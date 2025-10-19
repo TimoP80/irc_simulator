@@ -13,7 +13,7 @@ const App: React.FC = () => {
   const [virtualUsers, setVirtualUsers] = useState<User[]>(DEFAULT_VIRTUAL_USERS);
   const [channels, setChannels] = useState<Channel[]>(DEFAULT_CHANNELS);
   const [privateMessages, setPrivateMessages] = useState<Record<string, PrivateMessageConversation>>({});
-  const [activeContext, setActiveContext] = useState<ActiveContext>({ type: 'channel', name: '#general' });
+  const [activeContext, setActiveContext] = useState<ActiveContext | null>(null);
   const [simulationSpeed, setSimulationSpeed] = useState<AppConfig['simulationSpeed']>('normal');
   const [isLoading, setIsLoading] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -44,12 +44,13 @@ const App: React.FC = () => {
     setChannels(channels);
     setSimulationSpeed(simulationSpeed);
     setPrivateMessages({});
-    // Default to the first channel after saving new settings
-    setActiveContext({ type: 'channel', name: channels[0]?.name || '#general' });
+    // Don't automatically join any channel - user needs to join manually
+    setActiveContext(null);
     setIsSettingsOpen(false);
   };
 
-  const addMessageToContext = useCallback((message: Message, context: ActiveContext) => {
+  const addMessageToContext = useCallback((message: Message, context: ActiveContext | null) => {
+    if (!context) return;
     if (context.type === 'channel') {
       setChannels(prev =>
         prev.map(c =>
@@ -106,6 +107,9 @@ const App: React.FC = () => {
         const channelName = argString.trim();
         const channelExists = channels.some(c => c.name === channelName);
         if (channelExists) {
+            const channel = channels.find(c => c.name === channelName);
+            const isAlreadyInChannel = channel?.users.some(u => u.nickname === currentUserNickname);
+            
             // Add user to channel if not already there
             setChannels(prev => prev.map(c => {
                 if (c.name === channelName && !c.users.some(u => u.nickname === currentUserNickname)) {
@@ -114,6 +118,11 @@ const App: React.FC = () => {
                 return c;
             }));
             setActiveContext({ type: 'channel', name: channelName });
+            
+            // Generate greeting if user is joining for the first time
+            if (!isAlreadyInChannel && channel) {
+              generateGreetingForNewUser(channel, currentUserNickname);
+            }
         } else {
             addMessageToContext({
                 id: Date.now(),
@@ -126,7 +135,7 @@ const App: React.FC = () => {
         break;
       }
       case 'who': {
-        if (activeContext.type === 'channel') {
+        if (activeContext && activeContext.type === 'channel') {
           const channel = channels.find(c => c.name === activeContext.name);
           if (channel) {
             const userList = channel.users.map(u => u.nickname).join(', ');
@@ -164,18 +173,18 @@ const App: React.FC = () => {
       nickname: currentUserNickname,
       content,
       timestamp: new Date(),
-      type: activeContext.type === 'pm' ? 'pm' : 'user'
+      type: activeContext?.type === 'pm' ? 'pm' : 'user'
     };
     addMessageToContext(userMessage, activeContext);
 
     try {
       let aiResponse: string | null = null;
-      if (activeContext.type === 'channel') {
+      if (activeContext && activeContext.type === 'channel') {
         const channel = channels.find(c => c.name === activeContext.name);
         if (channel) {
           aiResponse = await generateReactionToMessage(channel, userMessage, currentUserNickname);
         }
-      } else { // 'pm'
+      } else if (activeContext && activeContext.type === 'pm') { // 'pm'
         const conversation = privateMessages[activeContext.with] || { user: virtualUsers.find(u => u.nickname === activeContext.with)!, messages: [] };
         aiResponse = await generatePrivateMessageResponse(conversation, userMessage, currentUserNickname);
       }
@@ -191,7 +200,7 @@ const App: React.FC = () => {
               nickname: nickname.trim(),
               content: content,
               timestamp: new Date(),
-              type: activeContext.type === 'pm' ? 'pm' : 'ai'
+              type: activeContext?.type === 'pm' ? 'pm' : 'ai'
             };
             addMessageToContext(aiMessage, activeContext);
           }
@@ -216,12 +225,51 @@ const App: React.FC = () => {
     }
   };
 
+  const generateGreetingForNewUser = async (channel: Channel, newUserNickname: string) => {
+    try {
+      const usersInChannel = channel.users.filter(u => u.nickname !== newUserNickname);
+      if (usersInChannel.length === 0) return;
+
+      const prompt = `
+A new user named "${newUserNickname}" just joined the IRC channel ${channel.name}.
+The channel topic is: "${channel.topic}".
+The existing users in the channel are: ${usersInChannel.map(u => u.nickname).join(', ')}.
+Their personalities are: ${usersInChannel.map(u => `${u.nickname} is ${u.personality}`).join('. ')}.
+
+Generate a warm, welcoming greeting from one of the existing users to the new person.
+The greeting should be friendly, brief, and in-character for the user who is greeting.
+The response must be a single line in the format: "nickname: greeting message"
+`;
+
+      const response = await generateChannelActivity(channel, newUserNickname);
+      if (response) {
+        const greetingMessages = response.split('\n').filter(line => line.includes(':'));
+        greetingMessages.forEach((msgLine, index) => {
+          const [nickname, ...contentParts] = msgLine.split(':');
+          const content = contentParts.join(':').trim();
+          if (nickname && content) {
+            const greetingMessage: Message = {
+              id: Date.now() + index + 1,
+              nickname: nickname.trim(),
+              content: content,
+              timestamp: new Date(),
+              type: 'ai'
+            };
+            addMessageToContext(greetingMessage, { type: 'channel', name: channel.name });
+          }
+        });
+      }
+    } catch (error) {
+      console.error("Failed to generate greeting:", error);
+    }
+  };
+
   const runSimulation = useCallback(async () => {
     if (channels.length === 0) return;
     const randomChannelIndex = Math.floor(Math.random() * channels.length);
     const targetChannel = channels[randomChannelIndex];
 
-    if (!(activeContext.type === 'channel' && activeContext.name === targetChannel.name)) {
+    if (!(activeContext && activeContext.type === 'channel' && activeContext.name === targetChannel.name)) {
       try {
         const response = await generateChannelActivity(targetChannel, currentUserNickname);
         if (response) {
@@ -293,24 +341,26 @@ const App: React.FC = () => {
     };
   }, [runSimulation, simulationSpeed]);
 
-  const activeChannel = activeContext.type === 'channel' ? channels.find(c => c.name === activeContext.name) : undefined;
-  const activePM = activeContext.type === 'pm' ? privateMessages[activeContext.with] : undefined;
+  const activeChannel = activeContext?.type === 'channel' ? channels.find(c => c.name === activeContext.name) : undefined;
+  const activePM = activeContext?.type === 'pm' ? privateMessages[activeContext.with] : undefined;
   
-  const usersInContext: User[] = activeContext.type === 'channel' && activeChannel
+  const usersInContext: User[] = activeContext?.type === 'channel' && activeChannel
     ? activeChannel.users
-    : activeContext.type === 'pm'
+    : activeContext?.type === 'pm'
     ? [virtualUsers.find(u => u.nickname === activeContext.with)!, { nickname: currentUserNickname, status: 'online' }]
     : [];
 
-  const messagesInContext = activeContext.type === 'channel' && activeChannel
+  const messagesInContext = activeContext?.type === 'channel' && activeChannel
     ? activeChannel.messages
-    : activeContext.type === 'pm' && activePM
+    : activeContext?.type === 'pm' && activePM
     ? activePM.messages
     : [];
   
-  const contextTitle = activeContext.type === 'channel' 
+  const contextTitle = activeContext?.type === 'channel' 
     ? activeChannel?.topic || activeContext.name 
-    : `Private message with ${activeContext.with}`;
+    : activeContext?.type === 'pm'
+    ? `Private message with ${activeContext.with}`
+    : 'No channel selected';
 
   const allPMUsers = Object.keys(privateMessages).map(nickname => virtualUsers.find(u => u.nickname === nickname)!);
 
