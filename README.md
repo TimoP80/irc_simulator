@@ -56,3 +56,15 @@ The simulation is powered by the Gemini API, using carefully crafted prompts to 
 
 -   **Frontend**: React, TypeScript, Tailwind CSS
 -   **AI**: Google Gemini API via the `@google/genai` npm package.
+
+## 7. Known Issues
+
+### API Rate Limit & Quota Errors
+
+-   **The Problem**: The most common issue is an error message like `API request failed (rate limit or server issue)`. This happens because the simulation, especially on faster settings, makes frequent, autonomous calls to the Gemini API to generate background chatter. Free-tier API keys have strict rate limits that can be quickly consumed.
+-   **"My Quota Dashboard Looks Fine, Why Am I Getting Errors?"**: This is a common point of confusion. API providers use multiple layers of protection. While your overall daily quota (e.g., requests per day) might be fine, you can easily hit a much stricter **short-term rate limit** (e.g., requests per minute). The simulator's rapid, periodic calls are likely to trigger these per-minute limits. Additionally, a `RESOURCE_EXHAUSTED` error can sometimes indicate temporary high load on Google's servers, not a problem with your specific quota.
+-   **The Solution**: You have direct control over how frequently the AI generates background messages.
+    -   Open the **"Configure Simulation"** window.
+    -   Under **"Background Simulation Speed,"** select a slower setting like `'Slow'` or `'Off'`.
+    -   Setting the speed to **'Off'** completely disables autonomous AI messages. The AI will *only* respond when you send a message, which is the most effective way to conserve your API quota and avoid rate-limit errors.
+    -   The simulation also automatically pauses when the browser tab is not visible, helping to save your quota when you're not actively looking at the app.

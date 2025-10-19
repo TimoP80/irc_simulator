@@ -1,4 +1,3 @@
-
 import type { AppConfig, User, Channel } from '../types';
 import { DEFAULT_NICKNAME, DEFAULT_VIRTUAL_USERS, DEFAULT_CHANNELS } from '../constants';
 
@@ -29,6 +28,42 @@ export const saveConfig = (config: AppConfig) => {
     console.error("Failed to save config to localStorage:", error);
   }
 };
+
+const MAX_RETRIES = 3;
+const INITIAL_BACKOFF_MS = 2000; // 2 seconds
+
+const isRateLimitError = (error: unknown): boolean => {
+  if (error instanceof Error) {
+    return error.message.includes("429") || error.message.includes("RESOURCE_EXHAUSTED");
+  }
+  return false;
+};
+
+/**
+ * Wraps an API call with exponential backoff for rate limit errors.
+ * @param apiCall The function that returns a promise for the API call.
+ * @returns The result of the API call.
+ * @throws Throws an error if retries are exhausted or a non-rate-limit error occurs.
+ */
+export const withRateLimitAndRetries = async <T>(apiCall: () => Promise<T>): Promise<T> => {
+  let attempt = 0;
+  while (attempt <= MAX_RETRIES) {
+    try {
+      return await apiCall();
+    } catch (error) {
+      if (isRateLimitError(error) && attempt < MAX_RETRIES) {
+        attempt++;
+        const delay = INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1) + Math.random() * 1000; // Add jitter
+        console.warn(`Rate limit hit. Retrying in ${Math.round(delay / 1000)}s... (Attempt ${attempt}/${MAX_RETRIES})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      } else {
+        throw error;
+      }
+    }
+  }
+  throw new Error("Exhausted retries for API call.");
+};
+
 
 /**
  * Parses the raw string configuration for virtual users into an array of User objects.
