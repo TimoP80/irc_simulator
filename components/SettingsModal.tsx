@@ -82,8 +82,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel }
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onCancel]);
 
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSave = () => {
     const configToSave = {
       ...config,
       virtualUsers: formatUsersToText(users),
@@ -124,7 +123,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel }
       <div className="bg-gray-800 rounded-lg shadow-xl p-8 w-full max-w-4xl border border-gray-700 max-h-[90vh] overflow-y-auto">
         <h2 className="text-2xl font-bold text-white mb-4">Simulation Configuration</h2>
         <p className="text-gray-400 mb-6">Customize the channels, virtual users, and your nickname. Changes are saved locally.</p>
-        <form onSubmit={handleSave} className="space-y-6">
+        
+        <div className="space-y-6">
           <div>
             <label htmlFor="currentUserNickname" className="block text-sm font-medium text-gray-300 mb-2">Your Nickname</label>
             <input
@@ -136,8 +136,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel }
               className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
+          
           <UserManagement users={users} onUsersChange={setUsers} />
           <ChannelManagement channels={channels} onChannelsChange={setChannels} />
+          
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">Background Simulation Speed</label>
             <div className="flex items-center space-x-6">
@@ -157,6 +159,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel }
             </div>
             <p className="text-xs text-gray-500 mt-2">"Off" disables autonomous AI messages to conserve API quota. Simulation also pauses when the tab is not visible.</p>
           </div>
+          
           <div className="flex justify-end pt-2 gap-4">
              <button
               type="button"
@@ -184,13 +187,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel }
               Cancel
             </button>
             <button
-              type="submit"
+              type="button"
+              onClick={handleSave}
               className="bg-indigo-600 text-white rounded-lg px-6 py-2 font-semibold hover:bg-indigo-500 transition-colors"
             >
               Save and Start
             </button>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );
