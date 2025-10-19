@@ -56,14 +56,20 @@ The simulation is powered by the Gemini API, using carefully crafted prompts to 
 2.  Upon first launch, you will be greeted by a **Settings** modal with a modern, user-friendly interface.
 3.  **Configure your world**: 
     -   **Set your nickname** in the text field at the top
-    -   **Manage virtual users**: Use the "Add User" button to create AI personalities with nicknames and detailed personality descriptions
-    -   **Manage channels**: Use the "Add Channel" button to create IRC channels with names (starting with #) and topics
+    -   **Manage virtual users**: 
+        -   Use the "Add User" button to create AI personalities with nicknames and detailed personality descriptions
+        -   Use the "Clear All" button to remove all users and start fresh
+        -   Edit or delete individual users using the buttons on each user card
+    -   **Manage channels**: 
+        -   Use the "Add Channel" button to create IRC channels with names (starting with #) and topics
+        -   Use the "Clear All" button to remove all channels and start fresh
+        -   Edit or delete individual channels using the buttons on each channel card
     -   **Adjust simulation speed**: Choose how frequently AI users generate autonomous messages (Fast/Normal/Slow/Off)
     -   **Browse without saving**: Use the "Cancel" button to explore settings without applying changes
 4.  Click **"Save and Start"** to enter the simulation. Your configuration will be saved for your next visit.
 5.  **Note**: This application requires a valid Google Gemini API key to be present in the execution environment (`process.env.API_KEY`).
 
-## 6. Recent Updates (v1.4.0)
+## 6. Recent Updates (v1.4.1)
 
 The application has recently received a major interface overhaul with significant improvements to the user experience:
 
@@ -72,6 +78,13 @@ The application has recently received a major interface overhaul with significan
 -   **Visual Channel Management**: Create and manage channels with intuitive cards and comprehensive validation
 -   **Form Validation**: Real-time validation with helpful error messages for nicknames, personalities, channel names, and topics
 -   **Cancel Functionality**: Browse settings without applying changes using the Cancel button or Escape key
+
+### 🧹 **Clear All Functionality**
+-   **Clear All Users**: Red button with trash icon to remove all virtual users at once
+-   **Clear All Channels**: Red button with trash icon to remove all channels at once
+-   **Smart Visibility**: Clear buttons only appear when there are items to clear
+-   **Safety Features**: Confirmation dialogs with exact counts and warning messages
+-   **Custom World Building**: Easily start fresh and build completely custom virtual worlds
 
 ### ⚡ **Performance Improvements**
 -   **More Frequent Messages**: Autonomous AI messages are now 3x more frequent across all speed settings

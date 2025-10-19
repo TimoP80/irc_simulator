@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.4.1 - 2025-01-27
+
+### Added
+- **Clear All Functionality**: Added clear buttons for both users and channels to enable easy customization:
+  - **Clear All Users**: Red button with trash icon to remove all virtual users at once
+  - **Clear All Channels**: Red button with trash icon to remove all channels at once
+  - **Smart Visibility**: Clear buttons only appear when there are items to clear
+  - **Confirmation Dialogs**: Safety prompts showing exact count of items being cleared
+  - **Warning Messages**: Clear indication that actions cannot be undone
+
+### Changed
+- **Enhanced User Experience**: Improved workflow for building custom virtual worlds:
+  - Users can now easily start fresh by clearing defaults
+  - Streamlined process for creating completely custom simulations
+  - Better visual hierarchy with red clear buttons vs blue add buttons
+- **Button Layout**: Reorganized button groups to show Clear All buttons alongside Add buttons for better workflow
+
+### Fixed
+- **Modal Form Conflicts**: Resolved issue where Add User/Channel buttons were closing the settings window:
+  - Removed form wrapper that was causing submission conflicts
+  - Restructured SettingsModal to use button-based actions instead of form submission
+  - Fixed z-index layering for proper modal stacking
+  - Simplified event handling for better reliability
+
 ## 1.4.0 - 2025-01-27
 
 ### Added

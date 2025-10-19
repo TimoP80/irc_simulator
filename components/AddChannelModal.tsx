@@ -106,8 +106,18 @@ export const AddChannelModal: React.FC<AddChannelModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-      <div className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md border border-gray-700">
+    <div 
+      className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[60]"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div 
+        className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md border border-gray-700"
+        onClick={(e) => e.stopPropagation()}
+      >
         <h3 className="text-xl font-bold text-white mb-4">
           {isEditing ? 'Edit Channel' : 'Add New Channel'}
         </h3>
