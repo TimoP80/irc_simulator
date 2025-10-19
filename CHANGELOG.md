@@ -2,7 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
-## 1.4.1 - 2025-01-27
+## 1.5.0 - 2025-10-20
+
+### Added
+- **Manual Channel Joining**: Users now must manually join channels using `/join #channelname` command instead of being automatically joined to channels
+- **Virtual User Greetings**: AI users now automatically greet new users when they join a channel for the first time:
+  - **Contextual Greetings**: Greetings are generated based on the channel topic and existing users' personalities
+  - **In-Character Responses**: Each greeting matches the personality of the virtual user who is greeting
+  - **Warm Welcome**: Creates a more welcoming and realistic IRC experience
+- **Enhanced IRC Authenticity**: More realistic IRC behavior where users must actively join channels
+
+### Changed
+- **Default Starting State**: Application now starts with no channels joined - users see "No channel selected" until they join a channel
+- **Channel Joining Logic**: Enhanced `/join` command to check if user is already in channel and only generate greetings for new joins
+- **Type System**: Updated `ActiveContext` type to allow `null` values for better handling of no-channel state
+- **User Experience**: More authentic IRC workflow where users must manually join channels to participate
+
+### Technical Improvements
+- **Null Safety**: All components now properly handle cases where no channel is selected
+- **Enhanced Error Handling**: Better handling of channel joining edge cases
+- **AI Integration**: Leveraged existing AI service for generating contextual greetings
+- **State Management**: Improved state handling for channel membership and active context
+
+## 1.4.1 - 2025-10-20
 
 ### Added
 - **Clear All Functionality**: Added clear buttons for both users and channels to enable easy customization:
@@ -26,7 +48,7 @@ All notable changes to this project will be documented in this file.
   - Fixed z-index layering for proper modal stacking
   - Simplified event handling for better reliability
 
-## 1.4.0 - 2025-01-27
+## 1.4.0 - 2025-10-20
 
 ### Added
 - **Advanced User Management Interface**: Complete overhaul of virtual user management with a dedicated interface featuring:

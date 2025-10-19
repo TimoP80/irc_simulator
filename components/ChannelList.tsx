@@ -30,7 +30,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({ channels, privateMessa
             <button
               key={channel.name}
               onClick={() => onSelectContext({ type: 'channel', name: channel.name })}
-              className={getButtonClass(activeContext.type === 'channel' && activeContext.name === channel.name)}
+              className={getButtonClass(activeContext?.type === 'channel' && activeContext.name === channel.name)}
             >
               <HashtagIcon className="h-4 w-4" />
               <span>{channel.name}</span>
@@ -44,7 +44,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({ channels, privateMessa
             <button
               key={user.nickname}
               onClick={() => onSelectContext({ type: 'pm', with: user.nickname })}
-              className={getButtonClass(activeContext.type === 'pm' && activeContext.with === user.nickname)}
+              className={getButtonClass(activeContext?.type === 'pm' && activeContext.with === user.nickname)}
             >
               <UserIcon className="h-4 w-4" />
               <span>{user.nickname}</span>

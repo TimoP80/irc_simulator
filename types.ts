@@ -28,7 +28,8 @@ export interface PrivateMessageConversation {
 
 export type ActiveContext = 
   | { type: 'channel'; name: string }
-  | { type: 'pm'; with: string };
+  | { type: 'pm'; with: string }
+  | null;
 
 /**
  * Defines the structure for user-configurable settings.
