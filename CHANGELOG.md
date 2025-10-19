@@ -2,13 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.2.0 - 2024-07-31
+
+### Changed
+- **Enhanced API Resilience**: Implemented an automatic retry mechanism with exponential backoff for all API calls. The application will now gracefully handle temporary API rate limit errors (`429 RESOURCE_EXHAUSTED`) by retrying the request a few times before failing, significantly reducing visible errors and improving the simulation's stability.
+- **Smarter Error Feedback**: If the background simulation repeatedly fails even after retries, a single, non-spammy system message will now appear in the affected channel to inform the user. This prevents silent failures without flooding the chat with error messages.
+
 ## 1.1.0 - 2024-07-30
 
 ### Added
 - **Simulation Speed Control**: Users can now adjust the speed of background AI chatter ('Fast', 'Normal', 'Slow') or turn it 'Off' completely via the Settings modal. This provides granular control over API usage.
 
 ### Changed
-- **API Quota Management**: The simulation now automatically pauses when the application's browser tab is not visible, significantly reducing API calls when the app is not in focus.
+- **Improved API Quota Management**: The simulation now automatically pauses when the application's browser tab is not visible. This, combined with the speed controls, significantly reduces the likelihood of hitting per-minute API rate limits and helps conserve overall quota.
 - **Default Simulation Speed**: The default 'Normal' simulation interval has been increased to 30 seconds to lower the default rate of API requests.
 
 ## 1.0.0 - 2024-07-29

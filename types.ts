@@ -1,4 +1,3 @@
-
 export interface User {
   nickname: string;
   status: 'online' | 'away';
@@ -40,4 +39,12 @@ export interface AppConfig {
   virtualUsers: string; 
   channels: string;
   simulationSpeed: 'fast' | 'normal' | 'slow' | 'off';
+}
+
+/**
+ * Defines the structure for the AI-generated random world configuration.
+ */
+export interface RandomWorldConfig {
+  users: { nickname: string; personality: string; }[];
+  channels: { name: string; topic: string; }[];
 }

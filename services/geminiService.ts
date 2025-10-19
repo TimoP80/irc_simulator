@@ -1,6 +1,6 @@
-
-import { GoogleGenAI } from "@google/genai";
-import type { Channel, Message, PrivateMessageConversation } from '../types';
+import { GoogleGenAI, Type } from "@google/genai";
+import type { Channel, Message, PrivateMessageConversation, RandomWorldConfig } from '../types';
+import { withRateLimitAndRetries } from '../utils/config';
 
 const API_KEY = process.env.API_KEY;
 
@@ -25,9 +25,9 @@ Keep messages concise and natural for a chat room setting.
 The human user's nickname is '${currentUserNickname}'.
 `;
 
-export const generateChannelActivity = async (channel: Channel, currentUserNickname: string): Promise<string | null> => {
+export const generateChannelActivity = async (channel: Channel, currentUserNickname: string): Promise<string> => {
   const usersInChannel = channel.users.filter(u => u.nickname !== currentUserNickname);
-  if (usersInChannel.length === 0) return null;
+  if (usersInChannel.length === 0) return '';
   
   const randomUser = usersInChannel[Math.floor(Math.random() * usersInChannel.length)];
 
@@ -42,8 +42,8 @@ Generate a new, single, in-character message from ${randomUser.nickname} that is
 The message must be a single line in the format: "nickname: message"
 `;
 
-  try {
-    const response = await ai.models.generateContent({
+  const response = await withRateLimitAndRetries(() => 
+    ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: prompt,
         config: {
@@ -52,17 +52,14 @@ The message must be a single line in the format: "nickname: message"
             maxOutputTokens: 100,
             thinkingConfig: { thinkingBudget: 0 },
         },
-    });
-    return response.text.trim();
-  } catch (error) {
-    console.error("Error generating channel activity:", error);
-    return null;
-  }
+    })
+  );
+  return response.text.trim();
 };
 
-export const generateReactionToMessage = async (channel: Channel, userMessage: Message, currentUserNickname: string): Promise<string | null> => {
+export const generateReactionToMessage = async (channel: Channel, userMessage: Message, currentUserNickname: string): Promise<string> => {
     const usersInChannel = channel.users.filter(u => u.nickname !== currentUserNickname);
-    if (usersInChannel.length === 0) return null;
+    if (usersInChannel.length === 0) return '';
 
     const prompt = `
 In IRC channel ${channel.name}, the user "${userMessage.nickname}" just said: "${userMessage.content}".
@@ -75,8 +72,8 @@ ${formatMessageHistory(channel.messages)}
 Generate a realistic and in-character reaction from one of the other users.
 The reaction must be a single line in the format: "nickname: message"
 `;
-    try {
-        const response = await ai.models.generateContent({
+    const response = await withRateLimitAndRetries(() => 
+        ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
             config: {
@@ -85,15 +82,12 @@ The reaction must be a single line in the format: "nickname: message"
                 maxOutputTokens: 150,
                 thinkingConfig: { thinkingBudget: 0 },
             },
-        });
-        return response.text.trim();
-    } catch (error) {
-        console.error("Error generating reaction:", error);
-        return null;
-    }
+        })
+    );
+    return response.text.trim();
 };
 
-export const generatePrivateMessageResponse = async (conversation: PrivateMessageConversation, userMessage: Message, currentUserNickname: string): Promise<string | null> => {
+export const generatePrivateMessageResponse = async (conversation: PrivateMessageConversation, userMessage: Message, currentUserNickname: string): Promise<string> => {
     const aiUser = conversation.user;
     const prompt = `
 You are roleplaying as an IRC user named '${aiUser.nickname}'. 
@@ -108,8 +102,8 @@ Generate a natural, in-character response.
 The response must be a single line in the format: "${aiUser.nickname}: message"
 `;
 
-    try {
-        const response = await ai.models.generateContent({
+    const response = await withRateLimitAndRetries(() => 
+        ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
             config: {
@@ -118,10 +112,82 @@ The response must be a single line in the format: "${aiUser.nickname}: message"
                 maxOutputTokens: 200,
                 thinkingConfig: { thinkingBudget: 0 },
             },
-        });
-        return response.text.trim();
-    } catch (error) {
-        console.error("Error generating PM response:", error);
-        return null;
+        })
+    );
+    return response.text.trim();
+};
+
+
+export const generateRandomWorldConfiguration = async (): Promise<RandomWorldConfig> => {
+    const prompt = `
+Generate a creative and interesting configuration for a simulated IRC world.
+Create a list of 8 unique virtual users with distinct, concise, and interesting personalities. Nicknames should be lowercase and simple.
+Create a list of 4 unique and thematic IRC channels with creative topics. Channel names must start with #.
+
+Provide the output in JSON format.
+`;
+
+    const response = await withRateLimitAndRetries(() =>
+        ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                systemInstruction: "You are a creative world-builder for a simulated IRC environment. Generate a valid JSON response based on the provided schema.",
+                temperature: 1.0,
+                maxOutputTokens: 1000,
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        users: {
+                            type: Type.ARRAY,
+                            description: "A list of 8 virtual users.",
+                            items: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    nickname: {
+                                        type: Type.STRING,
+                                        description: "The user's lowercase nickname."
+                                    },
+                                    personality: {
+                                        type: Type.STRING,
+                                        description: "A brief, interesting personality description."
+                                    }
+                                },
+                                required: ['nickname', 'personality']
+                            }
+                        },
+                        channels: {
+                            type: Type.ARRAY,
+                            description: "A list of 4 IRC channels.",
+                            items: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    name: {
+                                        type: Type.STRING,
+                                        description: "The channel name, starting with #."
+                                    },
+                                    topic: {
+                                        type: Type.STRING,
+                                        description: "A creative topic for the channel."
+                                    }
+                                },
+                                required: ['name', 'topic']
+                            }
+                        }
+                    },
+                    required: ['users', 'channels']
+                }
+            }
+        })
+    );
+
+    const jsonString = response.text.trim();
+    const parsedConfig: RandomWorldConfig = JSON.parse(jsonString);
+
+    if (!parsedConfig.users || !parsedConfig.channels || parsedConfig.users.length === 0 || parsedConfig.channels.length === 0) {
+        throw new Error("Invalid config structure received from AI.");
     }
+
+    return parsedConfig;
 };

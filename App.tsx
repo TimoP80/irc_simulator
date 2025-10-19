@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ChannelList } from './components/ChannelList';
 import { UserList } from './components/UserList';
@@ -20,6 +19,7 @@ const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   
   const simulationIntervalRef = useRef<number | null>(null);
+  const lastSimErrorTimestampRef = useRef<number>(0);
 
   // Load configuration from localStorage on initial render
   useEffect(() => {
@@ -199,9 +199,9 @@ const App: React.FC = () => {
       }
     } catch (error) {
       console.error("Failed to get AI response:", error);
-      let content = `Error: Could not get AI response. Please check your API key and network.`;
+      let content = `Error: Could not get AI response. Please check your API key and network connection.`;
       if (error instanceof Error && (error.message.includes("RESOURCE_EXHAUSTED") || error.message.includes("429"))) {
-        content = `Error: API rate limit exceeded. Please wait a moment before sending more messages.`;
+        content = `Error: API request failed (rate limit or server issue). This can happen with frequent messages, even if your daily quota is fine. Try setting a slower simulation speed in the configuration.`;
       }
       const errorMessage: Message = {
         id: Date.now() + 1,
@@ -241,6 +241,19 @@ const App: React.FC = () => {
         }
       } catch (error) {
         console.error(`Simulation failed for ${targetChannel.name}:`, error);
+        const now = Date.now();
+        // Only show error message if the last one was more than 2 minutes ago
+        if (now - lastSimErrorTimestampRef.current > 120000) { 
+            lastSimErrorTimestampRef.current = now;
+            const errorMessage: Message = {
+                id: now,
+                nickname: 'system',
+                content: `Background simulation for this channel failed due to API errors. It will keep retrying silently. The issue might be rate limiting.`,
+                timestamp: new Date(),
+                type: 'system'
+            };
+            addMessageToContext(errorMessage, { type: 'channel', name: targetChannel.name });
+        }
       }
     }
   }, [channels, activeContext, addMessageToContext, currentUserNickname]);
