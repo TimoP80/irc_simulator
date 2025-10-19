@@ -1,11 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { AppConfig } from '../types';
 import { loadConfig } from '../utils/config';
 import { DEFAULT_NICKNAME } from '../constants';
 import { generateRandomWorldConfiguration } from '../services/geminiService';
+import { UserManagement } from './UserManagement';
+import { ChannelManagement } from './ChannelManagement';
 
 interface SettingsModalProps {
   onSave: (config: AppConfig) => void;
+  onCancel: () => void;
 }
 
 const DEFAULT_USERS_TEXT = `nova, A curious tech-savvy individual who loves gadgets.
@@ -19,7 +22,41 @@ const DEFAULT_CHANNELS_TEXT = `#general, General chit-chat about anything and ev
 #random, For off-topic conversations and random thoughts.
 #help, Ask for help with the simulator here.`;
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave }) => {
+// Helper functions to convert between text format and user objects
+const parseUsersFromText = (text: string) => {
+  return text.split('\n')
+    .filter(line => line.trim())
+    .map(line => {
+      const [nickname, ...personalityParts] = line.split(',');
+      return {
+        nickname: nickname.trim(),
+        personality: personalityParts.join(',').trim()
+      };
+    });
+};
+
+const formatUsersToText = (users: { nickname: string; personality: string }[]) => {
+  return users.map(user => `${user.nickname}, ${user.personality}`).join('\n');
+};
+
+// Helper functions to convert between text format and channel objects
+const parseChannelsFromText = (text: string) => {
+  return text.split('\n')
+    .filter(line => line.trim())
+    .map(line => {
+      const [name, ...topicParts] = line.split(',');
+      return {
+        name: name.trim(),
+        topic: topicParts.join(',').trim()
+      };
+    });
+};
+
+const formatChannelsToText = (channels: { name: string; topic: string }[]) => {
+  return channels.map(channel => `${channel.name}, ${channel.topic}`).join('\n');
+};
+
+export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel }) => {
   const [config, setConfig] = useState<AppConfig>(() => {
     const savedConfig = loadConfig();
     return {
@@ -29,11 +66,30 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave }) => {
       simulationSpeed: savedConfig?.simulationSpeed || 'normal',
     };
   });
+  const [users, setUsers] = useState(() => parseUsersFromText(config.virtualUsers));
+  const [channels, setChannels] = useState(() => parseChannelsFromText(config.channels));
   const [isRandomizing, setIsRandomizing] = useState(false);
+
+  // Handle Escape key to close modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onCancel();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onCancel]);
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(config);
+    const configToSave = {
+      ...config,
+      virtualUsers: formatUsersToText(users),
+      channels: formatChannelsToText(channels)
+    };
+    onSave(configToSave);
   };
   
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -44,18 +100,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave }) => {
     setIsRandomizing(true);
     try {
       const randomConfig = await generateRandomWorldConfiguration();
-      const usersString = randomConfig.users
-        .map(u => `${u.nickname}, ${u.personality}`)
-        .join('\n');
-      const channelsString = randomConfig.channels
-        .map(c => `${c.name}, ${c.topic}`)
-        .join('\n');
-      
-      setConfig(prev => ({
-        ...prev,
-        virtualUsers: usersString,
-        channels: channelsString,
+      const randomUsers = randomConfig.users.map(u => ({
+        nickname: u.nickname,
+        personality: u.personality
       }));
+      const randomChannels = randomConfig.channels.map(c => ({
+        name: c.name,
+        topic: c.topic
+      }));
+      
+      setUsers(randomUsers);
+      setChannels(randomChannels);
     } catch (error) {
       console.error("An error occurred during randomization:", error);
       // TODO: Consider showing a user-facing error message here.
@@ -66,7 +121,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-      <div className="bg-gray-800 rounded-lg shadow-xl p-8 w-full max-w-2xl border border-gray-700">
+      <div className="bg-gray-800 rounded-lg shadow-xl p-8 w-full max-w-4xl border border-gray-700 max-h-[90vh] overflow-y-auto">
         <h2 className="text-2xl font-bold text-white mb-4">Simulation Configuration</h2>
         <p className="text-gray-400 mb-6">Customize the channels, virtual users, and your nickname. Changes are saved locally.</p>
         <form onSubmit={handleSave} className="space-y-6">
@@ -81,30 +136,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave }) => {
               className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
-          <div>
-            <label htmlFor="virtualUsers" className="block text-sm font-medium text-gray-300 mb-2">Virtual Users (nickname, personality)</label>
-            <textarea
-              id="virtualUsers"
-              name="virtualUsers"
-              value={config.virtualUsers}
-              onChange={handleChange}
-              rows={5}
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono text-sm"
-              placeholder="e.g., nova, A curious tech expert"
-            />
-          </div>
-          <div>
-            <label htmlFor="channels" className="block text-sm font-medium text-gray-300 mb-2">Channels (#channel, topic)</label>
-            <textarea
-              id="channels"
-              name="channels"
-              value={config.channels}
-              onChange={handleChange}
-              rows={4}
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono text-sm"
-              placeholder="e.g., #general, A place for general chat"
-            />
-          </div>
+          <UserManagement users={users} onUsersChange={setUsers} />
+          <ChannelManagement channels={channels} onChannelsChange={setChannels} />
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">Background Simulation Speed</label>
             <div className="flex items-center space-x-6">
@@ -142,6 +175,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave }) => {
               ) : (
                 '🎲 Randomize World'
               )}
+            </button>
+            <button
+              type="button"
+              onClick={onCancel}
+              className="bg-gray-600 text-white rounded-lg px-6 py-2 font-semibold hover:bg-gray-500 transition-colors"
+            >
+              Cancel
             </button>
             <button
               type="submit"

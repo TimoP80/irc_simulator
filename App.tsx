@@ -316,7 +316,7 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen w-screen bg-gray-800 font-mono">
-      {isSettingsOpen && <SettingsModal onSave={handleSaveSettings} />}
+      {isSettingsOpen && <SettingsModal onSave={handleSaveSettings} onCancel={() => setIsSettingsOpen(false)} />}
       <ChannelList 
         channels={channels}
         privateMessageUsers={allPMUsers}
