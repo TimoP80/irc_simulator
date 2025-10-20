@@ -1,7 +1,7 @@
 {
   "name": "station-v-virtual-irc-simulator",
   "private": true,
-  "version": "1.11.1",
+  "version": "1.11.3",
   "type": "module",
   "scripts": {
     "dev": "vite",

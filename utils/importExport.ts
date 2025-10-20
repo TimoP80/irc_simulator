@@ -139,32 +139,349 @@ export const readFileAsText = (file: File): Promise<string> => {
   });
 };
 
-// HTML Export Functions - Simple version for testing
+// HTML Export Functions - Beautiful formatted version
 export const exportChannelToHTML = (channel: Channel, currentUserNickname: string): string => {
   console.log('Starting HTML export for channel:', channel.name);
-  console.log('Channel messages count:', channel.messages.length);
+  console.log('Channel messages:', channel.messages);
+  console.log('Channel messages count:', channel.messages?.length || 0);
   console.log('Current user nickname:', currentUserNickname);
   
-  // Simple HTML export for testing
-  const messages = channel.messages.map(msg => 
-    `<div><strong>${msg.nickname}:</strong> ${msg.content}</div>`
-  ).join('');
+  // Ensure messages array exists
+  const channelMessages = channel.messages || [];
+  
+  // Format messages with proper styling and message types
+  const messages = channelMessages.map(msg => {
+    try {
+      const timestamp = msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp);
+      const timeStr = timestamp.toLocaleTimeString('en-US', { 
+        hour12: false, 
+        hour: '2-digit', 
+        minute: '2-digit', 
+        second: '2-digit' 
+      });
+      
+      const isCurrentUser = msg.nickname === currentUserNickname;
+      const messageClass = isCurrentUser ? 'message current-user' : 'message';
+      const nicknameClass = isCurrentUser ? 'nickname current-user' : 'nickname';
+      
+      let content = msg.content;
+      let messageTypeClass = '';
+      
+      // Handle different message types
+      switch (msg.type) {
+        case 'action':
+          content = `* ${msg.nickname} ${msg.content}`;
+          messageTypeClass = 'action';
+          break;
+        case 'system':
+          content = `*** ${msg.content}`;
+          messageTypeClass = 'system';
+          break;
+        case 'join':
+          content = `*** ${msg.nickname} joined the channel`;
+          messageTypeClass = 'join';
+          break;
+        case 'part':
+          content = `*** ${msg.nickname} left the channel`;
+          messageTypeClass = 'part';
+          break;
+        case 'quit':
+          content = `*** ${msg.nickname} quit IRC`;
+          messageTypeClass = 'quit';
+          break;
+        case 'kick':
+          content = `*** ${msg.nickname} was kicked from the channel`;
+          messageTypeClass = 'kick';
+          break;
+        case 'ban':
+          content = `*** ${msg.nickname} was banned from the channel`;
+          messageTypeClass = 'ban';
+          break;
+        case 'topic':
+          content = `*** Topic changed to: ${msg.content}`;
+          messageTypeClass = 'topic';
+          break;
+        case 'notice':
+          content = `-${msg.nickname}- ${msg.content}`;
+          messageTypeClass = 'notice';
+          break;
+        case 'pm':
+          content = `[PM] ${msg.content}`;
+          messageTypeClass = 'pm';
+          break;
+        default:
+          content = `${msg.nickname}: ${msg.content}`;
+          break;
+      }
+      
+      return `
+        <div class="${messageClass} ${messageTypeClass}">
+          <span class="timestamp">${timeStr}</span>
+          <span class="${nicknameClass}">${msg.nickname}</span>
+          <span class="content">${content}</span>
+        </div>`;
+    } catch (error) {
+      console.error('Error processing message:', error, msg);
+      return `
+        <div class="message error">
+          <span class="timestamp">${new Date().toLocaleTimeString()}</span>
+          <span class="content">*** Error processing message</span>
+        </div>`;
+    }
+  }).join('');
+  
+  const userList = (channel.users || []).map(u => u.nickname).join(', ');
+  const exportDate = new Date().toLocaleString();
   
   return `<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Station V - ${channel.name}</title>
   <style>
-    body { font-family: monospace; background: #1a1a1a; color: #fff; padding: 20px; }
-    .message { margin: 5px 0; }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+      background: #1a1a1a;
+      color: #e0e0e0;
+      line-height: 1.4;
+      padding: 20px;
+    }
+    
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: #2d2d2d;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    }
+    
+    .header {
+      background: linear-gradient(135deg, #4a5568, #2d3748);
+      padding: 20px;
+      border-bottom: 2px solid #4a5568;
+    }
+    
+    .header h1 {
+      color: #81c784;
+      font-size: 2rem;
+      margin-bottom: 10px;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+    
+    .channel-info {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-top: 15px;
+    }
+    
+    .info-item {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 10px;
+      border-radius: 4px;
+      border-left: 3px solid #81c784;
+    }
+    
+    .info-label {
+      font-weight: bold;
+      color: #a0a0a0;
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .info-value {
+      color: #ffffff;
+      margin-top: 5px;
+      font-size: 1.1rem;
+    }
+    
+    .messages-container {
+      padding: 20px;
+      max-height: 70vh;
+      overflow-y: auto;
+      background: #1a1a1a;
+    }
+    
+    .message {
+      display: flex;
+      margin-bottom: 8px;
+      padding: 6px 0;
+      border-radius: 4px;
+      transition: background-color 0.2s ease;
+    }
+    
+    .message:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+    
+    .timestamp {
+      color: #666;
+      font-size: 0.85rem;
+      min-width: 80px;
+      margin-right: 10px;
+      flex-shrink: 0;
+    }
+    
+    .nickname {
+      font-weight: bold;
+      min-width: 120px;
+      margin-right: 10px;
+      flex-shrink: 0;
+    }
+    
+    .nickname.current-user {
+      color: #81c784;
+    }
+    
+    .content {
+      flex: 1;
+      word-wrap: break-word;
+    }
+    
+    /* Message type styling */
+    .message.action {
+      font-style: italic;
+      color: #ffb74d;
+    }
+    
+    .message.system {
+      color: #f48fb1;
+      font-weight: bold;
+    }
+    
+    .message.join {
+      color: #81c784;
+    }
+    
+    .message.part, .message.quit {
+      color: #e57373;
+    }
+    
+    .message.kick, .message.ban {
+      color: #ff8a65;
+      font-weight: bold;
+    }
+    
+    .message.topic {
+      color: #ba68c8;
+    }
+    
+    .message.notice {
+      color: #64b5f6;
+    }
+    
+    .message.pm {
+      color: #ffd54f;
+    }
+    
+    .message.error {
+      color: #f44336;
+      background: rgba(244, 67, 54, 0.1);
+    }
+    
+    .footer {
+      background: #2d2d2d;
+      padding: 15px 20px;
+      border-top: 1px solid #4a5568;
+      text-align: center;
+      color: #a0a0a0;
+      font-size: 0.9rem;
+    }
+    
+    /* Scrollbar styling */
+    .messages-container::-webkit-scrollbar {
+      width: 8px;
+    }
+    
+    .messages-container::-webkit-scrollbar-track {
+      background: #2d2d2d;
+    }
+    
+    .messages-container::-webkit-scrollbar-thumb {
+      background: #4a5568;
+      border-radius: 4px;
+    }
+    
+    .messages-container::-webkit-scrollbar-thumb:hover {
+      background: #5a6578;
+    }
+    
+    /* Responsive design */
+    @media (max-width: 768px) {
+      body {
+        padding: 10px;
+      }
+      
+      .header h1 {
+        font-size: 1.5rem;
+      }
+      
+      .channel-info {
+        grid-template-columns: 1fr;
+      }
+      
+      .message {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      
+      .timestamp, .nickname {
+        min-width: auto;
+        margin-right: 0;
+        margin-bottom: 2px;
+      }
+    }
   </style>
 </head>
 <body>
-  <h1>Station V - ${channel.name}</h1>
-  <p>Channel: ${channel.name}</p>
-  <p>Topic: ${channel.topic || 'No topic'}</p>
-  <p>Messages: ${channel.messages.length}</p>
-  <div class="messages">${messages}</div>
+  <div class="container">
+    <div class="header">
+      <h1>Station V - Virtual IRC Simulator</h1>
+      <div class="channel-info">
+        <div class="info-item">
+          <div class="info-label">Channel</div>
+          <div class="info-value">${channel.name}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Topic</div>
+          <div class="info-value">${channel.topic || 'No topic set'}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Messages</div>
+          <div class="info-value">${channelMessages.length}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Users</div>
+          <div class="info-value">${(channel.users || []).length}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">User List</div>
+          <div class="info-value">${userList || 'No users'}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Exported</div>
+          <div class="info-value">${exportDate}</div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="messages-container">
+      ${messages || '<div class="message system"><span class="content">*** No messages in this channel</span></div>'}
+    </div>
+    
+    <div class="footer">
+      Generated by Station V - Virtual IRC Simulator | ${exportDate}
+    </div>
+  </div>
 </body>
 </html>`;
 };
@@ -173,43 +490,364 @@ export const exportAllChannelsToHTML = (channels: Channel[], currentUserNickname
   console.log('Starting HTML export for all channels, count:', channels.length);
   console.log('Current user nickname:', currentUserNickname);
   
-  // Simple HTML export for all channels
+  // Collect all messages from all channels with proper sorting
   const allMessages: Array<{ message: Message; channelName: string; timestamp: Date }> = [];
   
   channels.forEach(channel => {
-    channel.messages.forEach(message => {
+    const channelMessages = channel.messages || [];
+    channelMessages.forEach(message => {
       allMessages.push({
         message,
         channelName: channel.name,
-        timestamp: message.timestamp
+        timestamp: message.timestamp instanceof Date ? message.timestamp : new Date(message.timestamp)
       });
     });
   });
   
+  // Sort messages chronologically
   allMessages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
   
-  const messages = allMessages.map(({ message, channelName }) => 
-    `<div><strong>[${channelName}] ${message.nickname}:</strong> ${message.content}</div>`
-  ).join('');
+  // Format messages with proper styling and message types
+  const messages = allMessages.map(({ message, channelName }) => {
+    try {
+      const timestamp = message.timestamp instanceof Date ? message.timestamp : new Date(message.timestamp);
+      const timeStr = timestamp.toLocaleTimeString('en-US', { 
+        hour12: false, 
+        hour: '2-digit', 
+        minute: '2-digit', 
+        second: '2-digit' 
+      });
+      
+      const isCurrentUser = message.nickname === currentUserNickname;
+      const messageClass = isCurrentUser ? 'message current-user' : 'message';
+      const nicknameClass = isCurrentUser ? 'nickname current-user' : 'nickname';
+      
+      let content = message.content;
+      let messageTypeClass = '';
+      
+      // Handle different message types
+      switch (message.type) {
+        case 'action':
+          content = `* ${message.nickname} ${message.content}`;
+          messageTypeClass = 'action';
+          break;
+        case 'system':
+          content = `*** ${message.content}`;
+          messageTypeClass = 'system';
+          break;
+        case 'join':
+          content = `*** ${message.nickname} joined the channel`;
+          messageTypeClass = 'join';
+          break;
+        case 'part':
+          content = `*** ${message.nickname} left the channel`;
+          messageTypeClass = 'part';
+          break;
+        case 'quit':
+          content = `*** ${message.nickname} quit IRC`;
+          messageTypeClass = 'quit';
+          break;
+        case 'kick':
+          content = `*** ${message.nickname} was kicked from the channel`;
+          messageTypeClass = 'kick';
+          break;
+        case 'ban':
+          content = `*** ${message.nickname} was banned from the channel`;
+          messageTypeClass = 'ban';
+          break;
+        case 'topic':
+          content = `*** Topic changed to: ${message.content}`;
+          messageTypeClass = 'topic';
+          break;
+        case 'notice':
+          content = `-${message.nickname}- ${message.content}`;
+          messageTypeClass = 'notice';
+          break;
+        case 'pm':
+          content = `[PM] ${message.content}`;
+          messageTypeClass = 'pm';
+          break;
+        default:
+          content = `${message.nickname}: ${message.content}`;
+          break;
+      }
+      
+      return `
+        <div class="${messageClass} ${messageTypeClass}">
+          <span class="timestamp">${timeStr}</span>
+          <span class="channel">[${channelName}]</span>
+          <span class="${nicknameClass}">${message.nickname}</span>
+          <span class="content">${content}</span>
+        </div>`;
+    } catch (error) {
+      console.error('Error processing message:', error, { message, channelName });
+      return `
+        <div class="message error">
+          <span class="timestamp">${new Date().toLocaleTimeString()}</span>
+          <span class="channel">[${channelName}]</span>
+          <span class="content">*** Error processing message</span>
+        </div>`;
+    }
+  }).join('');
 
   const totalMessages = allMessages.length;
-  const totalUsers = new Set(channels.flatMap(c => c.users.map(u => u.nickname))).size;
+  const totalUsers = new Set(channels.flatMap(c => (c.users || []).map(u => u.nickname))).size;
+  const channelList = channels.map(c => `${c.name} (${(c.messages || []).length} messages)`).join(', ');
+  const exportDate = new Date().toLocaleString();
 
   return `<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Station V - All Channels</title>
   <style>
-    body { font-family: monospace; background: #1a1a1a; color: #fff; padding: 20px; }
-    .message { margin: 5px 0; }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+      background: #1a1a1a;
+      color: #e0e0e0;
+      line-height: 1.4;
+      padding: 20px;
+    }
+    
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: #2d2d2d;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    }
+    
+    .header {
+      background: linear-gradient(135deg, #4a5568, #2d3748);
+      padding: 20px;
+      border-bottom: 2px solid #4a5568;
+    }
+    
+    .header h1 {
+      color: #81c784;
+      font-size: 2rem;
+      margin-bottom: 10px;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+    
+    .channel-info {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-top: 15px;
+    }
+    
+    .info-item {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 10px;
+      border-radius: 4px;
+      border-left: 3px solid #81c784;
+    }
+    
+    .info-label {
+      font-weight: bold;
+      color: #a0a0a0;
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .info-value {
+      color: #ffffff;
+      margin-top: 5px;
+      font-size: 1.1rem;
+    }
+    
+    .messages-container {
+      padding: 20px;
+      max-height: 70vh;
+      overflow-y: auto;
+      background: #1a1a1a;
+    }
+    
+    .message {
+      display: flex;
+      margin-bottom: 8px;
+      padding: 6px 0;
+      border-radius: 4px;
+      transition: background-color 0.2s ease;
+    }
+    
+    .message:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+    
+    .timestamp {
+      color: #666;
+      font-size: 0.85rem;
+      min-width: 80px;
+      margin-right: 10px;
+      flex-shrink: 0;
+    }
+    
+    .channel {
+      color: #64b5f6;
+      font-weight: bold;
+      min-width: 100px;
+      margin-right: 10px;
+      flex-shrink: 0;
+    }
+    
+    .nickname {
+      font-weight: bold;
+      min-width: 120px;
+      margin-right: 10px;
+      flex-shrink: 0;
+    }
+    
+    .nickname.current-user {
+      color: #81c784;
+    }
+    
+    .content {
+      flex: 1;
+      word-wrap: break-word;
+    }
+    
+    /* Message type styling */
+    .message.action {
+      font-style: italic;
+      color: #ffb74d;
+    }
+    
+    .message.system {
+      color: #f48fb1;
+      font-weight: bold;
+    }
+    
+    .message.join {
+      color: #81c784;
+    }
+    
+    .message.part, .message.quit {
+      color: #e57373;
+    }
+    
+    .message.kick, .message.ban {
+      color: #ff8a65;
+      font-weight: bold;
+    }
+    
+    .message.topic {
+      color: #ba68c8;
+    }
+    
+    .message.notice {
+      color: #64b5f6;
+    }
+    
+    .message.pm {
+      color: #ffd54f;
+    }
+    
+    .message.error {
+      color: #f44336;
+      background: rgba(244, 67, 54, 0.1);
+    }
+    
+    .footer {
+      background: #2d2d2d;
+      padding: 15px 20px;
+      border-top: 1px solid #4a5568;
+      text-align: center;
+      color: #a0a0a0;
+      font-size: 0.9rem;
+    }
+    
+    /* Scrollbar styling */
+    .messages-container::-webkit-scrollbar {
+      width: 8px;
+    }
+    
+    .messages-container::-webkit-scrollbar-track {
+      background: #2d2d2d;
+    }
+    
+    .messages-container::-webkit-scrollbar-thumb {
+      background: #4a5568;
+      border-radius: 4px;
+    }
+    
+    .messages-container::-webkit-scrollbar-thumb:hover {
+      background: #5a6578;
+    }
+    
+    /* Responsive design */
+    @media (max-width: 768px) {
+      body {
+        padding: 10px;
+      }
+      
+      .header h1 {
+        font-size: 1.5rem;
+      }
+      
+      .channel-info {
+        grid-template-columns: 1fr;
+      }
+      
+      .message {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      
+      .timestamp, .channel, .nickname {
+        min-width: auto;
+        margin-right: 0;
+        margin-bottom: 2px;
+      }
+    }
   </style>
 </head>
 <body>
-  <h1>Station V - All Channels</h1>
-  <p>Channels: ${channels.length}</p>
-  <p>Total Messages: ${totalMessages}</p>
-  <p>Unique Users: ${totalUsers}</p>
-  <div class="messages">${messages}</div>
+  <div class="container">
+    <div class="header">
+      <h1>Station V - Virtual IRC Simulator</h1>
+      <div class="channel-info">
+        <div class="info-item">
+          <div class="info-label">Channels</div>
+          <div class="info-value">${channels.length}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Total Messages</div>
+          <div class="info-value">${totalMessages}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Unique Users</div>
+          <div class="info-value">${totalUsers}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Channel List</div>
+          <div class="info-value">${channelList || 'No channels'}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Exported</div>
+          <div class="info-value">${exportDate}</div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="messages-container">
+      ${messages || '<div class="message system"><span class="content">*** No messages in any channel</span></div>'}
+    </div>
+    
+    <div class="footer">
+      Generated by Station V - Virtual IRC Simulator | ${exportDate}
+    </div>
+  </div>
 </body>
 </html>`;
 };

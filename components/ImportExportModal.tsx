@@ -64,6 +64,11 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
   const handleExportChannelHTML = (channel: Channel) => {
     try {
       console.log('Exporting channel HTML for:', channel.name);
+      console.log('Channel data:', { 
+        name: channel.name, 
+        messageCount: channel.messages?.length || 0,
+        messages: channel.messages?.slice(0, 3) // Show first 3 messages for debugging
+      });
       const htmlContent = exportChannelToHTML(channel, currentUserNickname);
       const filename = `station-v-${channel.name.replace('#', '')}-${new Date().toISOString().split('T')[0]}.html`;
       console.log('Generated HTML content length:', htmlContent.length);
@@ -77,8 +82,13 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
 
   const handleExportAllChannelsHTML = () => {
     try {
-      console.log('Exporting all channels HTML, count:', channels.length);
-      const htmlContent = exportAllChannelsToHTML(channels, currentUserNickname);
+      console.log('Exporting all channels HTML, count:', validChannels.length);
+      console.log('Channels data:', validChannels.map(c => ({ 
+        name: c.name, 
+        messageCount: c.messages?.length || 0,
+        messages: c.messages?.slice(0, 3) // Show first 3 messages for debugging
+      })));
+      const htmlContent = exportAllChannelsToHTML(validChannels, currentUserNickname);
       const filename = `station-v-all-channels-${new Date().toISOString().split('T')[0]}.html`;
       console.log('Generated HTML content length:', htmlContent.length);
       downloadFile(htmlContent, filename, 'text/html');
@@ -134,6 +144,62 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
   };
 
   if (!isOpen) return null;
+
+  // Add safety checks for required props
+  if (!users || !channels || !currentUserNickname) {
+    console.error('ImportExportModal: Missing required props', { users, channels, currentUserNickname });
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[70]">
+        <div className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-2xl border border-gray-700">
+          <h3 className="text-2xl font-bold text-white mb-4">Error</h3>
+          <p className="text-red-400 mb-4">Missing required data. Please try refreshing the page.</p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="bg-gray-600 text-white rounded-lg px-6 py-2 font-semibold hover:bg-gray-500 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Check channels structure
+  if (!Array.isArray(channels)) {
+    console.error('ImportExportModal: Channels is not an array', { channels });
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[70]">
+        <div className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-2xl border border-gray-700">
+          <h3 className="text-2xl font-bold text-white mb-4">Error</h3>
+          <p className="text-red-400 mb-4">Invalid channels data. Please try refreshing the page.</p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="bg-gray-600 text-white rounded-lg px-6 py-2 font-semibold hover:bg-gray-500 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Ensure all channels have required properties - use current channels state
+  const validChannels = channels.map(channel => ({
+    ...channel,
+    messages: channel.messages || [],
+    users: channel.users || []
+  }));
+  
+  console.log('ImportExportModal - channels prop:', channels.map(c => ({ 
+    name: c.name, 
+    messageCount: c.messages?.length || 0 
+  })));
+  console.log('ImportExportModal - validChannels:', validChannels.map(c => ({ 
+    name: c.name, 
+    messageCount: c.messages?.length || 0 
+  })));
 
   // Add error boundary for debugging
   try {
@@ -235,18 +301,18 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
                     <div className="text-2xl mb-2">🌐</div>
                     <div className="font-semibold">Export All Channels</div>
                     <div className="text-sm opacity-75">
-                      All {channels.length} channels in one HTML file
+                      All {validChannels.length} channels in one HTML file
                     </div>
                   </div>
                 </button>
               </div>
 
               {/* Individual Channel Exports */}
-              {channels.length > 0 && (
+              {validChannels.length > 0 && (
                 <div>
                   <h5 className="text-md font-semibold text-gray-300 mb-4">Individual Channels</h5>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {channels.map((channel) => (
+                    {validChannels.map((channel) => (
                       <button
                         key={channel.name}
                         type="button"
@@ -266,7 +332,7 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
                 </div>
               )}
 
-              {channels.length === 0 && (
+              {validChannels.length === 0 && (
                 <div className="p-4 bg-gray-700 rounded-lg text-center text-gray-400">
                   <div className="text-2xl mb-2">📭</div>
                   <div>No channels available for export</div>
@@ -390,11 +456,17 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
     );
   } catch (error) {
     console.error('Error rendering ImportExportModal:', error);
+    console.error('Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      name: error instanceof Error ? error.name : undefined
+    });
     return (
       <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[70]">
         <div className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-2xl border border-gray-700">
           <h3 className="text-2xl font-bold text-white mb-4">Error</h3>
           <p className="text-red-400 mb-4">An error occurred while loading the export interface.</p>
+          <p className="text-gray-400 mb-2">Error details: {error instanceof Error ? error.message : 'Unknown error'}</p>
           <p className="text-gray-400 mb-6">Please try refreshing the page or contact support if the issue persists.</p>
           <button
             type="button"

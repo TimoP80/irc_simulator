@@ -44,7 +44,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ title, messages, onSendM
           {messages.map((msg) => (
             <MessageEntry key={msg.id} message={msg} currentUserNickname={currentUserNickname} />
           ))}
-          {isLoading && <div className="text-gray-400 italic text-sm px-2">AI is typing...</div>}
           {typingUsers.length > 0 && (
             <div className="text-gray-400 italic text-sm px-2 flex items-center gap-2">
               <div className="flex space-x-1">
