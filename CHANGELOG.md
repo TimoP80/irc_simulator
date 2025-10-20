@@ -38,6 +38,28 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
   - **Information**: `/who`, `/help` commands for user lists and command help
   - **Command Parser**: Robust command parsing with proper argument handling
   - **Visual Display**: Color-coded message types with proper IRC formatting
+- **Enhanced Autonomous Messaging**: Improved AI responsiveness and conversation flow
+  - **Faster Response Times**: Reduced simulation intervals (3s fast, 6s normal, 12s slow)
+  - **Active Channel Priority**: Simulation focuses on the channel the user is currently viewing
+  - **Burst Mode**: Additional AI messages generated when user is actively chatting
+  - **Action Command Reactions**: Virtual users now react to `/me` action commands
+  - **Improved AI Context**: Better understanding of action messages vs regular messages
+  - **Dynamic Activity**: More responsive conversation flow with burst mode after user messages
+- **AI-Powered Username Generation**: Revolutionary username creation system
+  - **Creative AI Names**: AI generates unique, creative usernames instead of random combinations
+  - **Style Categories**: 6 different username styles (Tech, Gaming, Creative, Realistic, Abstract, Mixed)
+  - **Personality-Based Names**: Usernames generated based on user personality traits
+  - **Batch Generation**: AI creates multiple unique usernames at once for batch user creation
+  - **Fallback System**: Traditional generation as backup when AI is unavailable
+  - **Style Selection UI**: Visual interface for choosing username generation style
+  - **Enhanced Variety**: Much more diverse and interesting usernames than before
+- **Configuration Loading Fixes**: Resolved critical bugs in configuration persistence
+  - **Fixed Channel Loading**: Configured channels now load correctly instead of default channels
+  - **Fixed User Loading**: All configured virtual users now appear in the virtual world
+  - **Smart Log Merging**: Saved channel logs are merged with current configuration
+  - **Configuration Validation**: Proper validation of saved vs configured channels
+  - **Debug Logging**: Added console logging to help identify configuration issues
+  - **User Assignment**: All configured users are now properly assigned to channels
 
 ### Enhanced
 - **User Generation Efficiency**: Create 50 users in seconds instead of hours
@@ -47,6 +69,12 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 - **Channel Management**: Enhanced UI with message count display and log management controls
 - **IRC Authenticity**: Full IRC command support makes the simulation feel like real IRC
 - **Message Variety**: Rich message types with proper formatting and color coding
+- **Conversation Flow**: Much more responsive AI that reacts quickly to user messages
+- **Dynamic Activity**: Burst mode creates lively conversations when users are actively chatting
+- **Username Quality**: AI-generated usernames are much more creative and realistic
+- **User Diversity**: Better variety in usernames with style-based generation
+- **Configuration Reliability**: Fixed critical bugs ensuring configured users and channels load correctly
+- **Data Persistence**: Improved configuration loading with smart merging of saved logs and current config
 - **Scalability**: Build massive virtual communities quickly and easily
 
 ### Technical Improvements

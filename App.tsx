@@ -21,6 +21,8 @@ const App: React.FC = () => {
   
   const simulationIntervalRef = useRef<number | null>(null);
   const lastSimErrorTimestampRef = useRef<number>(0);
+  const lastUserMessageTimeRef = useRef<number>(0);
+  const burstModeRef = useRef<boolean>(false);
 
   // Load configuration and channel logs from localStorage on initial render
   useEffect(() => {
@@ -29,14 +31,50 @@ const App: React.FC = () => {
     
     if (savedConfig) {
       const { nickname, virtualUsers, channels, simulationSpeed } = initializeStateFromConfig(savedConfig);
+      console.log('Loaded configuration:', { 
+        nickname, 
+        virtualUsersCount: virtualUsers.length, 
+        channelsCount: channels.length,
+        channelNames: channels.map(c => c.name)
+      });
       setCurrentUserNickname(nickname);
       setVirtualUsers(virtualUsers);
       setSimulationSpeed(simulationSpeed);
       
-      // Use saved logs if available, otherwise use default channels
+      // Use saved logs if available and they match the current configuration
       if (savedLogs && savedLogs.length > 0) {
-        setChannels(savedLogs);
+        // Check if saved logs match the configured channels
+        const configuredChannelNames = channels.map(c => c.name).sort();
+        const savedChannelNames = savedLogs.map(c => c.name).sort();
+        
+        console.log('Channel comparison:', {
+          configured: configuredChannelNames,
+          saved: savedChannelNames,
+          match: JSON.stringify(configuredChannelNames) === JSON.stringify(savedChannelNames)
+        });
+        
+        if (JSON.stringify(configuredChannelNames) === JSON.stringify(savedChannelNames)) {
+          // Use saved logs but ensure they have the correct users
+          const updatedLogs = savedLogs.map(savedChannel => {
+            const configuredChannel = channels.find(c => c.name === savedChannel.name);
+            if (configuredChannel) {
+              return {
+                ...savedChannel,
+                users: configuredChannel.users, // Use configured users
+                topic: configuredChannel.topic  // Use configured topic
+              };
+            }
+            return savedChannel;
+          });
+          console.log('Using saved logs with updated users');
+          setChannels(updatedLogs);
+        } else {
+          // Channel configuration changed, use new channels
+          console.log('Channel configuration changed, using new channels');
+          setChannels(channels);
+        }
       } else {
+        console.log('No saved logs, using configured channels');
         setChannels(channels);
       }
     } else {
@@ -327,8 +365,56 @@ const App: React.FC = () => {
   const handleSendMessage = async (content: string) => {
     if (content.startsWith('/')) {
       handleCommand(content);
+      
+      // Trigger AI reactions for action commands (/me)
+      if (content.startsWith('/me ')) {
+        const parsedCommand = parseIRCCommand(content);
+        if (parsedCommand && parsedCommand.command === 'me') {
+          const userMessage: Message = {
+            id: Date.now(),
+            nickname: currentUserNickname,
+            content: parsedCommand.content,
+            timestamp: new Date(),
+            type: 'action',
+            command: 'me'
+          };
+          
+          // Track user message time for burst mode
+          lastUserMessageTimeRef.current = Date.now();
+          
+          // Trigger AI reaction to the action
+          if (activeContext && activeContext.type === 'channel') {
+            const channel = channels.find(c => c.name === activeContext.name);
+            if (channel) {
+              try {
+                const aiResponse = await generateReactionToMessage(channel, userMessage, currentUserNickname);
+                if (aiResponse) {
+                  const aiMessages = aiResponse.split('\n').filter(line => line.includes(':'));
+                  aiMessages.forEach((msgLine, index) => {
+                    const [nickname, ...contentParts] = msgLine.split(':');
+                    const content = contentParts.join(':').trim();
+                    if (nickname && content) {
+                      const aiMessage: Message = {
+                        id: Date.now() + index + 1,
+                        nickname: nickname.trim(),
+                        content: content,
+                        timestamp: new Date(),
+                        type: 'ai'
+                      };
+                      addMessageToContext(aiMessage, activeContext);
+                    }
+                  });
+                }
+              } catch (error) {
+                console.error("Failed to get AI reaction to action:", error);
+              }
+            }
+          }
+        }
+      }
       return;
     }
+    
     setIsLoading(true);
     const userMessage: Message = {
       id: Date.now(),
@@ -338,6 +424,9 @@ const App: React.FC = () => {
       type: activeContext?.type === 'pm' ? 'pm' : 'user'
     };
     addMessageToContext(userMessage, activeContext);
+    
+    // Track user message time for burst mode
+    lastUserMessageTimeRef.current = Date.now();
 
     try {
       let aiResponse: string | null = null;
@@ -428,42 +517,84 @@ The response must be a single line in the format: "nickname: greeting message"
 
   const runSimulation = useCallback(async () => {
     if (channels.length === 0) return;
-    const randomChannelIndex = Math.floor(Math.random() * channels.length);
-    const targetChannel = channels[randomChannelIndex];
+    
+    // Check if we should enter burst mode (user recently sent a message)
+    const now = Date.now();
+    const timeSinceLastUserMessage = now - lastUserMessageTimeRef.current;
+    const shouldBurst = timeSinceLastUserMessage < 30000; // 30 seconds
+    
+    // Prioritize the active channel for more responsive conversation
+    let targetChannel: Channel;
+    if (activeContext && activeContext.type === 'channel') {
+      const activeChannel = channels.find(c => c.name === activeContext.name);
+      if (activeChannel) {
+        targetChannel = activeChannel;
+      } else {
+        const randomChannelIndex = Math.floor(Math.random() * channels.length);
+        targetChannel = channels[randomChannelIndex];
+      }
+    } else {
+      const randomChannelIndex = Math.floor(Math.random() * channels.length);
+      targetChannel = channels[randomChannelIndex];
+    }
 
-    if (!(activeContext && activeContext.type === 'channel' && activeContext.name === targetChannel.name)) {
-      try {
-        const response = await generateChannelActivity(targetChannel, currentUserNickname);
-        if (response) {
-          const [nickname, ...contentParts] = response.split(':');
-          const content = contentParts.join(':').trim();
+    try {
+      const response = await generateChannelActivity(targetChannel, currentUserNickname);
+      if (response) {
+        const [nickname, ...contentParts] = response.split(':');
+        const content = contentParts.join(':').trim();
 
-          if (nickname && content) {
-            const aiMessage: Message = {
-              id: Date.now(),
-              nickname: nickname.trim(),
-              content,
-              timestamp: new Date(),
-              type: 'ai'
-            };
-            addMessageToContext(aiMessage, { type: 'channel', name: targetChannel.name });
+        if (nickname && content) {
+          const aiMessage: Message = {
+            id: Date.now(),
+            nickname: nickname.trim(),
+            content,
+            timestamp: new Date(),
+            type: 'ai'
+          };
+          addMessageToContext(aiMessage, { type: 'channel', name: targetChannel.name });
+        }
+      }
+      
+      // In burst mode, sometimes generate a second message for more activity
+      if (shouldBurst && Math.random() < 0.3) {
+        setTimeout(async () => {
+          try {
+            const secondResponse = await generateChannelActivity(targetChannel, currentUserNickname);
+            if (secondResponse) {
+              const [nickname, ...contentParts] = secondResponse.split(':');
+              const content = contentParts.join(':').trim();
+
+              if (nickname && content) {
+                const aiMessage: Message = {
+                  id: Date.now() + Math.random(),
+                  nickname: nickname.trim(),
+                  content,
+                  timestamp: new Date(),
+                  type: 'ai'
+                };
+                addMessageToContext(aiMessage, { type: 'channel', name: targetChannel.name });
+              }
+            }
+          } catch (error) {
+            console.error(`Burst simulation failed for ${targetChannel.name}:`, error);
           }
-        }
-      } catch (error) {
-        console.error(`Simulation failed for ${targetChannel.name}:`, error);
-        const now = Date.now();
-        // Only show error message if the last one was more than 2 minutes ago
-        if (now - lastSimErrorTimestampRef.current > 120000) { 
-            lastSimErrorTimestampRef.current = now;
-            const errorMessage: Message = {
-                id: now,
-                nickname: 'system',
-                content: `Background simulation for this channel failed due to API errors. It will keep retrying silently. The issue might be rate limiting.`,
-                timestamp: new Date(),
-                type: 'system'
-            };
-            addMessageToContext(errorMessage, { type: 'channel', name: targetChannel.name });
-        }
+        }, Math.random() * 3000 + 1000); // 1-4 seconds delay
+      }
+    } catch (error) {
+      console.error(`Simulation failed for ${targetChannel.name}:`, error);
+      const now = Date.now();
+      // Only show error message if the last one was more than 2 minutes ago
+      if (now - lastSimErrorTimestampRef.current > 120000) { 
+          lastSimErrorTimestampRef.current = now;
+          const errorMessage: Message = {
+              id: now,
+              nickname: 'system',
+              content: `Background simulation for this channel failed due to API errors. It will keep retrying silently. The issue might be rate limiting.`,
+              timestamp: new Date(),
+              type: 'system'
+          };
+          addMessageToContext(errorMessage, { type: 'channel', name: targetChannel.name });
       }
     }
   }, [channels, activeContext, addMessageToContext, currentUserNickname]);

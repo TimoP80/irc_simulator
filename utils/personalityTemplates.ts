@@ -218,6 +218,7 @@ export const TRAIT_POOLS = {
 };
 
 export const generateRandomNickname = (): string => {
+  // Fallback to traditional generation for immediate use
   const prefixes = ['nova', 'cyber', 'digital', 'virtual', 'quantum', 'neon', 'crystal', 'shadow', 'phoenix', 'cosmic', 'stellar', 'lunar', 'solar', 'atomic', 'mystic', 'arcane', 'prism', 'echo', 'pulse', 'flux'];
   const suffixes = ['byte', 'code', 'link', 'node', 'core', 'wave', 'beam', 'stream', 'flow', 'glow', 'spark', 'flash', 'blaze', 'storm', 'wind', 'fire', 'ice', 'star', 'moon', 'sun'];
   
@@ -226,6 +227,21 @@ export const generateRandomNickname = (): string => {
   const number = Math.floor(Math.random() * 999) + 1;
   
   return `${prefix}${suffix}${number}`;
+};
+
+export const generateRandomNicknameAsync = async (avoidDuplicates: string[] = []): Promise<string> => {
+  try {
+    const { generateAUsernames } = await import('../services/usernameGeneration');
+    const usernames = await generateAUsernames({
+      count: 1,
+      style: 'mixed',
+      avoidDuplicates
+    });
+    return usernames[0] || generateRandomNickname();
+  } catch (error) {
+    console.error('Failed to generate AI nickname:', error);
+    return generateRandomNickname();
+  }
 };
 
 export const generateRandomUser = (): User => {
@@ -243,6 +259,40 @@ export const generateRandomUser = (): User => {
   
   return {
     nickname: generateRandomNickname(),
+    status: 'online',
+    personality: `${personality}, interested in ${interest}`,
+    languageSkills: {
+      fluency: fluencyLevels[Math.floor(Math.random() * fluencyLevels.length)],
+      languages: languages,
+      accent: accent
+    },
+    writingStyle: {
+      formality: formalityLevels[Math.floor(Math.random() * formalityLevels.length)],
+      verbosity: verbosityLevels[Math.floor(Math.random() * verbosityLevels.length)],
+      humor: humorLevels[Math.floor(Math.random() * humorLevels.length)],
+      emojiUsage: emojiLevels[Math.floor(Math.random() * emojiLevels.length)],
+      punctuation: punctuationLevels[Math.floor(Math.random() * punctuationLevels.length)]
+    }
+  };
+};
+
+export const generateRandomUserAsync = async (avoidDuplicates: string[] = []): Promise<User> => {
+  const personality = TRAIT_POOLS.personalities[Math.floor(Math.random() * TRAIT_POOLS.personalities.length)];
+  const interest = TRAIT_POOLS.interests[Math.floor(Math.random() * TRAIT_POOLS.interests.length)];
+  const languages = TRAIT_POOLS.languages.slice(0, Math.floor(Math.random() * 3) + 1);
+  const accent = Math.random() > 0.7 ? TRAIT_POOLS.accents[Math.floor(Math.random() * TRAIT_POOLS.accents.length)] : '';
+  
+  const fluencyLevels = ['beginner', 'intermediate', 'advanced', 'native'] as const;
+  const formalityLevels = ['casual', 'formal', 'mixed'] as const;
+  const verbosityLevels = ['concise', 'moderate', 'verbose'] as const;
+  const humorLevels = ['none', 'light', 'heavy'] as const;
+  const emojiLevels = ['none', 'minimal', 'frequent'] as const;
+  const punctuationLevels = ['minimal', 'standard', 'excessive'] as const;
+  
+  const nickname = await generateRandomNicknameAsync(avoidDuplicates);
+  
+  return {
+    nickname,
     status: 'online',
     personality: `${personality}, interested in ${interest}`,
     languageSkills: {

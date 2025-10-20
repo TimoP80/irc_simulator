@@ -73,8 +73,16 @@ export const generateReactionToMessage = async (channel: Channel, userMessage: M
 
     const randomUser = usersInChannel[Math.floor(Math.random() * usersInChannel.length)];
     
+    // Handle different message types
+    let messageDescription = '';
+    if (userMessage.type === 'action') {
+      messageDescription = `performed an action: *${userMessage.nickname} ${userMessage.content}*`;
+    } else {
+      messageDescription = `said: "${userMessage.content}"`;
+    }
+    
     const prompt = `
-In IRC channel ${channel.name}, the user "${userMessage.nickname}" just said: "${userMessage.content}".
+In IRC channel ${channel.name}, the user "${userMessage.nickname}" just ${messageDescription}.
 The topic is: "${channel.topic}".
 The other users in the channel are: ${usersInChannel.map(u => u.nickname).join(', ')}.
 Their personalities are: ${usersInChannel.map(u => `${u.nickname} is ${u.personality}`).join('. ')}.

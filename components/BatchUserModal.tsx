@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { User } from '../types';
-import { PERSONALITY_TEMPLATES, generateRandomUser, TRAIT_POOLS } from '../utils/personalityTemplates';
+import { PERSONALITY_TEMPLATES, generateRandomUser, generateRandomUserAsync, TRAIT_POOLS } from '../utils/personalityTemplates';
 import { generateBatchUsers } from '../services/geminiService';
+import { generateBatchUsernames, generateUsernamesForPersonality, USERNAME_CATEGORIES } from '../services/usernameGeneration';
 
 interface BatchUserModalProps {
   isOpen: boolean;
@@ -27,6 +28,7 @@ export const BatchUserModal: React.FC<BatchUserModalProps> = ({
     randomizeLanguages: true,
     randomizeAccent: true
   });
+  const [usernameStyle, setUsernameStyle] = useState<'mixed' | 'tech' | 'gaming' | 'creative' | 'realistic' | 'abstract'>('mixed');
 
   // Reset form when modal opens
   useEffect(() => {
@@ -70,13 +72,40 @@ export const BatchUserModal: React.FC<BatchUserModalProps> = ({
         setIsGenerating(false);
       }
     } else {
-      return generateRandomUsers();
+      return await generateRandomUsers();
     }
   };
 
-  const generateRandomUsers = (): User[] => {
+  const generateRandomUsers = async (): Promise<User[]> => {
     const users: User[] = [];
     const usedNicknames = new Set(existingNicknames.map(n => n.toLowerCase()));
+
+    // Generate AI usernames for better variety
+    let aiUsernames: string[] = [];
+    try {
+      if (generationMode === 'template' && selectedTemplate) {
+        const template = PERSONALITY_TEMPLATES.find(t => t.id === selectedTemplate);
+        if (template?.baseUser.personality) {
+          aiUsernames = await generateUsernamesForPersonality(
+            template.baseUser.personality,
+            userCount,
+            Array.from(usedNicknames)
+          );
+        }
+      }
+      
+      if (aiUsernames.length === 0) {
+        const { generateAUsernames } = await import('../services/usernameGeneration');
+        aiUsernames = await generateAUsernames({
+          count: userCount,
+          style: usernameStyle,
+          avoidDuplicates: Array.from(usedNicknames)
+        });
+      }
+    } catch (error) {
+      console.error('Failed to generate AI usernames:', error);
+      // Fallback to traditional generation
+    }
 
     for (let i = 0; i < userCount; i++) {
       let user: User;
@@ -85,7 +114,7 @@ export const BatchUserModal: React.FC<BatchUserModalProps> = ({
         const template = PERSONALITY_TEMPLATES.find(t => t.id === selectedTemplate);
         if (template) {
           user = {
-            nickname: generateUniqueNickname(usedNicknames),
+            nickname: aiUsernames[i] || generateUniqueNickname(usedNicknames),
             status: 'online',
             personality: template.baseUser.personality || '',
             languageSkills: template.baseUser.languageSkills || {
@@ -102,10 +131,13 @@ export const BatchUserModal: React.FC<BatchUserModalProps> = ({
             }
           };
         } else {
-          user = generateRandomUser();
+          user = await generateRandomUserAsync(Array.from(usedNicknames));
         }
       } else {
-        user = generateRandomUser();
+        user = await generateRandomUserAsync(Array.from(usedNicknames));
+        if (aiUsernames[i]) {
+          user.nickname = aiUsernames[i];
+        }
       }
 
       // Apply randomization settings
@@ -354,6 +386,31 @@ export const BatchUserModal: React.FC<BatchUserModalProps> = ({
               </div>
             </div>
           )}
+
+          {/* Username Style Selection */}
+          <div>
+            <h4 className="text-lg font-semibold text-gray-200 mb-4">Username Style</h4>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {USERNAME_CATEGORIES.map((category) => (
+                <button
+                  key={category.id}
+                  type="button"
+                  onClick={() => setUsernameStyle(category.id as any)}
+                  className={`p-3 rounded-lg border-2 transition-colors text-left ${
+                    usernameStyle === category.id
+                      ? 'border-indigo-500 bg-indigo-900/20 text-indigo-200'
+                      : 'border-gray-600 bg-gray-700 text-gray-300 hover:border-gray-500'
+                  }`}
+                >
+                  <div className="font-semibold text-sm">{category.name}</div>
+                  <div className="text-xs text-gray-400 mt-1">{category.description}</div>
+                </button>
+              ))}
+            </div>
+            <div className="text-sm text-gray-400 mt-2">
+              Choose the style for generated usernames. AI will create names that match the selected style.
+            </div>
+          </div>
 
           {/* Preview Section */}
           <div>
