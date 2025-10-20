@@ -174,7 +174,7 @@ export const generateBatchUsernames = async (
   const avoidDuplicates = existingUsers.map(u => u.toLowerCase());
   
   // Mix different styles for variety
-  const styles: UsernameGenerationOptions['style'][] = ['tech', 'gaming', 'creative', 'realistic', 'abstract'];
+  const styles: UsernameGenerationOptions['style'][] = ['tech', 'gaming', 'creative', 'realistic', 'mixed'];
   const usernames: string[] = [];
   
   const perStyle = Math.ceil(count / styles.length);

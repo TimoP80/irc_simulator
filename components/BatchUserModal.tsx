@@ -80,7 +80,7 @@ export const BatchUserModal: React.FC<BatchUserModalProps> = ({
 
   const generateRandomUsers = async (): Promise<User[]> => {
     const users: User[] = [];
-    const usedNicknames = new Set(existingNicknames.map(n => n.toLowerCase()));
+    const usedNicknames = new Set<string>(existingNicknames.map(n => n.toLowerCase()));
 
     // Generate AI usernames for better variety
     let aiUsernames: string[] = [];
