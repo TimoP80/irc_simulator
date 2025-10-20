@@ -6,9 +6,9 @@ export const DEFAULT_NICKNAME = "you";
 
 // Intervals for background simulation in milliseconds.
 export const SIMULATION_INTERVALS: Record<'fast' | 'normal' | 'slow', number> = {
-  fast: 3000,    // 3 seconds - very responsive
-  normal: 6000,  // 6 seconds - good balance
-  slow: 12000,   // 12 seconds - slower but still active
+  fast: 5000,    // 5 seconds - responsive but safer
+  normal: 10000, // 10 seconds - good balance, reduced from 6s
+  slow: 20000,   // 20 seconds - much slower, API-friendly
 };
 
 // Fallback AI models when API is unavailable
@@ -45,8 +45,8 @@ export const DEFAULT_AI_MODEL = 'gemini-2.5-flash' as const;
 // Default typing delay settings
 export const DEFAULT_TYPING_DELAY = {
   enabled: true,
-  baseDelay: 1000, // 1 second base delay
-  maxDelay: 5000   // 5 seconds maximum delay
+  baseDelay: 500,  // Reduced from 1000ms to 500ms for better Tier 1 API compatibility
+  maxDelay: 3000   // Reduced from 5000ms to 3000ms for better Tier 1 API compatibility
 } as const;
 
 // Default list of virtual users for the simulation.

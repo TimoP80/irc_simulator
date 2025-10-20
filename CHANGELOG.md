@@ -4,6 +4,46 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 
 *Note: This project was previously known as "Gemini IRC Simulator" and was renamed to "Station V - Virtual IRC Simulator" as of v1.5.1.*
 
+## 1.10.2 - 2025-01-20
+
+### Fixed
+- **AI Model ID Validation**: Resolved critical API errors caused by invalid model names
+  - **Model ID Extraction**: Added intelligent model ID validation that extracts proper model IDs from display names
+  - **Display Name Handling**: Fixed issue where model selector was passing display names instead of model IDs to API
+  - **Regex Pattern Matching**: Implemented robust pattern matching to extract `gemini-2.5-flash` from complex display names
+  - **Fallback System**: Added automatic fallback to `gemini-2.5-flash` when model ID cannot be determined
+  - **Enhanced Debugging**: Added comprehensive logging to track model ID validation process
+  - **API Call Validation**: Applied model ID validation to all AI generation functions:
+    - `generateChannelActivity()`
+    - `generateReactionToMessage()`
+    - `generatePrivateMessageResponse()`
+    - `generateBatchUsers()`
+    - `generateRandomWorldConfiguration()`
+  - **Settings UI Debugging**: Added model ID display in Settings modal for troubleshooting
+
+### Enhanced
+- **Error Prevention**: Proactive validation prevents "unexpected model name format" API errors
+- **Developer Experience**: Better debugging information for model selection issues
+- **API Reliability**: More robust handling of dynamic model loading and selection
+
+## 1.10.1 - 2025-01-20
+
+### Fixed
+- **API Rate Limit Issues**: Addressed frequent API errors caused by typing delays
+  - **Increased Simulation Intervals**: Made background simulation more API-friendly
+    - Fast: 3s → 5s (67% less frequent)
+    - Normal: 6s → 10s (67% less frequent) 
+    - Slow: 12s → 20s (67% less frequent)
+  - **Better Error Handling**: Reduced error message frequency from every 2 minutes to every 5 minutes
+  - **Automatic Recovery**: Simulation pauses for 30 seconds after API errors to prevent rapid retries
+  - **Clearer Error Messages**: More helpful error messages that guide users to solutions
+  - **Conservative Defaults**: New intervals are much safer for free-tier API keys
+
+### Enhanced
+- **API Resilience**: Improved handling of rate limit errors with automatic backoff
+- **User Experience**: Less spammy error messages and better guidance when issues occur
+- **Documentation**: Updated README with new, more conservative simulation intervals
+
 ## 1.10.0 - 2025-01-20
 
 ### Added

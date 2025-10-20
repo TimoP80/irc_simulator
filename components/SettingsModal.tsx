@@ -73,12 +73,14 @@ const formatChannelsToText = (channels: { name: string; topic: string }[]) => {
 export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel }) => {
   const [config, setConfig] = useState<AppConfig>(() => {
     const savedConfig = loadConfig();
+    const aiModel = savedConfig?.aiModel || DEFAULT_AI_MODEL;
+    console.log('Initial AI model from config:', aiModel);
     return {
       currentUserNickname: savedConfig?.currentUserNickname || DEFAULT_NICKNAME,
       virtualUsers: savedConfig?.virtualUsers || DEFAULT_USERS_TEXT,
       channels: savedConfig?.channels || DEFAULT_CHANNELS_TEXT,
       simulationSpeed: savedConfig?.simulationSpeed || 'normal',
-      aiModel: savedConfig?.aiModel || DEFAULT_AI_MODEL,
+      aiModel: aiModel,
       typingDelay: savedConfig?.typingDelay || DEFAULT_TYPING_DELAY,
     };
   });
@@ -114,7 +116,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel }
         console.error('Failed to fetch available models:', error);
         setModelsError(error instanceof Error ? error.message : 'Failed to fetch models');
         // Fall back to static models if API fails
-        setAvailableModels(FALLBACK_AI_MODELS.map(model => ({
+        const fallbackModels = FALLBACK_AI_MODELS.map(model => ({
           name: model.id,
           baseModelId: model.id,
           version: model.id.includes('2.5') ? '2.5' : '1.5',
@@ -128,7 +130,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel }
           maxTemperature: 1.0,
           topP: 0.95,
           topK: 40
-        })));
+        }));
+        console.log('Using fallback models:', fallbackModels);
+        setAvailableModels(fallbackModels);
       } finally {
         setIsLoadingModels(false);
       }
@@ -136,6 +140,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel }
 
     fetchModels();
   }, []);
+
+  // Ensure AI model is valid when models are loaded
+  useEffect(() => {
+    if (availableModels.length > 0) {
+      const currentModel = availableModels.find(model => model.baseModelId === config.aiModel);
+      if (!currentModel) {
+        // If current model is not found, reset to the first available model
+        const firstModel = availableModels[0];
+        console.log('Resetting AI model from', config.aiModel, 'to', firstModel.baseModelId);
+        setConfig(prev => ({ ...prev, aiModel: firstModel.baseModelId }));
+      }
+    }
+  }, [availableModels, config.aiModel]);
 
   const handleSave = () => {
     const configToSave = {
@@ -147,7 +164,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel }
   };
   
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setConfig(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    const { name, value } = e.target;
+    
+    // Special handling for AI model selection to ensure we use the model ID
+    if (name === 'aiModel') {
+      console.log('AI Model changed to:', value);
+      setConfig(prev => ({ ...prev, [name]: value }));
+    } else {
+      setConfig(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleRandomize = async () => {
@@ -249,6 +274,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel }
                 <option value={DEFAULT_AI_MODEL}>Loading models...</option>
               )}
             </select>
+            {/* Debug info */}
+            <p className="text-xs text-gray-500 mt-1">
+              Selected model ID: {config.aiModel}
+            </p>
             {modelsError && (
               <p className="text-xs text-red-400 mt-1">
                 ⚠️ {modelsError} (Using fallback models)
