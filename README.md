@@ -55,6 +55,7 @@ The simulation is powered by the Gemini API, using carefully crafted prompts to 
 -   **Import/Export System**: Full data portability for user management:
     -   **CSV Support**: Export/import users in spreadsheet format for easy editing
     -   **JSON Support**: Export/import complete user objects with all attributes
+    -   **JSON Format Reference**: [Users_JSON_Format.html](Users_JSON_Format.html)
     -   **Backup & Sharing**: Easy data backup and community sharing capabilities
     -   **File Validation**: Automatic format detection with helpful error messages
 -   **Classic IRC Experience**: The app features a familiar three-panel UI (channels, chat, user list), a retro monospace aesthetic, and support for essential commands like `/nick`, `/join`, and `/who`.
