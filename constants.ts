@@ -11,25 +11,31 @@ export const SIMULATION_INTERVALS: Record<'fast' | 'normal' | 'slow', number> = 
   slow: 12000,   // 12 seconds - slower but still active
 };
 
-// Available AI models for message generation
-export const AI_MODELS = [
+// Fallback AI models when API is unavailable
+export const FALLBACK_AI_MODELS = [
   { 
     id: 'gemini-2.5-flash' as const, 
     name: 'Gemini 2.5 Flash', 
     description: 'Fastest model, good for quick responses',
-    cost: 'Low'
+    cost: 'Low',
+    inputTokenLimit: 1000000,
+    outputTokenLimit: 8192
   },
   { 
     id: 'gemini-1.5-flash' as const, 
     name: 'Gemini 1.5 Flash', 
     description: 'Balanced speed and quality',
-    cost: 'Low'
+    cost: 'Low',
+    inputTokenLimit: 1000000,
+    outputTokenLimit: 8192
   },
   { 
     id: 'gemini-1.5-pro' as const, 
     name: 'Gemini 1.5 Pro', 
     description: 'Highest quality, best for complex conversations',
-    cost: 'High'
+    cost: 'High',
+    inputTokenLimit: 2000000,
+    outputTokenLimit: 8192
   }
 ];
 

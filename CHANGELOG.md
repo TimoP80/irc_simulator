@@ -4,6 +4,34 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 
 *Note: This project was previously known as "Gemini IRC Simulator" and was renamed to "Station V - Virtual IRC Simulator" as of v1.5.1.*
 
+## 1.9.0 - 2025-01-20
+
+### Added
+- **Dynamic AI Model Listing**: Real-time model discovery and selection
+  - **API Integration**: Fetches available models directly from Google's Gemini API using `https://generativelanguage.googleapis.com/v1beta/models`
+  - **Live Model Discovery**: Automatically discovers new models as they become available
+  - **Model Information Display**: Shows detailed model information including token limits, capabilities, and descriptions
+  - **Fallback System**: Gracefully falls back to static models if API is unavailable
+  - **Loading States**: Visual feedback during model fetching with loading indicators
+  - **Error Handling**: Displays error messages when model fetching fails
+  - **Enhanced UI**: Updated model selector with token limits and real-time information
+  - **TypeScript Support**: Full type safety with `GeminiModel` and `ModelsListResponse` interfaces
+
+### Enhanced
+- **AI Model Selector**: Now displays live model information from the API
+  - **Token Limits**: Shows input token limits for each model (e.g., "Input: 1000k tokens")
+  - **Model Count**: Displays total number of available models found
+  - **Real-time Updates**: Models are fetched fresh each time settings are opened
+  - **Better Descriptions**: Uses official model descriptions from Google's API
+  - **Improved UX**: Loading states and error handling for better user experience
+
+### Technical Changes
+- **New API Functions**: Added `listAvailableModels()` and `getModelInfo()` to `geminiService.ts`
+- **Type Definitions**: Added `GeminiModel` and `ModelsListResponse` interfaces to `types.ts`
+- **Constants Update**: Renamed `AI_MODELS` to `FALLBACK_AI_MODELS` for clarity
+- **Dynamic Model Support**: `AppConfig.aiModel` now supports any model ID from the API
+- **Error Resilience**: Graceful handling of API failures with fallback to static models
+
 ## 1.8.0 - 2025-01-20
 
 ### Added
