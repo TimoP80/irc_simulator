@@ -2,7 +2,41 @@ import React, { useState, useEffect } from 'react';
 import { User } from '../types';
 import { PERSONALITY_TEMPLATES, generateRandomUser, generateRandomUserAsync, TRAIT_POOLS } from '../utils/personalityTemplates';
 import { generateBatchUsers } from '../services/geminiService';
-import { generateBatchUsernames, generateUsernamesForPersonality, USERNAME_CATEGORIES } from '../services/usernameGeneration';
+// usernameGeneration functions are imported dynamically to avoid mixed import warnings
+
+// Local username categories to avoid dynamic import issues
+const USERNAME_CATEGORIES = [
+  {
+    id: 'tech',
+    name: 'Tech/Programming',
+    description: 'Technology and programming related usernames',
+    examples: ['CodeMaster', 'ByteWizard', 'DataNinja', 'CloudGuru', 'DevOpsHero']
+  },
+  {
+    id: 'gaming',
+    name: 'Gaming',
+    description: 'Gaming and fantasy themed usernames',
+    examples: ['DragonSlayer', 'PixelWarrior', 'QuestSeeker', 'ShadowMage', 'BattleLord']
+  },
+  {
+    id: 'creative',
+    name: 'Creative/Artistic',
+    description: 'Creative and artistic themed usernames',
+    examples: ['ArtSoul', 'ColorDreamer', 'MusicMaker', 'PoetWriter', 'DesignMuse']
+  },
+  {
+    id: 'realistic',
+    name: 'Realistic',
+    description: 'Realistic and personal sounding usernames',
+    examples: ['Alex_M', 'SarahJ', 'Mike_Dev', 'Emma_C', 'John_2024']
+  },
+  {
+    id: 'mixed',
+    name: 'Mixed',
+    description: 'Combination of different styles for variety',
+    examples: ['TechGamer', 'CreativeDev', 'ArtWarrior', 'CodeArtist', 'PixelPoet']
+  }
+];
 
 interface BatchUserModalProps {
   isOpen: boolean;
@@ -88,6 +122,7 @@ export const BatchUserModal: React.FC<BatchUserModalProps> = ({
       if (generationMode === 'template' && selectedTemplate) {
         const template = PERSONALITY_TEMPLATES.find(t => t.id === selectedTemplate);
         if (template?.baseUser.personality) {
+          const { generateUsernamesForPersonality } = await import('../services/usernameGeneration');
           aiUsernames = await generateUsernamesForPersonality(
             template.baseUser.personality,
             userCount,
