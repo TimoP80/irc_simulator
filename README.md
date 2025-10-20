@@ -520,6 +520,14 @@ A: No, Station V requires an internet connection to communicate with the Gemini 
   - Bridge between virtual AI users and real IRC channels
   - Allow real IRC users to interact with AI personalities
   - Maintain the simulation experience while adding real-world connectivity
+  - Configure autonomous chat frequency (default=OFF, but configurable similar to the simulated personalities)
+
+- **HTML Chat Log Export**: Export chat logs in HTML format for better readability and sharing
+  - Generate formatted HTML files with proper styling and timestamps
+  - Include user avatars, message types, and channel information
+  - Support for exporting individual channels or all channels at once
+  - Preserve message formatting, colors, and IRC command styling
+  - Enable easy sharing and archiving of conversation history
 
 ## 10. Known Issues
 
