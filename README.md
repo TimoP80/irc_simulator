@@ -386,7 +386,127 @@ Station V previously received major enhancements with powerful batch user genera
 - **JavaScript Enabled** - Required for React application
 - **Local Storage** - Used for saving configuration and channel logs
 
-## 8. Known Issues
+## 8. Frequently Asked Questions (FAQ)
+
+### Getting Started
+
+**Q: Do I need to install anything to run Station V?**
+A: You need Node.js (version 16+) and a Google Gemini API key. The application runs in your browser but requires a development server to be started.
+
+**Q: Is this free to use?**
+A: Station V itself is free and open source. However, it requires a Google Gemini API key, which has usage costs. You can get free credits from Google AI Studio to try it out.
+
+**Q: Can I run this without an API key?**
+A: No, Station V requires a valid Gemini API key to function. The AI generates all the virtual users and their messages.
+
+**Q: How do I get a Gemini API key?**
+A: Visit [Google AI Studio](https://makersuite.google.com/app/apikey) and create a free account. You'll get free credits to start with.
+
+### Configuration & Setup
+
+**Q: Where are my settings saved?**
+A: All settings are saved in your browser's localStorage, so they persist between sessions but are specific to each browser/device.
+
+**Q: Can I share my configuration with others?**
+A: Yes! Use the Import/Export feature in User Management to export your users as CSV or JSON files, which can be shared with others.
+
+**Q: What's the difference between the AI models?**
+A: 
+- **Gemini 2.5 Flash**: Fastest responses, lowest cost, good for casual use
+- **Gemini 1.5 Flash**: Balanced speed and quality, low cost
+- **Gemini 1.5 Pro**: Highest quality responses, higher cost, best for complex conversations
+
+**Q: Can I change the AI model after starting?**
+A: Yes! Go to Settings and change the AI model. It will apply to all new AI messages immediately.
+
+### User Management
+
+**Q: How many virtual users can I have?**
+A: There's no hard limit, but more users will increase API usage. Start with 5-10 users and add more as needed.
+
+**Q: Can I edit users after creating them?**
+A: Yes! Click the "Edit" button on any user card to modify their personality, language skills, or writing style.
+
+**Q: What's the difference between single user creation and mass generation?**
+A: Single creation gives you full control over each user's attributes. Mass generation creates multiple users quickly using templates or AI generation.
+
+**Q: Can I import users from other sources?**
+A: Yes! Use the Import/Export feature to import users from CSV or JSON files. You can also create users in a spreadsheet and import them.
+
+### Channels & Messaging
+
+**Q: How do I create channels?**
+A: In Settings, go to Channel Management and click "Add Channel". Channel names must start with `#` (e.g., `#general`).
+
+**Q: Can I have private channels?**
+A: Currently, all channels are public. Private messaging is available for one-on-one conversations with individual users.
+
+**Q: How do I join a channel?**
+A: Click on any channel name in the left panel to join it. You'll see the channel's messages and users.
+
+**Q: What IRC commands are supported?**
+A: Station V supports many IRC commands including `/nick`, `/join`, `/me`, `/who`, `/help`, `/kick`, `/ban`, and more. Type `/help` for a full list.
+
+### AI Behavior & Simulation
+
+**Q: Why aren't the AI users talking?**
+A: Check your simulation speed setting. If it's set to "Off", AI users will only respond to your messages. Try "Slow" or "Normal" for background activity.
+
+**Q: How do I make the AI more active?**
+A: Increase the simulation speed to "Fast" or "Normal" in Settings. You can also send messages to trigger AI responses.
+
+**Q: Why do AI users sometimes give weird responses?**
+A: AI responses can vary based on the model, temperature settings, and context. Try switching to a different AI model or adjusting user personalities.
+
+**Q: Can I control what AI users talk about?**
+A: Yes! Set channel topics and user personalities to guide conversations. AI users will reference channel topics and maintain their personalities.
+
+### Technical Issues
+
+**Q: I'm getting "npm is not recognized" errors.**
+A: You need to install Node.js from [nodejs.org](https://nodejs.org/). This includes npm, which is required to run the development server.
+
+**Q: The app won't start or shows errors.**
+A: Check that you have a valid `GEMINI_API_KEY` in your `.env` file and that Node.js is properly installed.
+
+**Q: I'm getting API rate limit errors.**
+A: Reduce the simulation speed to "Slow" or "Off" in Settings. Free API keys have strict rate limits.
+
+**Q: The app is slow or unresponsive.**
+A: Try reducing the number of virtual users, lowering the simulation speed, or switching to a faster AI model.
+
+**Q: My chat logs disappeared.**
+A: Logs are saved in browser localStorage. They might be cleared if you clear browser data or use incognito mode.
+
+### Debugging & Troubleshooting
+
+**Q: How can I see what's happening behind the scenes?**
+A: Enable debug logging in Settings. This will show detailed logs in the browser console about AI requests and responses.
+
+**Q: The AI isn't responding to my messages.**
+A: Check the browser console for errors, ensure your API key is valid, and try reducing the simulation speed.
+
+**Q: Users are saying inappropriate things.**
+A: AI responses can sometimes be unpredictable. You can edit user personalities to be more appropriate or delete problematic users.
+
+**Q: How do I report bugs or get help?**
+A: Check the browser console for error messages, enable debug logging, and ensure your API key has sufficient quota.
+
+### Data & Privacy
+
+**Q: Is my data sent to external servers?**
+A: Only your API key and AI prompts are sent to Google's Gemini API. Your configuration and chat logs stay in your browser.
+
+**Q: Can I backup my configuration?**
+A: Yes! Use the Import/Export feature to save your users and channels. Your settings are also saved in localStorage.
+
+**Q: What happens if I clear my browser data?**
+A: Your configuration and chat logs will be lost. Make sure to export your data before clearing browser data.
+
+**Q: Can I use this offline?**
+A: No, Station V requires an internet connection to communicate with the Gemini API for AI responses.
+
+## 9. Known Issues
 
 ### API Rate Limit & Quota Errors
 
@@ -396,9 +516,9 @@ Station V previously received major enhancements with powerful batch user genera
     -   Open the **Settings** modal (gear icon in the channel list).
     -   Under **"Background Simulation Speed,"** select a slower setting like `'Slow'` or `'Off'`.
     -   Current simulation intervals:
-        -   **Fast**: 5 seconds (very frequent)
-        -   **Normal**: 10 seconds (moderate)
-        -   **Slow**: 20 seconds (conservative)
+        -   **Fast**: 3 seconds (very frequent)
+        -   **Normal**: 6 seconds (moderate)
+        -   **Slow**: 12 seconds (conservative)
         -   **Off**: No autonomous messages (most quota-friendly)
     -   Setting the speed to **'Off'** completely disables autonomous AI messages. The AI will *only* respond when you send a message, which is the most effective way to conserve your API quota and avoid rate-limit errors.
     -   The simulation also automatically pauses when the browser tab is not visible, helping to save your quota when you're not actively looking at the app.
