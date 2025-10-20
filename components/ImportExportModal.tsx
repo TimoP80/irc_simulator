@@ -38,25 +38,55 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
   }, [isOpen, onClose]);
 
   const handleExportCSV = () => {
-    const csvContent = exportUsersToCSV(users);
-    downloadFile(csvContent, `station-v-users-${new Date().toISOString().split('T')[0]}.csv`, 'text/csv');
+    try {
+      console.log('Exporting users CSV, count:', users.length);
+      const csvContent = exportUsersToCSV(users);
+      downloadFile(csvContent, `station-v-users-${new Date().toISOString().split('T')[0]}.csv`, 'text/csv');
+      console.log('CSV export completed');
+    } catch (error) {
+      console.error('Error exporting CSV:', error);
+      alert('Error exporting CSV: ' + error.message);
+    }
   };
 
   const handleExportJSON = () => {
-    const jsonContent = exportUsersToJSON(users);
-    downloadFile(jsonContent, `station-v-users-${new Date().toISOString().split('T')[0]}.json`, 'application/json');
+    try {
+      console.log('Exporting users JSON, count:', users.length);
+      const jsonContent = exportUsersToJSON(users);
+      downloadFile(jsonContent, `station-v-users-${new Date().toISOString().split('T')[0]}.json`, 'application/json');
+      console.log('JSON export completed');
+    } catch (error) {
+      console.error('Error exporting JSON:', error);
+      alert('Error exporting JSON: ' + error.message);
+    }
   };
 
   const handleExportChannelHTML = (channel: Channel) => {
-    const htmlContent = exportChannelToHTML(channel, currentUserNickname);
-    const filename = `station-v-${channel.name.replace('#', '')}-${new Date().toISOString().split('T')[0]}.html`;
-    downloadFile(htmlContent, filename, 'text/html');
+    try {
+      console.log('Exporting channel HTML for:', channel.name);
+      const htmlContent = exportChannelToHTML(channel, currentUserNickname);
+      const filename = `station-v-${channel.name.replace('#', '')}-${new Date().toISOString().split('T')[0]}.html`;
+      console.log('Generated HTML content length:', htmlContent.length);
+      downloadFile(htmlContent, filename, 'text/html');
+      console.log('Download initiated successfully');
+    } catch (error) {
+      console.error('Error exporting channel HTML:', error);
+      alert('Error exporting channel HTML: ' + error.message);
+    }
   };
 
   const handleExportAllChannelsHTML = () => {
-    const htmlContent = exportAllChannelsToHTML(channels, currentUserNickname);
-    const filename = `station-v-all-channels-${new Date().toISOString().split('T')[0]}.html`;
-    downloadFile(htmlContent, filename, 'text/html');
+    try {
+      console.log('Exporting all channels HTML, count:', channels.length);
+      const htmlContent = exportAllChannelsToHTML(channels, currentUserNickname);
+      const filename = `station-v-all-channels-${new Date().toISOString().split('T')[0]}.html`;
+      console.log('Generated HTML content length:', htmlContent.length);
+      downloadFile(htmlContent, filename, 'text/html');
+      console.log('Download initiated successfully');
+    } catch (error) {
+      console.error('Error exporting all channels HTML:', error);
+      alert('Error exporting all channels HTML: ' + error.message);
+    }
   };
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
