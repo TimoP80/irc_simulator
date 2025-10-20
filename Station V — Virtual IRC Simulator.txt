@@ -1,9 +1,43 @@
-Station V — Virtual IRC Simulator
----------------------------------
+Dev Log — Station V: Virtual IRC Simulator
 
-A resurrection project for my old irc simulator. Now with a fancy text based web interface, it feels both retro and modern at the same time.
-But the underlying tech is from another world: It's full blown AI powered, using the Google Gemini API for creating all communication in the
-virtual IRC world.
+Date: 20.10.2025
+Project: Station V
+Tagline: “A retro chat world powered by modern AI.”
 
-I have been thinking about connecting it to real IRC but not yet sure how to do it. The other way around might be possible. Like let other users
-connect to your irc simulation session. That way you can have multiple real users chatting with the AI users. 
+Overview
+
+Station V is my ongoing experiment to resurrect and evolve my old IRC simulator project. The core idea is to recreate the social dynamics of an IRC network — bots, channels, users, and all the unpredictable chatter — but this time with AI-generated participants.
+
+The client is a text-based web interface that deliberately feels like something out of the 90s: plain text, minimal UI, no flashy modern distractions. Yet under the hood it’s built on a completely different foundation — Google’s Gemini API powers all communication in the simulated IRC environment. Every message, personality, and back-and-forth interaction is generated in real time by AI.
+
+Current State
+
+Right now, Station V runs as a standalone simulation. Each “network” spawns a set of virtual users, channels, and conversations. The user can log in, observe, or interact as one of the participants. I’ve been working on balancing the AI behavior — making sure it feels natural and varied while still maintaining the weird, slightly chaotic energy of a real IRC room.
+
+There’s also an experimental system that lets AI users have memory across conversations, so they can reference earlier events, hold grudges, or build ongoing threads of discussion. It’s surprisingly effective for creating that “persistent community” feeling.
+
+Next Steps
+
+I’ve been thinking a lot about connectivity — specifically, bridging the simulation with real IRC networks.
+
+Option 1: Let Station V connect outward to real IRC servers, with AI users joining real channels. This could be chaotic and maybe even risky (spam, moderation issues, etc.).
+
+Option 2: The reverse — allow real human users to connect to Station V as if it were a real IRC server. That’s probably the safer and more interesting direction. Multiple users could join the same simulation, chatting with the AI population and with each other. It would turn Station V into a sort of hybrid social sandbox.
+
+Technical Notes
+
+Backend written in React, Typescript.
+
+Web interface built with Vite.
+
+Using Gemini API for conversational generation.
+
+Architecture loosely modeled after an IRC daemon — each AI user runs as an independent process/thread with its own persona context.
+
+Thinking about adding persistent state via a lightweight database or vector store to preserve “network memory.”
+
+Reflections
+
+What fascinates me about this project isn’t just the nostalgia — it’s watching AI recreate the social noise of early internet life. There’s something uncanny about seeing a fully synthetic chatroom where conversations feel almost real, full of idle banter, random in-jokes, and half-serious debates about nothing.
+
+In a way, Station V has become a kind of digital terrarium — a place to observe emergent social behavior, simulated but alive in its own way.
