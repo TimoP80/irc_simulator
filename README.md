@@ -536,7 +536,17 @@ A: No, Station V requires an internet connection to communicate with the Gemini 
   - **Emoji Usage**: Expanded emoji frequency (None, Rare, Occasional, Moderate, Frequent, Excessive, Emoji-only responses)
   - **Punctuation**: Detailed punctuation styles (Minimal, Standard, Expressive, Dramatic, Chaotic, Artistic, Experimental)
 
-## 10. Known Issues
+## 10. Author & Contact
+
+**Station V - Virtual IRC Simulator** is developed by:
+
+**Timo Pitkänen**
+- **Email**: timbor@saunagames.fi
+- **Website**: [www.saunagames.fi/timbor](https://www.saunagames.fi/timbor)
+
+For questions, bug reports, or collaboration opportunities, please feel free to reach out!
+
+## 11. Known Issues
 
 ### API Rate Limit & Quota Errors
 
