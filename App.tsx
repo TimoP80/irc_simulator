@@ -112,6 +112,19 @@ const App: React.FC = () => {
     setIsSettingsOpen(false);
   };
 
+  const handleOpenSettings = () => {
+    // Stop simulation immediately when opening settings
+    if (simulationIntervalRef.current) {
+      clearInterval(simulationIntervalRef.current);
+      simulationIntervalRef.current = null;
+    }
+    setIsSettingsOpen(true);
+  };
+
+  const handleCloseSettings = () => {
+    setIsSettingsOpen(false);
+  };
+
   const setTyping = (nickname: string, isTyping: boolean) => {
     setTypingUsers(prev => {
       const newSet = new Set(prev);
@@ -587,6 +600,12 @@ The response must be a single line in the format: "nickname: greeting message"
   };
 
   const runSimulation = useCallback(async () => {
+    // Safety check: Don't run simulation if settings modal is open
+    if (isSettingsOpen) {
+      console.log('[Simulation Debug] Settings modal is open, skipping simulation');
+      return;
+    }
+    
     if (channels.length === 0) {
       console.log('[Simulation Debug] No channels available for simulation');
       return;
@@ -723,7 +742,7 @@ The response must be a single line in the format: "nickname: greeting message"
         console.log(`[Simulation Debug] Resuming simulation after API error pause`);
       }, 30000);
     }
-  }, [channels, activeContext, addMessageToContext, currentUserNickname]);
+  }, [channels, activeContext, addMessageToContext, currentUserNickname, isSettingsOpen]);
 
   useEffect(() => {
     const stopSimulation = () => {
@@ -735,7 +754,7 @@ The response must be a single line in the format: "nickname: greeting message"
 
     const startSimulation = () => {
       stopSimulation(); // Ensure no multiple intervals are running
-      if (simulationSpeed === 'off' || document.hidden) {
+      if (simulationSpeed === 'off' || document.hidden || isSettingsOpen) {
         return;
       }
       const interval = SIMULATION_INTERVALS[simulationSpeed];
@@ -758,7 +777,7 @@ The response must be a single line in the format: "nickname: greeting message"
       stopSimulation();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [runSimulation, simulationSpeed]);
+  }, [runSimulation, simulationSpeed, isSettingsOpen]);
 
   const activeChannel = activeContext?.type === 'channel' ? channels.find(c => c.name === activeContext.name) : undefined;
   const activePM = activeContext?.type === 'pm' ? privateMessages[activeContext.with] : undefined;
@@ -785,13 +804,13 @@ The response must be a single line in the format: "nickname: greeting message"
 
   return (
     <div className="flex h-screen w-screen bg-gray-800 font-mono">
-      {isSettingsOpen && <SettingsModal onSave={handleSaveSettings} onCancel={() => setIsSettingsOpen(false)} />}
+      {isSettingsOpen && <SettingsModal onSave={handleSaveSettings} onCancel={handleCloseSettings} />}
       <ChannelList 
         channels={channels}
         privateMessageUsers={allPMUsers}
         activeContext={activeContext}
         onSelectContext={setActiveContext}
-        onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenSettings={handleOpenSettings}
       />
       <main className="flex flex-1 flex-col border-l border-r border-gray-700">
         <ChatWindow 

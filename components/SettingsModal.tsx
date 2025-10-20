@@ -207,7 +207,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel }
     updateDebugConfig(newConfig);
   };
 
-  return (
+  // Add error boundary for debugging
+  try {
+    return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
       <div className="bg-gray-800 rounded-lg shadow-xl p-8 w-full max-w-4xl border border-gray-700 max-h-[90vh] overflow-y-auto">
         <h2 className="text-2xl font-bold text-white mb-4">Simulation Configuration</h2>
@@ -458,5 +460,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel }
         </div>
       </div>
     </div>
-  );
+    );
+  } catch (error) {
+    console.error('Error rendering SettingsModal:', error);
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+        <div className="bg-gray-800 rounded-lg shadow-xl p-8 w-full max-w-4xl border border-gray-700">
+          <h2 className="text-2xl font-bold text-white mb-4">Error</h2>
+          <p className="text-red-400 mb-4">An error occurred while loading the settings interface.</p>
+          <p className="text-gray-400 mb-6">Please try refreshing the page or contact support if the issue persists.</p>
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="bg-gray-600 text-white rounded-lg px-6 py-2 font-semibold hover:bg-gray-500 transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 };
