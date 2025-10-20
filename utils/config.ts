@@ -112,10 +112,9 @@ const parseChannels = (channelsString: string, allVirtualUsers: User[], currentU
         .filter(line => line.startsWith('#') && line.includes(','))
         .map((line, index) => {
             const [name, ...topicParts] = line.split(',');
-            // Create a semi-random selection of users for each channel
-            const usersForChannel = [...allVirtualUsers]
-              .sort(() => 0.5 - Math.random())
-              .slice(0, 4 + (index % 3)); 
+            // Use all configured virtual users for each channel
+            // This ensures that all configured users are available in the virtual world
+            const usersForChannel = [...allVirtualUsers];
 
             return {
                 name: name.trim(),
@@ -146,10 +145,28 @@ const parseChannels = (channelsString: string, allVirtualUsers: User[], currentU
 export const initializeStateFromConfig = (config: AppConfig) => {
     const nickname = config.currentUserNickname || DEFAULT_NICKNAME;
     const virtualUsers = config.virtualUsers ? parseVirtualUsers(config.virtualUsers) : DEFAULT_VIRTUAL_USERS;
-    const channels = config.channels ? parseChannels(config.channels, virtualUsers, nickname) : DEFAULT_CHANNELS.map(c => ({
-        ...c,
-        users: c.users.map(u => u.nickname === DEFAULT_NICKNAME ? { ...u, nickname } : u)
-    }));
+    
+    // Always use configured channels if they exist, otherwise use default channels
+    let channels: Channel[];
+    if (config.channels && config.channels.trim()) {
+        channels = parseChannels(config.channels, virtualUsers, nickname);
+    } else {
+        // Use default channels but ensure they have the correct users and nickname
+        channels = DEFAULT_CHANNELS.map(c => ({
+            ...c,
+            users: [
+                { 
+                    nickname, 
+                    status: 'online' as const,
+                    personality: 'The human user',
+                    languageSkills: { fluency: 'native' as const, languages: ['English'], accent: '' },
+                    writingStyle: { formality: 'casual' as const, verbosity: 'moderate' as const, humor: 'light' as const, emojiUsage: 'minimal' as const, punctuation: 'standard' as const }
+                },
+                ...virtualUsers
+            ]
+        }));
+    }
+    
     const simulationSpeed = config.simulationSpeed || 'normal';
 
     return { nickname, virtualUsers, channels, simulationSpeed };

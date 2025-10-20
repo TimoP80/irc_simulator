@@ -6,9 +6,9 @@ export const DEFAULT_NICKNAME = "you";
 
 // Intervals for background simulation in milliseconds.
 export const SIMULATION_INTERVALS: Record<'fast' | 'normal' | 'slow', number> = {
-  fast: 5000,
-  normal: 10000,
-  slow: 20000,
+  fast: 3000,    // 3 seconds - very responsive
+  normal: 6000,  // 6 seconds - good balance
+  slow: 12000,   // 12 seconds - slower but still active
 };
 
 // Default list of virtual users for the simulation.
