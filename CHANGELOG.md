@@ -4,6 +4,22 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 
 *Note: This project was previously known as "Gemini IRC Simulator" and was renamed to "Station V - Virtual IRC Simulator" as of v1.5.1.*
 
+## 1.11.2 - 2025-01-20
+
+### Fixed
+- **Export Window Error**: Resolved critical bug where export window would show "an error occurred while opening export window" message
+  - **TypeScript Errors**: Fixed multiple TypeScript compilation errors that were preventing React components from rendering properly
+  - **BatchUserModal**: Fixed `usedNicknames` type from `Set<unknown>` to `Set<string>` for proper type safety
+  - **GeminiService**: Added missing `User` type import that was causing compilation failures
+  - **UsernameGeneration**: Fixed invalid style type `'abstract'` to `'mixed'` in username generation options
+  - **Component Rendering**: All modal components now render correctly without falling back to error boundaries
+  - **Export Functionality**: Users can now successfully access and use all export features (CSV, JSON, HTML)
+
+### Enhanced
+- **Type Safety**: Improved overall TypeScript type safety across the application
+- **Error Prevention**: Proactive fixing of compilation errors prevents UI failures
+- **User Experience**: Export functionality now works reliably without error messages
+
 ## 1.11.1 - 2025-01-20
 
 ### Fixed
