@@ -26,7 +26,7 @@ const getUserColor = (nickname: string, currentUserNickname: string) => {
 
 
 export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickname }) => {
-  const { nickname, content, timestamp, type } = message;
+  const { nickname, content, timestamp, type, command } = message;
   const time = new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
   if (type === 'system') {
@@ -40,6 +40,117 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
 
   const nicknameColor = getUserColor(nickname, currentUserNickname);
 
+  // Handle action messages (/me)
+  if (type === 'action') {
+    return (
+      <div className="flex items-start gap-4 text-sm">
+        <span className="text-gray-600 font-semibold flex-shrink-0 w-14 text-right">{time}</span>
+        <div className="flex-1">
+          <span className="text-gray-500 italic">
+            * <span className={`${nicknameColor} font-bold`}>{nickname}</span> {content}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // Handle notice messages
+  if (type === 'notice') {
+    return (
+      <div className="flex items-start gap-4 text-sm">
+        <span className="text-gray-600 font-semibold flex-shrink-0 w-14 text-right">{time}</span>
+        <div className="flex-1">
+          <span className="text-orange-400 font-semibold">Notice from {nickname}:</span>
+          <span className="text-gray-200 break-words whitespace-pre-wrap ml-2">{content}</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Handle topic changes
+  if (type === 'topic') {
+    return (
+      <div className="flex items-start gap-4 text-sm">
+        <span className="text-gray-600 font-semibold flex-shrink-0 w-14 text-right">{time}</span>
+        <div className="flex-1">
+          <span className="text-purple-400 font-semibold">Topic changed by {nickname}:</span>
+          <span className="text-gray-200 break-words whitespace-pre-wrap ml-2">{content}</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Handle kick messages
+  if (type === 'kick') {
+    return (
+      <div className="flex items-start gap-4 text-sm">
+        <span className="text-gray-600 font-semibold flex-shrink-0 w-14 text-right">{time}</span>
+        <div className="flex-1">
+          <span className="text-red-400 font-semibold">
+            {nickname} kicked {message.target || 'someone'}{content ? `: ${content}` : ''}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // Handle ban messages
+  if (type === 'ban') {
+    return (
+      <div className="flex items-start gap-4 text-sm">
+        <span className="text-gray-600 font-semibold flex-shrink-0 w-14 text-right">{time}</span>
+        <div className="flex-1">
+          <span className="text-red-500 font-semibold">
+            {nickname} banned {message.target || 'someone'}{content ? `: ${content}` : ''}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // Handle join messages
+  if (type === 'join') {
+    return (
+      <div className="flex items-start gap-4 text-sm">
+        <span className="text-gray-600 font-semibold flex-shrink-0 w-14 text-right">{time}</span>
+        <div className="flex-1">
+          <span className="text-green-400 font-semibold">
+            {nickname} joined {content}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // Handle part messages
+  if (type === 'part') {
+    return (
+      <div className="flex items-start gap-4 text-sm">
+        <span className="text-gray-600 font-semibold flex-shrink-0 w-14 text-right">{time}</span>
+        <div className="flex-1">
+          <span className="text-yellow-400 font-semibold">
+            {nickname} left{content ? `: ${content}` : ''}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // Handle quit messages
+  if (type === 'quit') {
+    return (
+      <div className="flex items-start gap-4 text-sm">
+        <span className="text-gray-600 font-semibold flex-shrink-0 w-14 text-right">{time}</span>
+        <div className="flex-1">
+          <span className="text-gray-400 font-semibold">
+            {nickname} quit{content ? `: ${content}` : ''}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // Default message display
   return (
     <div className="flex items-start gap-4 text-sm">
       <span className="text-gray-600 font-semibold flex-shrink-0 w-14 text-right">{time}</span>

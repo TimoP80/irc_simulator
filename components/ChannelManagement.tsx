@@ -1,10 +1,7 @@
 import React, { useState } from 'react';
 import { AddChannelModal } from './AddChannelModal';
-
-interface Channel {
-  name: string;
-  topic: string;
-}
+import { Channel } from '../types';
+import { clearChannelLogs } from '../utils/config';
 
 interface ChannelManagementProps {
   channels: Channel[];
@@ -16,14 +13,19 @@ export const ChannelManagement: React.FC<ChannelManagementProps> = ({ channels, 
   const [editingChannel, setEditingChannel] = useState<Channel | null>(null);
 
   const handleAddChannel = (name: string, topic: string) => {
-    const newChannel: Channel = { name, topic };
+    const newChannel: Channel = { 
+      name, 
+      topic, 
+      users: [], 
+      messages: [] 
+    };
     onChannelsChange([...channels, newChannel]);
   };
 
   const handleUpdateChannel = (oldName: string, newName: string, topic: string) => {
     const updatedChannels = channels.map(channel => 
       channel.name === oldName 
-        ? { name: newName, topic }
+        ? { ...channel, name: newName, topic }
         : channel
     );
     onChannelsChange(updatedChannels);
@@ -46,27 +48,55 @@ export const ChannelManagement: React.FC<ChannelManagementProps> = ({ channels, 
     setEditingChannel(null);
   };
 
+  const handleClearLogs = () => {
+    if (window.confirm('Are you sure you want to clear all channel logs? This will remove all message history from all channels. This action cannot be undone.')) {
+      // Clear logs from localStorage
+      clearChannelLogs();
+      
+      // Clear messages from all channels but keep the channels themselves
+      const clearedChannels = channels.map(channel => ({
+        ...channel,
+        messages: []
+      }));
+      
+      onChannelsChange(clearedChannels);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-white">Channels</h3>
         <div className="flex items-center gap-2">
           {channels.length > 0 && (
-            <button
-              type="button"
-              onClick={() => {
-                if (window.confirm(`Are you sure you want to clear all ${channels.length} channels? This action cannot be undone.`)) {
-                  onChannelsChange([]);
-                }
-              }}
-              className="bg-red-600 text-white rounded-lg px-3 py-2 text-sm font-semibold hover:bg-red-500 transition-colors flex items-center gap-2"
-              title="Clear all channels"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-              Clear All
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={handleClearLogs}
+                className="bg-orange-600 text-white rounded-lg px-3 py-2 text-sm font-semibold hover:bg-orange-500 transition-colors flex items-center gap-2"
+                title="Clear all channel message logs"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                Clear Logs
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm(`Are you sure you want to clear all ${channels.length} channels? This action cannot be undone.`)) {
+                    onChannelsChange([]);
+                  }
+                }}
+                className="bg-red-600 text-white rounded-lg px-3 py-2 text-sm font-semibold hover:bg-red-500 transition-colors flex items-center gap-2"
+                title="Clear all channels"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                Clear All
+              </button>
+            </>
           )}
           <button
             type="button"
@@ -103,6 +133,11 @@ export const ChannelManagement: React.FC<ChannelManagementProps> = ({ channels, 
                     <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-900 text-blue-200">
                       Channel
                     </span>
+                    {channel.messages && channel.messages.length > 0 && (
+                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-900 text-green-200">
+                        {channel.messages.length} messages
+                      </span>
+                    )}
                   </div>
                   <p className="text-gray-300 text-sm leading-relaxed">{channel.topic}</p>
                 </div>

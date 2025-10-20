@@ -2,6 +2,7 @@ import type { AppConfig, User, Channel } from '../types';
 import { DEFAULT_NICKNAME, DEFAULT_VIRTUAL_USERS, DEFAULT_CHANNELS } from '../constants';
 
 const CONFIG_STORAGE_KEY = 'gemini-irc-simulator-config';
+const CHANNEL_LOGS_STORAGE_KEY = 'station-v-channel-logs';
 
 /**
  * Loads the application configuration from localStorage.
@@ -152,4 +153,61 @@ export const initializeStateFromConfig = (config: AppConfig) => {
     const simulationSpeed = config.simulationSpeed || 'normal';
 
     return { nickname, virtualUsers, channels, simulationSpeed };
+};
+
+/**
+ * Saves channel logs to localStorage.
+ * @param channels Array of Channel objects to save.
+ */
+export const saveChannelLogs = (channels: Channel[]) => {
+  try {
+    // Convert Date objects to strings for JSON serialization
+    const serializedChannels = channels.map(channel => ({
+      ...channel,
+      messages: channel.messages.map(message => ({
+        ...message,
+        timestamp: message.timestamp.toISOString()
+      }))
+    }));
+    
+    localStorage.setItem(CHANNEL_LOGS_STORAGE_KEY, JSON.stringify(serializedChannels));
+  } catch (error) {
+    console.error("Failed to save channel logs to localStorage:", error);
+  }
+};
+
+/**
+ * Loads channel logs from localStorage.
+ * @returns Array of Channel objects or null if none found.
+ */
+export const loadChannelLogs = (): Channel[] | null => {
+  try {
+    const savedLogs = localStorage.getItem(CHANNEL_LOGS_STORAGE_KEY);
+    if (!savedLogs) return null;
+    
+    const parsedChannels = JSON.parse(savedLogs);
+    
+    // Convert timestamp strings back to Date objects
+    return parsedChannels.map((channel: any) => ({
+      ...channel,
+      messages: channel.messages.map((message: any) => ({
+        ...message,
+        timestamp: new Date(message.timestamp)
+      }))
+    }));
+  } catch (error) {
+    console.error("Failed to load channel logs from localStorage:", error);
+    return null;
+  }
+};
+
+/**
+ * Clears all saved channel logs from localStorage.
+ */
+export const clearChannelLogs = () => {
+  try {
+    localStorage.removeItem(CHANNEL_LOGS_STORAGE_KEY);
+  } catch (error) {
+    console.error("Failed to clear channel logs from localStorage:", error);
+  }
 };

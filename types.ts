@@ -16,7 +16,7 @@ export interface User {
   };
 }
 
-export type MessageType = 'system' | 'user' | 'ai' | 'pm';
+export type MessageType = 'system' | 'user' | 'ai' | 'pm' | 'action' | 'notice' | 'topic' | 'kick' | 'ban' | 'join' | 'part' | 'quit';
 
 export interface Message {
   id: number;
@@ -24,6 +24,8 @@ export interface Message {
   content: string;
   timestamp: Date;
   type: MessageType;
+  command?: string; // For IRC commands like 'me', 'notice', 'topic', etc.
+  target?: string; // For commands that target specific users or channels
 }
 
 export interface Channel {
