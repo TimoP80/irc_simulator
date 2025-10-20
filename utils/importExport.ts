@@ -59,6 +59,7 @@ export const importUsersFromCSV = (csvContent: string): User[] => {
     
     if (values.length < headers.length) continue;
 
+    // Validate and set default values for all required properties
     const user: User = {
       nickname: values[0] || `user${i}`,
       status: 'online',
@@ -77,6 +78,25 @@ export const importUsersFromCSV = (csvContent: string): User[] => {
       }
     };
 
+    // Validate that all required properties are properly set
+    if (!user.languageSkills) {
+      user.languageSkills = {
+        fluency: 'native',
+        languages: ['English'],
+        accent: ''
+      };
+    }
+    
+    if (!user.writingStyle) {
+      user.writingStyle = {
+        formality: 'casual',
+        verbosity: 'moderate',
+        humor: 'light',
+        emojiUsage: 'minimal',
+        punctuation: 'standard'
+      };
+    }
+
     users.push(user);
   }
 
@@ -92,10 +112,28 @@ export const importUsersFromJSON = (jsonContent: string): User[] => {
     const data = JSON.parse(jsonContent);
     
     if (Array.isArray(data)) {
-      return data.map(user => ({
-        ...user,
-        status: 'online' as const
-      }));
+      return data.map(user => {
+        // Ensure all required properties exist with defaults
+        const importedUser: User = {
+          nickname: user.nickname || `user${Math.random().toString(36).substr(2, 9)}`,
+          status: 'online' as const,
+          personality: user.personality || 'Imported user',
+          languageSkills: user.languageSkills || {
+            fluency: 'native',
+            languages: ['English'],
+            accent: ''
+          },
+          writingStyle: user.writingStyle || {
+            formality: 'casual',
+            verbosity: 'moderate',
+            humor: 'light',
+            emojiUsage: 'minimal',
+            punctuation: 'standard'
+          }
+        };
+
+        return importedUser;
+      });
     }
     
     return [];

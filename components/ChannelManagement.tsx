@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AddChannelModal } from './AddChannelModal';
+import { ChannelImportExportModal } from './ChannelImportExportModal';
 import { Channel } from '../types';
 import { clearChannelLogs } from '../utils/config';
 
@@ -10,6 +11,7 @@ interface ChannelManagementProps {
 
 export const ChannelManagement: React.FC<ChannelManagementProps> = ({ channels, onChannelsChange }) => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isImportExportModalOpen, setIsImportExportModalOpen] = useState(false);
   const [editingChannel, setEditingChannel] = useState<Channel | null>(null);
 
   const handleAddChannel = (name: string, topic: string) => {
@@ -46,6 +48,14 @@ export const ChannelManagement: React.FC<ChannelManagementProps> = ({ channels, 
   const handleCloseModal = () => {
     setIsAddModalOpen(false);
     setEditingChannel(null);
+  };
+
+  const handleCloseImportExportModal = () => {
+    setIsImportExportModalOpen(false);
+  };
+
+  const handleImportChannels = (importedChannels: Channel[]) => {
+    onChannelsChange([...channels, ...importedChannels]);
   };
 
   const handleClearLogs = () => {
@@ -98,6 +108,17 @@ export const ChannelManagement: React.FC<ChannelManagementProps> = ({ channels, 
               </button>
             </>
           )}
+          <button
+            type="button"
+            onClick={() => setIsImportExportModalOpen(true)}
+            className="bg-purple-600 text-white rounded-lg px-4 py-2 text-sm font-semibold hover:bg-purple-500 transition-colors flex items-center gap-2"
+            title="Import or export channels"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+            </svg>
+            Import/Export
+          </button>
           <button
             type="button"
             onClick={() => setIsAddModalOpen(true)}
@@ -176,6 +197,13 @@ export const ChannelManagement: React.FC<ChannelManagementProps> = ({ channels, 
         onUpdateChannel={handleUpdateChannel}
         existingChannelNames={channels.map(c => c.name)}
         editingChannel={editingChannel}
+      />
+
+      <ChannelImportExportModal
+        isOpen={isImportExportModalOpen}
+        onClose={handleCloseImportExportModal}
+        channels={channels}
+        onImportChannels={handleImportChannels}
       />
     </div>
   );
