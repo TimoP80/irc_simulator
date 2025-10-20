@@ -13,14 +13,62 @@ export const SIMULATION_INTERVALS: Record<'fast' | 'normal' | 'slow', number> = 
 
 // Default list of virtual users for the simulation.
 export const DEFAULT_VIRTUAL_USERS: User[] = [
-  { nickname: 'nova', status: 'online', personality: 'A very curious and tech-savvy individual, loves discussing new gadgets and programming.' },
-  { nickname: 'seraph', status: 'online', personality: 'Calm, wise, and often speaks in philosophical or poetic terms.' },
-  { nickname: 'jinx', status: 'online', personality: 'A chaotic, funny, and unpredictable prankster who loves jokes and memes.' },
-  { nickname: 'rex', status: 'online', personality: 'Gruff but helpful, an expert in system administration and network security.' },
-  { nickname: 'luna', status: 'online', personality: 'An artist who is dreamy, creative, and talks about music, art, and nature.' },
-  { nickname: 'cypher', status: 'online', personality: 'Mysterious and speaks in cryptic messages, interested in privacy and cryptography.' },
-  { nickname: 'glitch', status: 'online', personality: 'Excitable and easily distracted, often making typos and using internet slang.' },
-  { nickname: 'root', status: 'online', personality: 'The silent observer, only speaks when something is very important.' },
+  { 
+    nickname: 'nova', 
+    status: 'online', 
+    personality: 'A very curious and tech-savvy individual, loves discussing new gadgets and programming.',
+    languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
+    writingStyle: { formality: 'casual', verbosity: 'moderate', humor: 'light', emojiUsage: 'minimal', punctuation: 'standard' }
+  },
+  { 
+    nickname: 'seraph', 
+    status: 'online', 
+    personality: 'Calm, wise, and often speaks in philosophical or poetic terms.',
+    languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
+    writingStyle: { formality: 'formal', verbosity: 'verbose', humor: 'none', emojiUsage: 'none', punctuation: 'standard' }
+  },
+  { 
+    nickname: 'jinx', 
+    status: 'online', 
+    personality: 'A chaotic, funny, and unpredictable prankster who loves jokes and memes.',
+    languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
+    writingStyle: { formality: 'casual', verbosity: 'moderate', humor: 'heavy', emojiUsage: 'frequent', punctuation: 'excessive' }
+  },
+  { 
+    nickname: 'rex', 
+    status: 'online', 
+    personality: 'Gruff but helpful, an expert in system administration and network security.',
+    languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
+    writingStyle: { formality: 'mixed', verbosity: 'concise', humor: 'none', emojiUsage: 'none', punctuation: 'minimal' }
+  },
+  { 
+    nickname: 'luna', 
+    status: 'online', 
+    personality: 'An artist who is dreamy, creative, and talks about music, art, and nature.',
+    languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
+    writingStyle: { formality: 'casual', verbosity: 'verbose', humor: 'light', emojiUsage: 'frequent', punctuation: 'standard' }
+  },
+  { 
+    nickname: 'cypher', 
+    status: 'online', 
+    personality: 'Mysterious and speaks in cryptic messages, interested in privacy and cryptography.',
+    languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
+    writingStyle: { formality: 'formal', verbosity: 'concise', humor: 'none', emojiUsage: 'none', punctuation: 'minimal' }
+  },
+  { 
+    nickname: 'glitch', 
+    status: 'online', 
+    personality: 'Excitable and easily distracted, often making typos and using internet slang.',
+    languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
+    writingStyle: { formality: 'casual', verbosity: 'moderate', humor: 'heavy', emojiUsage: 'frequent', punctuation: 'excessive' }
+  },
+  { 
+    nickname: 'root', 
+    status: 'online', 
+    personality: 'The silent observer, only speaks when something is very important.',
+    languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
+    writingStyle: { formality: 'formal', verbosity: 'concise', humor: 'none', emojiUsage: 'none', punctuation: 'standard' }
+  },
 ];
 
 // Default channels for the simulation.
@@ -29,7 +77,13 @@ export const DEFAULT_CHANNELS: Channel[] = [
     name: '#general',
     topic: 'General chit-chat about anything and everything.',
     users: [
-      { nickname: DEFAULT_NICKNAME, status: 'online' }, 
+      { 
+        nickname: DEFAULT_NICKNAME, 
+        status: 'online',
+        personality: 'The human user',
+        languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
+        writingStyle: { formality: 'casual', verbosity: 'moderate', humor: 'light', emojiUsage: 'minimal', punctuation: 'standard' }
+      }, 
       ...DEFAULT_VIRTUAL_USERS.slice(0, 5)
     ],
     messages: [
@@ -41,7 +95,13 @@ export const DEFAULT_CHANNELS: Channel[] = [
     name: '#tech-talk',
     topic: 'Discussing the latest in technology and software development.',
     users: [
-      { nickname: DEFAULT_NICKNAME, status: 'online' },
+      { 
+        nickname: DEFAULT_NICKNAME, 
+        status: 'online',
+        personality: 'The human user',
+        languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
+        writingStyle: { formality: 'casual', verbosity: 'moderate', humor: 'light', emojiUsage: 'minimal', punctuation: 'standard' }
+      },
       DEFAULT_VIRTUAL_USERS.find(u => u.nickname === 'nova')!,
       DEFAULT_VIRTUAL_USERS.find(u => u.nickname === 'rex')!,
       DEFAULT_VIRTUAL_USERS.find(u => u.nickname === 'cypher')!,
@@ -56,7 +116,13 @@ export const DEFAULT_CHANNELS: Channel[] = [
     name: '#random',
     topic: 'For off-topic conversations and random thoughts.',
     users: [
-      { nickname: DEFAULT_NICKNAME, status: 'online' },
+      { 
+        nickname: DEFAULT_NICKNAME, 
+        status: 'online',
+        personality: 'The human user',
+        languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
+        writingStyle: { formality: 'casual', verbosity: 'moderate', humor: 'light', emojiUsage: 'minimal', punctuation: 'standard' }
+      },
       DEFAULT_VIRTUAL_USERS.find(u => u.nickname === 'jinx')!,
       DEFAULT_VIRTUAL_USERS.find(u => u.nickname === 'luna')!,
       DEFAULT_VIRTUAL_USERS.find(u => u.nickname === 'seraph')!,
