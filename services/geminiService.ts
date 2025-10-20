@@ -10,6 +10,28 @@ if (!API_KEY) {
 
 const ai = new GoogleGenAI({ apiKey: API_KEY });
 
+// Validate and clean model ID
+const validateModelId = (model: string): string => {
+  // If model contains spaces or looks like a display name, extract the actual model ID
+  if (model.includes(' ') || model.includes('-') && model.length > 20) {
+    // Try to extract model ID from display name
+    const match = model.match(/(gemini-[0-9.]+-[a-z]+)/i);
+    if (match) {
+      console.log(`[AI Debug] Extracted model ID "${match[1]}" from display name "${model}"`);
+      return match[1];
+    }
+  }
+  
+  // If it looks like a valid model ID, return as is
+  if (model.match(/^gemini-[0-9.]+-[a-z]+$/i)) {
+    return model;
+  }
+  
+  // Fallback to default
+  console.log(`[AI Debug] Invalid model ID "${model}", falling back to default`);
+  return 'gemini-2.5-flash';
+};
+
 const formatMessageHistory = (messages: Message[]): string => {
   return messages
     .slice(-15) // Get last 15 messages
@@ -27,6 +49,10 @@ The human user's nickname is '${currentUserNickname}'.
 
 export const generateChannelActivity = async (channel: Channel, currentUserNickname: string, model: string = 'gemini-2.5-flash'): Promise<string> => {
   console.log(`[AI Debug] generateChannelActivity called for channel: ${channel.name}`);
+  console.log(`[AI Debug] Model parameter: "${model}" (type: ${typeof model}, length: ${model.length})`);
+  
+  const validatedModel = validateModelId(model);
+  console.log(`[AI Debug] Validated model ID: "${validatedModel}"`);
   
   const usersInChannel = channel.users.filter(u => u.nickname !== currentUserNickname);
   if (usersInChannel.length === 0) {
@@ -60,9 +86,10 @@ ${randomUser.languageSkills.accent ? `- Accent: ${randomUser.languageSkills.acce
 
   try {
     console.log(`[AI Debug] Sending request to Gemini for channel activity in ${channel.name}`);
+    console.log(`[AI Debug] Using model ID: "${validatedModel}" for API call`);
     const response = await withRateLimitAndRetries(() => 
       ai.models.generateContent({
-          model: model,
+          model: validatedModel,
           contents: prompt,
           config: {
               systemInstruction: getBaseSystemInstruction(currentUserNickname),
@@ -90,6 +117,9 @@ ${randomUser.languageSkills.accent ? `- Accent: ${randomUser.languageSkills.acce
 
 export const generateReactionToMessage = async (channel: Channel, userMessage: Message, currentUserNickname: string, model: string = 'gemini-2.5-flash'): Promise<string> => {
     console.log(`[AI Debug] generateReactionToMessage called for channel: ${channel.name}, reacting to: ${userMessage.nickname}`);
+    
+    const validatedModel = validateModelId(model);
+    console.log(`[AI Debug] Validated model ID for reaction: "${validatedModel}"`);
     
     const usersInChannel = channel.users.filter(u => u.nickname !== currentUserNickname);
     if (usersInChannel.length === 0) {
@@ -134,7 +164,7 @@ ${randomUser.languageSkills.accent ? `- Accent: ${randomUser.languageSkills.acce
         console.log(`[AI Debug] Sending request to Gemini for reaction in ${channel.name}`);
         const response = await withRateLimitAndRetries(() => 
             ai.models.generateContent({
-                model: model,
+                model: validatedModel,
                 contents: prompt,
                 config: {
                     systemInstruction: getBaseSystemInstruction(currentUserNickname),
@@ -165,6 +195,9 @@ ${randomUser.languageSkills.accent ? `- Accent: ${randomUser.languageSkills.acce
 export const generatePrivateMessageResponse = async (conversation: PrivateMessageConversation, userMessage: Message, currentUserNickname: string, model: string = 'gemini-2.5-flash'): Promise<string> => {
     console.log(`[AI Debug] generatePrivateMessageResponse called for user: ${conversation.user.nickname}`);
     
+    const validatedModel = validateModelId(model);
+    console.log(`[AI Debug] Validated model ID for private message: "${validatedModel}"`);
+    
     const aiUser = conversation.user;
     const prompt = `
 You are roleplaying as an IRC user named '${aiUser.nickname}'. 
@@ -193,7 +226,7 @@ The response must be a single line in the format: "${aiUser.nickname}: message"
         console.log(`[AI Debug] Sending request to Gemini for private message response from ${aiUser.nickname}`);
         const response = await withRateLimitAndRetries(() => 
             ai.models.generateContent({
-                model: model,
+                model: validatedModel,
                 contents: prompt,
                 config: {
                     systemInstruction: getBaseSystemInstruction(currentUserNickname),
@@ -224,6 +257,9 @@ The response must be a single line in the format: "${aiUser.nickname}: message"
 export const generateBatchUsers = async (count: number, model: string = 'gemini-2.5-flash'): Promise<User[]> => {
   console.log(`[AI Debug] generateBatchUsers called for count: ${count}`);
   
+  const validatedModel = validateModelId(model);
+  console.log(`[AI Debug] Validated model ID for batch users: "${validatedModel}"`);
+  
   const prompt = `
 Generate ${count} unique IRC users with diverse personalities, language skills, and writing styles.
 Each user should have:
@@ -240,7 +276,7 @@ Provide the output in JSON format.
     console.log(`[AI Debug] Sending request to Gemini for batch user generation (${count} users)`);
     const response = await withRateLimitAndRetries(() =>
       ai.models.generateContent({
-        model: model,
+        model: validatedModel,
         contents: prompt,
         config: {
           systemInstruction: "You are a creative character generator for an IRC simulation. Generate diverse, interesting users with unique personalities and communication styles. Provide a valid JSON response.",
@@ -346,6 +382,9 @@ Provide the output in JSON format.
 };
 
 export const generateRandomWorldConfiguration = async (model: string = 'gemini-2.5-flash'): Promise<RandomWorldConfig> => {
+    const validatedModel = validateModelId(model);
+    console.log(`[AI Debug] Validated model ID for world config: "${validatedModel}"`);
+    
     const prompt = `
 Generate a creative and interesting configuration for a simulated IRC world.
 Create a list of 8 unique virtual users with distinct, concise, and interesting personalities. Nicknames should be lowercase and simple.
@@ -361,7 +400,7 @@ Provide the output in JSON format.
 
     const response = await withRateLimitAndRetries(() =>
         ai.models.generateContent({
-            model: model,
+            model: validatedModel,
             contents: prompt,
             config: {
                 systemInstruction: "You are a creative world-builder for a simulated IRC environment. Generate a valid JSON response based on the provided schema.",

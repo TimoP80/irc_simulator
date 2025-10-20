@@ -516,9 +516,9 @@ A: No, Station V requires an internet connection to communicate with the Gemini 
     -   Open the **Settings** modal (gear icon in the channel list).
     -   Under **"Background Simulation Speed,"** select a slower setting like `'Slow'` or `'Off'`.
     -   Current simulation intervals:
-        -   **Fast**: 3 seconds (very frequent)
-        -   **Normal**: 6 seconds (moderate)
-        -   **Slow**: 12 seconds (conservative)
+        -   **Fast**: 5 seconds (responsive but safer)
+        -   **Normal**: 10 seconds (moderate, API-friendly)
+        -   **Slow**: 20 seconds (conservative, very safe)
         -   **Off**: No autonomous messages (most quota-friendly)
     -   Setting the speed to **'Off'** completely disables autonomous AI messages. The AI will *only* respond when you send a message, which is the most effective way to conserve your API quota and avoid rate-limit errors.
     -   The simulation also automatically pauses when the browser tab is not visible, helping to save your quota when you're not actively looking at the app.

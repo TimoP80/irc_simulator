@@ -502,9 +502,26 @@ const App: React.FC = () => {
       }
     } catch (error) {
       console.error("Failed to get AI response:", error);
+      console.error("Full error details:", {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        name: error instanceof Error ? error.name : undefined
+      });
+      
       let content = `Error: Could not get AI response. Please check your API key and network connection.`;
-      if (error instanceof Error && (error.message.includes("RESOURCE_EXHAUSTED") || error.message.includes("429"))) {
-        content = `Error: API request failed (rate limit or server issue). This can happen with frequent messages, even if your daily quota is fine. Try setting a slower simulation speed in the configuration.`;
+      if (error instanceof Error) {
+        if (error.message.includes("RESOURCE_EXHAUSTED") || error.message.includes("429")) {
+          content = `Error: API rate limit exceeded. Try reducing simulation speed or disabling typing delays in Settings.`;
+        } else if (error.message.includes("PERMISSION_DENIED") || error.message.includes("403")) {
+          content = `Error: API key permission denied. Please check your API key is valid and has proper permissions.`;
+        } else if (error.message.includes("INVALID_ARGUMENT") || error.message.includes("400")) {
+          content = `Error: Invalid API request. This might be a temporary issue with the API service.`;
+        } else if (error.message.includes("UNAVAILABLE") || error.message.includes("503")) {
+          content = `Error: API service temporarily unavailable. Please try again in a few moments.`;
+        } else {
+          // For Tier 1 API debugging - show the actual error
+          content = `Error: ${error.message}. Check browser console for details.`;
+        }
       }
       const errorMessage: Message = {
         id: Date.now() + 1,
@@ -635,7 +652,8 @@ The response must be a single line in the format: "nickname: greeting message"
       }
       
       // In burst mode, sometimes generate a second message for more activity
-      if (shouldBurst && Math.random() < 0.3) {
+      // Reduced probability and increased delay for Tier 1 API stability
+      if (shouldBurst && Math.random() < 0.15) { // Reduced from 0.3 to 0.15
         console.log(`[Simulation Debug] Burst mode: generating second message for ${targetChannel.name}`);
         setTimeout(async () => {
           try {
@@ -673,7 +691,7 @@ The response must be a single line in the format: "nickname: greeting message"
               channel: targetChannel.name
             });
           }
-        }, Math.random() * 3000 + 1000); // 1-4 seconds delay
+        }, Math.random() * 5000 + 2000); // Increased from 1-4s to 2-7s delay
       }
     } catch (error) {
       console.error(`[Simulation Debug] Simulation failed for ${targetChannel.name}:`, {
@@ -683,14 +701,14 @@ The response must be a single line in the format: "nickname: greeting message"
         burstMode: shouldBurst
       });
       const now = Date.now();
-      // Only show error message if the last one was more than 2 minutes ago
-      if (now - lastSimErrorTimestampRef.current > 120000) { 
+      // Only show error message if the last one was more than 5 minutes ago
+      if (now - lastSimErrorTimestampRef.current > 300000) { 
           lastSimErrorTimestampRef.current = now;
           console.log(`[Simulation Debug] Showing error message to user for ${targetChannel.name}`);
           const errorMessage: Message = {
               id: now,
               nickname: 'system',
-              content: `Background simulation for this channel failed due to API errors. It will keep retrying silently. The issue might be rate limiting.`,
+              content: `Background simulation paused due to API rate limits. Try reducing simulation speed in Settings or wait a few minutes.`,
               timestamp: new Date(),
               type: 'system'
           };
@@ -698,6 +716,12 @@ The response must be a single line in the format: "nickname: greeting message"
       } else {
         console.log(`[Simulation Debug] Error rate limited, not showing alert for ${targetChannel.name}`);
       }
+      
+      // Pause simulation for 30 seconds when API errors occur
+      console.log(`[Simulation Debug] Pausing simulation for 30 seconds due to API error`);
+      setTimeout(() => {
+        console.log(`[Simulation Debug] Resuming simulation after API error pause`);
+      }, 30000);
     }
   }, [channels, activeContext, addMessageToContext, currentUserNickname]);
 
