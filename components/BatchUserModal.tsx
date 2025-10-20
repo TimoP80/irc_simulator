@@ -9,13 +9,15 @@ interface BatchUserModalProps {
   onClose: () => void;
   onAddUsers: (users: User[]) => void;
   existingNicknames: string[];
+  aiModel: string;
 }
 
 export const BatchUserModal: React.FC<BatchUserModalProps> = ({
   isOpen,
   onClose,
   onAddUsers,
-  existingNicknames
+  existingNicknames,
+  aiModel
 }) => {
   const [generationMode, setGenerationMode] = useState<'template' | 'random' | 'ai'>('template');
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
@@ -62,7 +64,7 @@ export const BatchUserModal: React.FC<BatchUserModalProps> = ({
     if (generationMode === 'ai') {
       try {
         setIsGenerating(true);
-        const users = await generateBatchUsers(userCount);
+        const users = await generateBatchUsers(userCount, aiModel);
         return users;
       } catch (error) {
         console.error('Failed to generate AI users:', error);

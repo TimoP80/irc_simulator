@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import { withRateLimitAndRetries } from '../utils/config';
 
 const API_KEY = process.env.GEMINI_API_KEY;
@@ -6,7 +6,7 @@ if (!API_KEY) {
   throw new Error('GEMINI_API_KEY environment variable not set');
 }
 
-const ai = new GoogleGenerativeAI(API_KEY);
+const ai = new GoogleGenAI({ apiKey: API_KEY });
 
 export interface UsernameGenerationOptions {
   count: number;
@@ -59,6 +59,8 @@ export const USERNAME_CATEGORIES: UsernameCategory[] = [
  * Generates creative usernames using AI
  */
 export const generateAUsernames = async (options: UsernameGenerationOptions): Promise<string[]> => {
+  console.log(`[AI Debug] generateAUsernames called with options:`, options);
+  
   const { count, style = 'mixed', personality, avoidDuplicates = [] } = options;
   
   const styleDescription = getStyleDescription(style);
@@ -84,6 +86,7 @@ Return only the usernames, one per line, no additional text or formatting.
 `;
 
   try {
+    console.log(`[AI Debug] Sending request to Gemini for username generation (${count} usernames, style: ${style})`);
     const response = await withRateLimitAndRetries(() =>
       ai.models.generateContent({
         model: 'gemini-2.5-flash',
@@ -96,6 +99,7 @@ Return only the usernames, one per line, no additional text or formatting.
       })
     );
 
+    console.log(`[AI Debug] Successfully received response from Gemini for username generation`);
     const usernames = response.text
       .trim()
       .split('\n')
@@ -106,6 +110,7 @@ Return only the usernames, one per line, no additional text or formatting.
 
     // If we didn't get enough unique names, generate more
     if (usernames.length < count) {
+      console.log(`[AI Debug] Generated ${usernames.length} usernames, need ${count}. Generating additional ${count - usernames.length} usernames.`);
       const additionalCount = count - usernames.length;
       const additionalUsernames = await generateAUsernames({
         count: additionalCount,
@@ -116,9 +121,15 @@ Return only the usernames, one per line, no additional text or formatting.
       usernames.push(...additionalUsernames);
     }
 
-    return usernames.slice(0, count);
+    const result = usernames.slice(0, count);
+    console.log(`[AI Debug] Successfully generated ${result.length} usernames:`, result);
+    return result;
   } catch (error) {
-    console.error('Failed to generate AI usernames:', error);
+    console.error(`[AI Debug] Error generating usernames:`, {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      options: options
+    });
     // Fallback to traditional generation
     return generateFallbackUsernames(count, avoidDuplicates);
   }

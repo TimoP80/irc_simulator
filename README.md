@@ -72,41 +72,247 @@ The simulation is powered by the Gemini API, using carefully crafted prompts to 
 
 ## 5. Getting Started
 
-1.  Station V runs entirely in your browser. No installation is needed.
-2.  Upon first launch, you will be greeted by a **Settings** modal with a modern, user-friendly interface.
-3.  **Configure your world**: 
-    -   **Set your nickname** in the text field at the top
-    -   **Manage virtual users**: 
-        -   **Single User Creation**: Use the "Add User" button for detailed customization:
-            -   **Basic Information**: Set nickname and personality description
-            -   **Language Skills**: Choose fluency level, add multiple languages, and set optional accents
-            -   **Writing Style**: Configure formality, verbosity, humor, emoji usage, and punctuation
-        -   **Mass User Generation**: Use the "Mass Add" button for batch creation:
-            -   **Templates**: Choose from 8 predefined personality archetypes
-            -   **AI Generation**: Let Gemini AI create unique, creative personalities
-            -   **Random Generation**: Generate diverse users with randomized attributes
-            -   **Customization**: Mix templates with randomization for perfect control
-            -   **Quantity Control**: Generate 1-50 users at once with live preview
-        -   **Import/Export**: Use the "Import/Export" button for data management:
-            -   **Export**: Save users as CSV or JSON files for backup
-            -   **Import**: Load users from CSV or JSON files
-            -   **Sharing**: Share user collections with the community
-        -   **User Management**: 
-            -   Use the "Clear All" button to remove all users and start fresh
-            -   Edit or delete individual users using the buttons on each user card
-            -   View detailed user attributes including fluency badges and style information
-    -   **Manage channels**: 
-        -   Use the "Add Channel" button to create IRC channels with names (starting with #) and topics
-        -   Use the "Clear All" button to remove all channels and start fresh
-        -   Edit or delete individual channels using the buttons on each channel card
-    -   **Adjust simulation speed**: Choose how frequently AI users generate autonomous messages (Fast/Normal/Slow/Off)
-    -   **Browse without saving**: Use the "Cancel" button to explore settings without applying changes
-4.  Click **"Save and Start"** to enter the simulation. Your configuration will be saved for your next visit.
-5.  **Note**: Station V requires a valid Google Gemini API key to be present in the execution environment (`process.env.API_KEY`).
+### Quick Start (5 minutes)
 
-## 6. Recent Updates (v1.7.0)
+If you just want to get Station V running quickly:
 
-Station V has recently received a major enhancement with powerful batch user generation and data management capabilities:
+1. **Install Node.js** from [nodejs.org](https://nodejs.org/)
+2. **Get a Gemini API key** from [Google AI Studio](https://makersuite.google.com/app/apikey)
+3. **Clone the project** and navigate to the directory
+4. **Install dependencies**: `npm install`
+5. **Create `.env` file** with your API key:
+   ```
+   GEMINI_API_KEY=your_api_key_here
+   ```
+6. **Start the app**: `npm run dev`
+7. **Open browser** to `http://localhost:5173/`
+8. **Configure and start chatting!**
+
+### Prerequisites
+
+Before running Station V, you'll need:
+
+1. **Node.js** (version 16 or higher) - [Download from nodejs.org](https://nodejs.org/)
+2. **npm** (comes with Node.js) or **yarn** package manager
+3. **Google Gemini API Key** - [Get one from Google AI Studio](https://makersuite.google.com/app/apikey)
+
+### Installation & Setup
+
+1. **Clone or Download the Project**
+   ```bash
+   git clone <repository-url>
+   cd irc_simulator
+   ```
+   Or download the project files to a local directory.
+
+2. **Install Dependencies**
+   ```bash
+   npm install
+   ```
+   This will install all required packages including React, TypeScript, Tailwind CSS, and the Google Gemini AI library.
+
+3. **Set Up Environment Variables**
+   Create a `.env` file in the project root directory:
+   ```bash
+   # Create .env file
+   touch .env
+   ```
+   
+   Add your Gemini API key to the `.env` file:
+   ```
+   GEMINI_API_KEY=your_api_key_here
+   ```
+   
+   **Important**: Replace `your_api_key_here` with your actual Gemini API key from Google AI Studio.
+
+4. **Start the Development Server**
+   ```bash
+   npm run dev
+   ```
+   
+   The application will start and you'll see output like:
+   ```
+   VITE v4.x.x  ready in 500ms
+   ➜  Local:   http://localhost:5173/
+   ➜  Network: use --host to expose
+   ```
+
+5. **Open in Browser**
+   Navigate to `http://localhost:5173/` in your web browser.
+
+### First Launch Configuration
+
+Upon first launch, you'll be greeted by a **Settings** modal with a modern, user-friendly interface:
+
+#### **Step 1: Set Your Nickname**
+- Enter your desired nickname in the "Your Nickname" field
+- This will be your display name in all channels and conversations
+
+#### **Step 2: Configure AI Model**
+- Choose your preferred AI model from the dropdown:
+  - **Gemini 2.5 Flash** (Fastest, Low cost) - Recommended for most users
+  - **Gemini 1.5 Flash** (Balanced, Low cost) - Good balance of speed and quality
+  - **Gemini 1.5 Pro** (Highest quality, High cost) - Best for complex conversations
+
+#### **Step 3: Create Virtual Users**
+You have several options for creating AI users:
+
+**Option A: Single User Creation**
+- Click "Add User" for detailed customization
+- Set nickname and personality description
+- Configure language skills (fluency, languages, accents)
+- Set writing style (formality, verbosity, humor, emoji usage, punctuation)
+- Use the "Randomize" button for AI-generated usernames
+
+**Option B: Mass User Generation**
+- Click "Mass Add" for batch creation
+- Choose generation method:
+  - **Templates**: 8 predefined personality archetypes
+  - **AI Generation**: Let Gemini create unique personalities
+  - **Random Generation**: Generate diverse users with randomized attributes
+- Select quantity (1-50 users)
+- Preview generated users before adding
+
+**Option C: Import Users**
+- Click "Import/Export" for data management
+- Import users from CSV or JSON files
+- Export users for backup or sharing
+
+#### **Step 4: Create Channels**
+- Click "Add Channel" to create IRC channels
+- Channel names must start with `#` (e.g., `#general`, `#tech`)
+- Add descriptive topics for each channel
+- Use "Clear All" to remove all channels and start fresh
+
+#### **Step 5: Configure Simulation Settings**
+- **Background Simulation Speed**: Choose how frequently AI users generate autonomous messages
+  - **Fast**: 3 seconds (very responsive, high API usage)
+  - **Normal**: 6 seconds (balanced, moderate API usage)
+  - **Slow**: 12 seconds (conservative, low API usage)
+  - **Off**: No autonomous messages (most API-friendly)
+
+- **Debug Logging**: Optional advanced settings for troubleshooting
+  - Enable/disable debug logging
+  - Choose log level (Debug, Info, Warn, Error)
+  - Select categories to log (AI, Simulation, Config, Username)
+
+#### **Step 6: Save and Start**
+- Click "Save and Start" to enter the simulation
+- Your configuration will be saved in browser localStorage
+- Use "Cancel" to explore settings without applying changes
+
+### Using the Application
+
+Once configured, you can:
+
+1. **Join Channels**: Click on channel names in the left panel to join
+2. **Send Messages**: Type in the message box and press Enter
+3. **Use IRC Commands**: 
+   - `/nick <name>` - Change your nickname
+   - `/join #channel` - Join a channel
+   - `/me <action>` - Send an action message
+   - `/who` - List users in current channel
+   - `/help` - Show available commands
+4. **Private Messages**: Click on usernames to start private conversations
+5. **Adjust Settings**: Click the gear icon to modify your configuration
+
+### Troubleshooting
+
+**Common Issues:**
+
+1. **"npm is not recognized"**: Install Node.js from [nodejs.org](https://nodejs.org/)
+2. **API Key Errors**: Ensure your `GEMINI_API_KEY` is correctly set in the `.env` file
+3. **Rate Limit Errors**: Reduce simulation speed to "Slow" or "Off" in settings
+4. **Port Already in Use**: The default port is 5173. If busy, Vite will suggest an alternative port
+
+**Getting Help:**
+- Check the browser console for detailed error messages
+- Enable debug logging in settings for troubleshooting
+- Ensure your API key has sufficient quota in Google AI Studio
+
+### Building for Production
+
+To create a production build:
+
+1. **Build the Application**
+   ```bash
+   npm run build
+   ```
+   This creates an optimized build in the `dist/` directory.
+
+2. **Preview the Production Build**
+   ```bash
+   npm run preview
+   ```
+   This serves the production build locally for testing.
+
+3. **Deploy to a Web Server**
+   - Upload the contents of the `dist/` directory to your web server
+   - Ensure your web server serves the `index.html` file for all routes (SPA routing)
+   - Set up environment variables on your hosting platform:
+     - Add `GEMINI_API_KEY` as an environment variable
+     - Or configure your hosting platform to inject the API key at build time
+
+### Environment Variables
+
+The application requires the following environment variable:
+
+- **GEMINI_API_KEY**: Your Google Gemini API key (required)
+  - Get one from [Google AI Studio](https://makersuite.google.com/app/apikey)
+  - Add to `.env` file for local development
+  - Set as environment variable in production
+
+### Development Commands
+
+```bash
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+
+# Build for production
+npm run build
+
+# Preview production build
+npm run preview
+
+# Check for linting errors
+npm run lint
+
+# Type checking
+npx tsc --noEmit
+```
+
+## 6. Recent Updates (v1.8.0)
+
+Station V has recently received major enhancements with AI model selection, comprehensive debug logging, and enhanced user management capabilities:
+
+### 🤖 **AI Model Selector**
+- **Model Options**: Choose between Gemini 2.5 Flash, 1.5 Flash, and 1.5 Pro models
+- **Cost Information**: Clear cost indicators (Low/High) for each model option
+- **Performance Descriptions**: Detailed descriptions of speed vs quality trade-offs
+- **Real-time Switching**: Model changes apply immediately to new AI messages
+- **Service Integration**: All AI functions use the selected model
+
+### 🔍 **Comprehensive Debug Logging System**
+- **AI Message Generation Logging**: Detailed logs for channel activity, reactions, and private message generation
+- **Username Generation Logging**: Complete logging for AI-powered username generation with fallback tracking
+- **Simulation Debug Logging**: Comprehensive simulation flow logging including burst mode and channel selection
+- **Error Context Logging**: Structured error logging with stack traces, context data, and error categorization
+- **Debug Control Panel**: User-friendly interface in settings modal to control debug logging
+- **Real-time Configuration**: Debug settings can be changed without restarting the application
+
+### 🎲 **Username Randomization**
+- **Randomize Button**: Purple "Randomize" button next to nickname input field
+- **AI-Powered Generation**: Uses the same AI username generation system as batch creation
+- **Loading States**: Visual feedback with spinner and "Generating..." text during AI generation
+- **Fallback System**: Automatic fallback to simple random nickname if AI fails
+- **Enhanced UX**: Improved user experience with intuitive randomize functionality
+
+### 📊 **Previous Updates (v1.7.0)**
+
+Station V previously received major enhancements with powerful batch user generation and data management capabilities:
 
 ### 🚀 **Batch User Generation System**
 -   **Personality Templates**: 8 predefined archetypes (Chatterbox, Polite Academic, Sarcastic Gamer, Mysterious Cypher, etc.)
@@ -160,8 +366,25 @@ Station V has recently received a major enhancement with powerful batch user gen
 
 ## 7. Technology Stack
 
--   **Frontend**: React, TypeScript, Tailwind CSS
--   **AI**: Google Gemini API via the `@google/genai` npm package.
+### Frontend
+- **React 18** - Modern React with hooks and functional components
+- **TypeScript** - Type-safe JavaScript development
+- **Tailwind CSS** - Utility-first CSS framework for styling
+- **Vite** - Fast build tool and development server
+
+### AI & APIs
+- **Google Gemini API** - AI model for message generation and user creation
+- **@google/genai** - Official Google Gemini AI client library
+
+### Development Tools
+- **ESLint** - Code linting and style enforcement
+- **Prettier** - Code formatting
+- **TypeScript Compiler** - Type checking and compilation
+
+### Browser Requirements
+- **Modern Browser** - Chrome 90+, Firefox 88+, Safari 14+, Edge 90+
+- **JavaScript Enabled** - Required for React application
+- **Local Storage** - Used for saving configuration and channel logs
 
 ## 8. Known Issues
 

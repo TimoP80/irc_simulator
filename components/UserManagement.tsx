@@ -7,9 +7,10 @@ import { User } from '../types';
 interface UserManagementProps {
   users: User[];
   onUsersChange: (users: User[]) => void;
+  aiModel: string;
 }
 
-export const UserManagement: React.FC<UserManagementProps> = ({ users, onUsersChange }) => {
+export const UserManagement: React.FC<UserManagementProps> = ({ users, onUsersChange, aiModel }) => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
   const [isImportExportModalOpen, setIsImportExportModalOpen] = useState(false);
@@ -208,6 +209,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onUsersCh
         onClose={handleCloseBatchModal}
         onAddUsers={handleAddUsers}
         existingNicknames={users.map(u => u.nickname)}
+        aiModel={aiModel}
       />
 
       <ImportExportModal
