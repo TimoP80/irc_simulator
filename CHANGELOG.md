@@ -4,6 +4,38 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 
 *Note: This project was previously known as "Gemini IRC Simulator" and was renamed to "Station V - Virtual IRC Simulator" as of v1.5.1.*
 
+## 1.7.0 - 2025-10-20
+
+### Added
+- **Batch User Generation System**: Complete mass user creation system with multiple generation methods
+  - **Personality Templates**: 8 predefined personality archetypes (Chatterbox, Polite Academic, Sarcastic Gamer, etc.)
+  - **Trait Pools**: Comprehensive randomization pools for personalities, interests, languages, and accents
+  - **AI-Assisted Generation**: Let Gemini AI create unique, creative personalities automatically
+  - **Randomization Engine**: Smart random generation with unique nicknames and varied attributes
+  - **Mass Add Interface**: Generate 1-50 users at once with live preview functionality
+  - **Template Customization**: Mix templates with randomization for perfect control
+- **Import/Export System**: Full data portability for user management
+  - **CSV Support**: Export/import users in spreadsheet format with proper column mapping
+  - **JSON Support**: Export/import complete user objects with all attributes
+  - **File Validation**: Automatic format detection and error handling
+  - **Backup & Sharing**: Easy data backup and community sharing capabilities
+- **Enhanced User Management Interface**: 
+  - **Mass Add Button**: Purple button for batch user generation
+  - **Import/Export Button**: Orange button for file operations
+  - **Improved Workflow**: Streamlined user creation and management process
+
+### Enhanced
+- **User Generation Efficiency**: Create 50 users in seconds instead of hours
+- **Personality Diversity**: AI and randomization ensure unique, interesting characters
+- **Data Management**: Complete import/export system for user data portability
+- **Scalability**: Build massive virtual communities quickly and easily
+
+### Technical Improvements
+- **Randomization Algorithms**: Smart nickname generation and attribute variation
+- **AI Integration**: Enhanced Gemini API usage for creative personality generation
+- **File Processing**: Robust CSV/JSON parsing with error handling
+- **UI/UX**: Intuitive modal interfaces with clear visual feedback
+
 ## 1.6.0 - 2025-10-20
 
 ### Added

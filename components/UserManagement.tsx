@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { AddUserModal } from './AddUserModal';
+import { BatchUserModal } from './BatchUserModal';
+import { ImportExportModal } from './ImportExportModal';
 import { User } from '../types';
 
 interface UserManagementProps {
@@ -9,6 +11,8 @@ interface UserManagementProps {
 
 export const UserManagement: React.FC<UserManagementProps> = ({ users, onUsersChange }) => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
+  const [isImportExportModalOpen, setIsImportExportModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
 
   const handleAddUser = (user: User) => {
@@ -34,9 +38,25 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onUsersCh
     setIsAddModalOpen(true);
   };
 
+  const handleAddUsers = (newUsers: User[]) => {
+    onUsersChange([...users, ...newUsers]);
+  };
+
   const handleCloseModal = () => {
     setIsAddModalOpen(false);
     setEditingUser(null);
+  };
+
+  const handleCloseBatchModal = () => {
+    setIsBatchModalOpen(false);
+  };
+
+  const handleCloseImportExportModal = () => {
+    setIsImportExportModalOpen(false);
+  };
+
+  const handleImportUsers = (importedUsers: User[]) => {
+    onUsersChange([...users, ...importedUsers]);
   };
 
   return (
@@ -61,6 +81,28 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onUsersCh
               Clear All
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => setIsImportExportModalOpen(true)}
+            className="bg-orange-600 text-white rounded-lg px-4 py-2 text-sm font-semibold hover:bg-orange-500 transition-colors flex items-center gap-2"
+            title="Import or export users"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+            </svg>
+            Import/Export
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsBatchModalOpen(true)}
+            className="bg-purple-600 text-white rounded-lg px-4 py-2 text-sm font-semibold hover:bg-purple-500 transition-colors flex items-center gap-2"
+            title="Add multiple users at once"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+            Mass Add
+          </button>
           <button
             type="button"
             onClick={() => setIsAddModalOpen(true)}
@@ -159,6 +201,20 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onUsersCh
         onUpdateUser={handleUpdateUser}
         existingNicknames={users.map(u => u.nickname)}
         editingUser={editingUser}
+      />
+
+      <BatchUserModal
+        isOpen={isBatchModalOpen}
+        onClose={handleCloseBatchModal}
+        onAddUsers={handleAddUsers}
+        existingNicknames={users.map(u => u.nickname)}
+      />
+
+      <ImportExportModal
+        isOpen={isImportExportModalOpen}
+        onClose={handleCloseImportExportModal}
+        users={users}
+        onImportUsers={handleImportUsers}
       />
     </div>
   );
