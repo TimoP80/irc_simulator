@@ -529,6 +529,13 @@ A: No, Station V requires an internet connection to communicate with the Gemini 
   - Preserve message formatting, colors, and IRC command styling
   - Enable easy sharing and archiving of conversation history
 
+- **Enhanced User Attribute Options**: Expand customization options for user personality traits
+  - **Formality**: More granular levels (Ultra-formal, Very formal, Formal, Semi-formal, Casual, Very casual, Ultra-casual)
+  - **Verbosity**: Extended range (Terse, Brief, Moderate, Detailed, Verbose, Extremely verbose, Novel-length)
+  - **Humor**: Extreme humor levels (None, Dry, Mild, Moderate, Witty, Sarcastic, Absurd, Chaotic, Unhinged)
+  - **Emoji Usage**: Expanded emoji frequency (None, Rare, Occasional, Moderate, Frequent, Excessive, Emoji-only responses)
+  - **Punctuation**: Detailed punctuation styles (Minimal, Standard, Expressive, Dramatic, Chaotic, Artistic, Experimental)
+
 ## 10. Known Issues
 
 ### API Rate Limit & Quota Errors
