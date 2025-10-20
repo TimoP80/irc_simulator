@@ -18,6 +18,45 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve(__dirname, '.'),
         }
+      },
+      build: {
+        rollupOptions: {
+          output: {
+            manualChunks: {
+              // Split vendor libraries into separate chunks
+              'react-vendor': ['react', 'react-dom'],
+              'google-ai': ['@google/genai'],
+              // Split AI services into their own chunk
+              'ai-services': [
+                './services/geminiService.ts',
+                './services/usernameGeneration.ts'
+              ],
+              // Split utility functions
+              'utils': [
+                './utils/importExport.ts',
+                './utils/ircCommands.ts',
+                './utils/personalityTemplates.ts',
+                './utils/config.ts',
+                './utils/debugLogger.ts'
+              ],
+              // Split components into smaller chunks
+              'modals': [
+                './components/AddUserModal.tsx',
+                './components/BatchUserModal.tsx',
+                './components/ImportExportModal.tsx',
+                './components/SettingsModal.tsx'
+              ],
+              'chat-components': [
+                './components/ChatWindow.tsx',
+                './components/Message.tsx',
+                './components/ChannelList.tsx',
+                './components/UserList.tsx'
+              ]
+            }
+          }
+        },
+        // Increase chunk size warning limit to 600KB to reduce noise
+        chunkSizeWarningLimit: 600
       }
     };
 });
