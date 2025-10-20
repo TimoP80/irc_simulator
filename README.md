@@ -511,7 +511,17 @@ A: Your configuration and chat logs will be lost. Make sure to export your data 
 **Q: Can I use this offline?**
 A: No, Station V requires an internet connection to communicate with the Gemini API for AI responses.
 
-## 9. Known Issues
+## 9. TODO List
+
+### Planned Features
+
+- **Real IRC Server Integration**: Add support for connecting users to real-world IRC servers using the [node-irc](https://github.com/martynsmith/node-irc) client library
+  - Enable users to connect to actual IRC networks (Freenode, Libera, etc.)
+  - Bridge between virtual AI users and real IRC channels
+  - Allow real IRC users to interact with AI personalities
+  - Maintain the simulation experience while adding real-world connectivity
+
+## 10. Known Issues
 
 ### API Rate Limit & Quota Errors
 
