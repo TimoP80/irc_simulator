@@ -80,7 +80,19 @@ const parseVirtualUsers = (usersString: string): User[] => {
             return {
                 nickname: nickname.trim(),
                 personality: personalityParts.join(',').trim(),
-                status: 'online'
+                status: 'online' as const,
+                languageSkills: {
+                    fluency: 'native' as const,
+                    languages: ['English'],
+                    accent: ''
+                },
+                writingStyle: {
+                    formality: 'casual' as const,
+                    verbosity: 'moderate' as const,
+                    humor: 'light' as const,
+                    emojiUsage: 'minimal' as const,
+                    punctuation: 'standard' as const
+                }
             };
         });
 };
@@ -107,7 +119,16 @@ const parseChannels = (channelsString: string, allVirtualUsers: User[], currentU
             return {
                 name: name.trim(),
                 topic: topicParts.join(',').trim(),
-                users: [{ nickname: currentUserNickname, status: 'online' }, ...usersForChannel],
+                users: [
+                    { 
+                        nickname: currentUserNickname, 
+                        status: 'online' as const,
+                        personality: 'The human user',
+                        languageSkills: { fluency: 'native' as const, languages: ['English'], accent: '' },
+                        writingStyle: { formality: 'casual' as const, verbosity: 'moderate' as const, humor: 'light' as const, emojiUsage: 'minimal' as const, punctuation: 'standard' as const }
+                    }, 
+                    ...usersForChannel
+                ],
                 messages: [
                     { id: Date.now() + index, nickname: 'system', content: `You have joined ${name.trim()}`, timestamp: new Date(), type: 'system' }
                 ]

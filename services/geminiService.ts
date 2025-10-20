@@ -2,10 +2,10 @@ import { GoogleGenAI, Type } from "@google/genai";
 import type { Channel, Message, PrivateMessageConversation, RandomWorldConfig } from '../types';
 import { withRateLimitAndRetries } from '../utils/config';
 
-const API_KEY = process.env.API_KEY;
+const API_KEY = process.env.GEMINI_API_KEY;
 
 if (!API_KEY) {
-  throw new Error("API_KEY environment variable not set");
+  throw new Error("GEMINI_API_KEY environment variable not set");
 }
 
 const ai = new GoogleGenAI({ apiKey: API_KEY });
@@ -149,6 +149,114 @@ The response must be a single line in the format: "${aiUser.nickname}: message"
     return response.text.trim();
 };
 
+
+export const generateBatchUsers = async (count: number): Promise<User[]> => {
+  const prompt = `
+Generate ${count} unique IRC users with diverse personalities, language skills, and writing styles.
+Each user should have:
+- A unique nickname (lowercase, creative, tech-inspired)
+- A detailed personality description
+- Language skills with fluency level, languages spoken, and optional accent
+- Writing style preferences for formality, verbosity, humor, emoji usage, and punctuation
+
+Make each user distinct and interesting for an IRC chat environment.
+Provide the output in JSON format.
+`;
+
+  const response = await withRateLimitAndRetries(() =>
+    ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+      config: {
+        systemInstruction: "You are a creative character generator for an IRC simulation. Generate diverse, interesting users with unique personalities and communication styles. Provide a valid JSON response.",
+        temperature: 1.0,
+        maxOutputTokens: 2000,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            users: {
+              type: Type.ARRAY,
+              description: `A list of ${count} virtual users.`,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  nickname: {
+                    type: Type.STRING,
+                    description: "The user's lowercase nickname."
+                  },
+                  personality: {
+                    type: Type.STRING,
+                    description: "A detailed personality description."
+                  },
+                  languageSkills: {
+                    type: Type.OBJECT,
+                    properties: {
+                      fluency: {
+                        type: Type.STRING,
+                        enum: ['beginner', 'intermediate', 'advanced', 'native'],
+                        description: "Language fluency level."
+                      },
+                      languages: {
+                        type: Type.ARRAY,
+                        items: { type: Type.STRING },
+                        description: "List of languages the user speaks."
+                      },
+                      accent: {
+                        type: Type.STRING,
+                        description: "Optional accent or dialect description."
+                      }
+                    },
+                    required: ['fluency', 'languages']
+                  },
+                  writingStyle: {
+                    type: Type.OBJECT,
+                    properties: {
+                      formality: {
+                        type: Type.STRING,
+                        enum: ['casual', 'formal', 'mixed'],
+                        description: "Writing formality level."
+                      },
+                      verbosity: {
+                        type: Type.STRING,
+                        enum: ['concise', 'moderate', 'verbose'],
+                        description: "Writing verbosity level."
+                      },
+                      humor: {
+                        type: Type.STRING,
+                        enum: ['none', 'light', 'heavy'],
+                        description: "Humor level in writing."
+                      },
+                      emojiUsage: {
+                        type: Type.STRING,
+                        enum: ['none', 'minimal', 'frequent'],
+                        description: "Emoji usage frequency."
+                      },
+                      punctuation: {
+                        type: Type.STRING,
+                        enum: ['minimal', 'standard', 'excessive'],
+                        description: "Punctuation style."
+                      }
+                    },
+                    required: ['formality', 'verbosity', 'humor', 'emojiUsage', 'punctuation']
+                  }
+                },
+                required: ['nickname', 'personality', 'languageSkills', 'writingStyle']
+              }
+            }
+          },
+          required: ['users']
+        }
+      }
+    })
+  );
+
+  const result = JSON.parse(response.text);
+  return result.users.map((user: any) => ({
+    ...user,
+    status: 'online' as const
+  }));
+};
 
 export const generateRandomWorldConfiguration = async (): Promise<RandomWorldConfig> => {
     const prompt = `
