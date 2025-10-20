@@ -23,11 +23,30 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
   - **Mass Add Button**: Purple button for batch user generation
   - **Import/Export Button**: Orange button for file operations
   - **Improved Workflow**: Streamlined user creation and management process
+- **Persistent Channel Logs**: Complete message history persistence system
+  - **Automatic Log Saving**: Channel messages are automatically saved to localStorage
+  - **Log Persistence**: Channel history persists across browser sessions and page reloads
+  - **Log Management**: "Clear Logs" button to remove all message history while keeping channels
+  - **Message Count Display**: Visual indicators showing number of messages in each channel
+  - **Log Storage Functions**: Comprehensive localStorage functions for saving/loading channel logs
+- **Advanced IRC Commands**: Complete IRC command support for realistic simulation
+  - **Action Messages**: `/me` command for action messages (e.g., `/me waves`)
+  - **Channel Management**: `/join`, `/part`, `/quit` commands for channel navigation
+  - **User Management**: `/kick`, `/ban`, `/unban` commands for user moderation
+  - **Channel Control**: `/topic` command to view and change channel topics
+  - **Communication**: `/notice` command for private notices to users
+  - **Information**: `/who`, `/help` commands for user lists and command help
+  - **Command Parser**: Robust command parsing with proper argument handling
+  - **Visual Display**: Color-coded message types with proper IRC formatting
 
 ### Enhanced
 - **User Generation Efficiency**: Create 50 users in seconds instead of hours
 - **Personality Diversity**: AI and randomization ensure unique, interesting characters
 - **Data Management**: Complete import/export system for user data portability
+- **Channel Persistence**: Messages now persist across sessions for realistic IRC experience
+- **Channel Management**: Enhanced UI with message count display and log management controls
+- **IRC Authenticity**: Full IRC command support makes the simulation feel like real IRC
+- **Message Variety**: Rich message types with proper formatting and color coding
 - **Scalability**: Build massive virtual communities quickly and easily
 
 ### Technical Improvements

@@ -6,7 +6,8 @@ import { SettingsModal } from './components/SettingsModal';
 import { DEFAULT_CHANNELS, DEFAULT_VIRTUAL_USERS, DEFAULT_NICKNAME, SIMULATION_INTERVALS } from './constants';
 import type { Channel, Message, User, ActiveContext, PrivateMessageConversation, AppConfig } from './types';
 import { generateChannelActivity, generateReactionToMessage, generatePrivateMessageResponse } from './services/geminiService';
-import { loadConfig, saveConfig, initializeStateFromConfig } from './utils/config';
+import { loadConfig, saveConfig, initializeStateFromConfig, saveChannelLogs, loadChannelLogs, clearChannelLogs } from './utils/config';
+import { parseIRCCommand, createCommandMessage, getIRCCommandsHelp } from './utils/ircCommands';
 
 const App: React.FC = () => {
   const [currentUserNickname, setCurrentUserNickname] = useState<string>(DEFAULT_NICKNAME);
@@ -21,20 +22,35 @@ const App: React.FC = () => {
   const simulationIntervalRef = useRef<number | null>(null);
   const lastSimErrorTimestampRef = useRef<number>(0);
 
-  // Load configuration from localStorage on initial render
+  // Load configuration and channel logs from localStorage on initial render
   useEffect(() => {
     const savedConfig = loadConfig();
+    const savedLogs = loadChannelLogs();
+    
     if (savedConfig) {
       const { nickname, virtualUsers, channels, simulationSpeed } = initializeStateFromConfig(savedConfig);
       setCurrentUserNickname(nickname);
       setVirtualUsers(virtualUsers);
-      setChannels(channels);
       setSimulationSpeed(simulationSpeed);
+      
+      // Use saved logs if available, otherwise use default channels
+      if (savedLogs && savedLogs.length > 0) {
+        setChannels(savedLogs);
+      } else {
+        setChannels(channels);
+      }
     } else {
       // If no config, open settings for the user to configure the app
       setIsSettingsOpen(true);
     }
   }, []);
+
+  // Save channel logs whenever channels change
+  useEffect(() => {
+    if (channels.length > 0) {
+      saveChannelLogs(channels);
+    }
+  }, [channels]);
 
   const handleSaveSettings = (config: AppConfig) => {
     saveConfig(config);
@@ -74,13 +90,26 @@ const App: React.FC = () => {
   }, [virtualUsers]);
 
   const handleCommand = (command: string) => {
-    const [cmd, ...args] = command.slice(1).split(' ');
-    const argString = args.join(' ');
+    const parsedCommand = parseIRCCommand(command);
+    
+    if (!parsedCommand) {
+      addMessageToContext({
+        id: Date.now(),
+        nickname: 'system',
+        content: `Unknown command: ${command}`,
+        timestamp: new Date(),
+        type: 'system'
+      }, activeContext);
+      return;
+    }
 
-    switch (cmd.toLowerCase()) {
+    const channelName = activeContext?.type === 'channel' ? activeContext.name : null;
+    const message = createCommandMessage(parsedCommand, currentUserNickname, channelName || '');
+
+    switch (parsedCommand.command) {
       case 'nick': {
-        const newNickname = argString.trim();
-        if (newNickname) {
+        const newNickname = parsedCommand.content.trim();
+        if (newNickname && newNickname !== currentUserNickname) {
           const oldNickname = currentUserNickname;
           // Update nickname in all channels' user lists
           setChannels(prevChannels => prevChannels.map(channel => ({
@@ -104,7 +133,7 @@ const App: React.FC = () => {
         break;
       }
       case 'join': {
-        const channelName = argString.trim();
+        const channelName = parsedCommand.content.trim();
         const channelExists = channels.some(c => c.name === channelName);
         if (channelExists) {
             const channel = channels.find(c => c.name === channelName);
@@ -134,6 +163,108 @@ const App: React.FC = () => {
         }
         break;
       }
+      case 'part': {
+        if (activeContext && activeContext.type === 'channel') {
+          const channelName = activeContext.name;
+          // Remove user from channel
+          setChannels(prev => prev.map(c => 
+            c.name === channelName 
+              ? { ...c, users: c.users.filter(u => u.nickname !== currentUserNickname) }
+              : c
+          ));
+          // Switch to first available channel or clear context
+          const remainingChannels = channels.filter(c => c.name !== channelName && c.users.some(u => u.nickname === currentUserNickname));
+          if (remainingChannels.length > 0) {
+            setActiveContext({ type: 'channel', name: remainingChannels[0].name });
+          } else {
+            setActiveContext(null);
+          }
+        }
+        addMessageToContext(message, activeContext);
+        break;
+      }
+      case 'quit': {
+        // In a real IRC client, this would disconnect. For simulation, we'll just show the message
+        addMessageToContext(message, activeContext);
+        break;
+      }
+      case 'topic': {
+        if (activeContext && activeContext.type === 'channel') {
+          const channelName = activeContext.name;
+          if (parsedCommand.content.trim()) {
+            // Set new topic
+            setChannels(prev => prev.map(c => 
+              c.name === channelName 
+                ? { ...c, topic: parsedCommand.content }
+                : c
+            ));
+            addMessageToContext({
+              id: Date.now(),
+              nickname: 'system',
+              content: `Topic for ${channelName} changed to: ${parsedCommand.content}`,
+              timestamp: new Date(),
+              type: 'system'
+            }, activeContext);
+          } else {
+            // Show current topic
+            const channel = channels.find(c => c.name === channelName);
+            addMessageToContext({
+              id: Date.now(),
+              nickname: 'system',
+              content: `Topic for ${channelName}: ${channel?.topic || 'No topic set'}`,
+              timestamp: new Date(),
+              type: 'system'
+            }, activeContext);
+          }
+        }
+        break;
+      }
+      case 'kick': {
+        if (activeContext && activeContext.type === 'channel' && parsedCommand.target) {
+          const channelName = activeContext.name;
+          const targetUser = parsedCommand.target;
+          // Remove target user from channel
+          setChannels(prev => prev.map(c => 
+            c.name === channelName 
+              ? { ...c, users: c.users.filter(u => u.nickname !== targetUser) }
+              : c
+          ));
+          addMessageToContext({
+            id: Date.now(),
+            nickname: 'system',
+            content: `${targetUser} has been kicked from ${channelName}${parsedCommand.content ? ` (${parsedCommand.content})` : ''}`,
+            timestamp: new Date(),
+            type: 'system'
+          }, activeContext);
+        }
+        break;
+      }
+      case 'ban': {
+        if (activeContext && activeContext.type === 'channel' && parsedCommand.target) {
+          const targetUser = parsedCommand.target;
+          addMessageToContext({
+            id: Date.now(),
+            nickname: 'system',
+            content: `${targetUser} has been banned from ${activeContext.name}${parsedCommand.content ? ` (${parsedCommand.content})` : ''}`,
+            timestamp: new Date(),
+            type: 'system'
+          }, activeContext);
+        }
+        break;
+      }
+      case 'unban': {
+        if (activeContext && activeContext.type === 'channel' && parsedCommand.target) {
+          const targetUser = parsedCommand.target;
+          addMessageToContext({
+            id: Date.now(),
+            nickname: 'system',
+            content: `${targetUser} has been unbanned from ${activeContext.name}`,
+            timestamp: new Date(),
+            type: 'system'
+          }, activeContext);
+        }
+        break;
+      }
       case 'who': {
         if (activeContext && activeContext.type === 'channel') {
           const channel = channels.find(c => c.name === activeContext.name);
@@ -150,11 +281,42 @@ const App: React.FC = () => {
         }
         break;
       }
+      case 'help': {
+        const helpText = getIRCCommandsHelp();
+        helpText.forEach(line => {
+          addMessageToContext({
+            id: Date.now() + Math.random(),
+            nickname: 'system',
+            content: line,
+            timestamp: new Date(),
+            type: 'system'
+          }, activeContext);
+        });
+        break;
+      }
+      case 'notice': {
+        // For notices, we'll add them as system messages for now
+        if (parsedCommand.target) {
+          addMessageToContext({
+            id: Date.now(),
+            nickname: 'system',
+            content: `Notice to ${parsedCommand.target}: ${parsedCommand.content}`,
+            timestamp: new Date(),
+            type: 'system'
+          }, activeContext);
+        }
+        break;
+      }
+      case 'me': {
+        // Action messages are handled by adding the message to context
+        addMessageToContext(message, activeContext);
+        break;
+      }
       default:
         addMessageToContext({
           id: Date.now(),
           nickname: 'system',
-          content: `Unknown command: /${cmd}`,
+          content: `Unknown command: /${parsedCommand.command}`,
           timestamp: new Date(),
           type: 'system'
         }, activeContext);
