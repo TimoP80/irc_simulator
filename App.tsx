@@ -3,10 +3,10 @@ import { ChannelList } from './components/ChannelList';
 import { UserList } from './components/UserList';
 import { ChatWindow } from './components/ChatWindow';
 import { SettingsModal } from './components/SettingsModal';
-import { DEFAULT_CHANNELS, DEFAULT_VIRTUAL_USERS, DEFAULT_NICKNAME, SIMULATION_INTERVALS, DEFAULT_AI_MODEL } from './constants';
+import { DEFAULT_CHANNELS, DEFAULT_VIRTUAL_USERS, DEFAULT_NICKNAME, SIMULATION_INTERVALS, DEFAULT_AI_MODEL, DEFAULT_TYPING_DELAY } from './constants';
 import type { Channel, Message, User, ActiveContext, PrivateMessageConversation, AppConfig } from './types';
 import { generateChannelActivity, generateReactionToMessage, generatePrivateMessageResponse } from './services/geminiService';
-import { loadConfig, saveConfig, initializeStateFromConfig, saveChannelLogs, loadChannelLogs, clearChannelLogs } from './utils/config';
+import { loadConfig, saveConfig, initializeStateFromConfig, saveChannelLogs, loadChannelLogs, clearChannelLogs, simulateTypingDelay } from './utils/config';
 import { parseIRCCommand, createCommandMessage, getIRCCommandsHelp } from './utils/ircCommands';
 
 const App: React.FC = () => {
@@ -19,6 +19,8 @@ const App: React.FC = () => {
   const [aiModel, setAiModel] = useState<AppConfig['aiModel']>(DEFAULT_AI_MODEL);
   const [isLoading, setIsLoading] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
+  const [typingDelayConfig, setTypingDelayConfig] = useState(DEFAULT_TYPING_DELAY);
   
   const simulationIntervalRef = useRef<number | null>(null);
   const lastSimErrorTimestampRef = useRef<number>(0);
@@ -31,18 +33,20 @@ const App: React.FC = () => {
     const savedLogs = loadChannelLogs();
     
     if (savedConfig) {
-      const { nickname, virtualUsers, channels, simulationSpeed, aiModel: savedAiModel } = initializeStateFromConfig(savedConfig);
+      const { nickname, virtualUsers, channels, simulationSpeed, aiModel: savedAiModel, typingDelay } = initializeStateFromConfig(savedConfig);
       console.log('Loaded configuration:', { 
         nickname, 
         virtualUsersCount: virtualUsers.length, 
         channelsCount: channels.length,
         channelNames: channels.map(c => c.name),
-        aiModel: savedAiModel
+        aiModel: savedAiModel,
+        typingDelay
       });
       setCurrentUserNickname(nickname);
       setVirtualUsers(virtualUsers);
       setSimulationSpeed(simulationSpeed);
       setAiModel(savedAiModel || DEFAULT_AI_MODEL);
+      setTypingDelayConfig(typingDelay || DEFAULT_TYPING_DELAY);
       
       // Use saved logs if available and they match the current configuration
       if (savedLogs && savedLogs.length > 0) {
@@ -95,16 +99,29 @@ const App: React.FC = () => {
 
   const handleSaveSettings = (config: AppConfig) => {
     saveConfig(config);
-    const { nickname, virtualUsers, channels, simulationSpeed, aiModel: savedAiModel } = initializeStateFromConfig(config);
+    const { nickname, virtualUsers, channels, simulationSpeed, aiModel: savedAiModel, typingDelay } = initializeStateFromConfig(config);
     setCurrentUserNickname(nickname);
     setVirtualUsers(virtualUsers);
     setChannels(channels);
     setSimulationSpeed(simulationSpeed);
     setAiModel(savedAiModel || DEFAULT_AI_MODEL);
+    setTypingDelayConfig(typingDelay || DEFAULT_TYPING_DELAY);
     setPrivateMessages({});
     // Don't automatically join any channel - user needs to join manually
     setActiveContext(null);
     setIsSettingsOpen(false);
+  };
+
+  const setTyping = (nickname: string, isTyping: boolean) => {
+    setTypingUsers(prev => {
+      const newSet = new Set(prev);
+      if (isTyping) {
+        newSet.add(nickname);
+      } else {
+        newSet.delete(nickname);
+      }
+      return newSet;
+    });
   };
 
   const addMessageToContext = useCallback((message: Message, context: ActiveContext | null) => {
@@ -394,10 +411,21 @@ const App: React.FC = () => {
                 const aiResponse = await generateReactionToMessage(channel, userMessage, currentUserNickname, aiModel);
                 if (aiResponse) {
                   const aiMessages = aiResponse.split('\n').filter(line => line.includes(':'));
-                  aiMessages.forEach((msgLine, index) => {
+                  for (let index = 0; index < aiMessages.length; index++) {
+                    const msgLine = aiMessages[index];
                     const [nickname, ...contentParts] = msgLine.split(':');
                     const content = contentParts.join(':').trim();
                     if (nickname && content) {
+                      // Show typing indicator for reaction message
+                      setTyping(nickname.trim(), true);
+                      
+                      // Simulate typing delay for each reaction message
+                      console.log(`[Simulation Debug] Simulating typing delay for reaction message: "${content}"`);
+                      await simulateTypingDelay(content.length, typingDelayConfig);
+                      
+                      // Hide typing indicator
+                      setTyping(nickname.trim(), false);
+                      
                       const aiMessage: Message = {
                         id: Date.now() + index + 1,
                         nickname: nickname.trim(),
@@ -407,7 +435,7 @@ const App: React.FC = () => {
                       };
                       addMessageToContext(aiMessage, activeContext);
                     }
-                  });
+                  }
                 }
               } catch (error) {
                 console.error("Failed to get AI reaction to action:", error);
@@ -446,10 +474,21 @@ const App: React.FC = () => {
       
       if (aiResponse) {
         const aiMessages = aiResponse.split('\n').filter(line => line.includes(':'));
-        aiMessages.forEach((msgLine, index) => {
+        for (let index = 0; index < aiMessages.length; index++) {
+          const msgLine = aiMessages[index];
           const [nickname, ...contentParts] = msgLine.split(':');
           const content = contentParts.join(':').trim();
           if (nickname && content) {
+            // Show typing indicator for AI response
+            setTyping(nickname.trim(), true);
+            
+            // Simulate typing delay for each AI response message
+            console.log(`[Simulation Debug] Simulating typing delay for AI response: "${content}"`);
+            await simulateTypingDelay(content.length, typingDelayConfig);
+            
+            // Hide typing indicator
+            setTyping(nickname.trim(), false);
+            
             const aiMessage: Message = {
               id: Date.now() + index + 1,
               nickname: nickname.trim(),
@@ -459,7 +498,7 @@ const App: React.FC = () => {
             };
             addMessageToContext(aiMessage, activeContext);
           }
-        });
+        }
       }
     } catch (error) {
       console.error("Failed to get AI response:", error);
@@ -499,10 +538,21 @@ The response must be a single line in the format: "nickname: greeting message"
       const response = await generateChannelActivity(channel, newUserNickname, aiModel);
       if (response) {
         const greetingMessages = response.split('\n').filter(line => line.includes(':'));
-        greetingMessages.forEach((msgLine, index) => {
+        for (let index = 0; index < greetingMessages.length; index++) {
+          const msgLine = greetingMessages[index];
           const [nickname, ...contentParts] = msgLine.split(':');
           const content = contentParts.join(':').trim();
           if (nickname && content) {
+            // Show typing indicator for greeting
+            setTyping(nickname.trim(), true);
+            
+            // Simulate typing delay for greeting messages
+            console.log(`[Simulation Debug] Simulating typing delay for greeting: "${content}"`);
+            await simulateTypingDelay(content.length, typingDelayConfig);
+            
+            // Hide typing indicator
+            setTyping(nickname.trim(), false);
+            
             const greetingMessage: Message = {
               id: Date.now() + index + 1,
               nickname: nickname.trim(),
@@ -512,7 +562,7 @@ The response must be a single line in the format: "nickname: greeting message"
             };
             addMessageToContext(greetingMessage, { type: 'channel', name: channel.name });
           }
-        });
+        }
       }
     } catch (error) {
       console.error("Failed to generate greeting:", error);
@@ -558,6 +608,16 @@ The response must be a single line in the format: "nickname: greeting message"
         const content = contentParts.join(':').trim();
 
         if (nickname && content) {
+          // Show typing indicator
+          setTyping(nickname.trim(), true);
+          
+          // Simulate typing delay before adding the message
+          console.log(`[Simulation Debug] Simulating typing delay for message: "${content}"`);
+          await simulateTypingDelay(content.length, typingDelayConfig);
+          
+          // Hide typing indicator
+          setTyping(nickname.trim(), false);
+          
           const aiMessage: Message = {
             id: Date.now(),
             nickname: nickname.trim(),
@@ -585,6 +645,16 @@ The response must be a single line in the format: "nickname: greeting message"
               const content = contentParts.join(':').trim();
 
               if (nickname && content) {
+                // Show typing indicator for burst message
+                setTyping(nickname.trim(), true);
+                
+                // Simulate typing delay for burst message too
+                console.log(`[Simulation Debug] Simulating typing delay for burst message: "${content}"`);
+                await simulateTypingDelay(content.length, typingDelayConfig);
+                
+                // Hide typing indicator
+                setTyping(nickname.trim(), false);
+                
                 const aiMessage: Message = {
                   id: Date.now() + Math.random(),
                   nickname: nickname.trim(),
@@ -706,6 +776,7 @@ The response must be a single line in the format: "nickname: greeting message"
           onSendMessage={handleSendMessage}
           isLoading={isLoading}
           currentUserNickname={currentUserNickname}
+          typingUsers={Array.from(typingUsers)}
         />
       </main>
       <UserList users={usersInContext} onUserClick={(nickname) => setActiveContext({ type: 'pm', with: nickname })} currentUserNickname={currentUserNickname} />

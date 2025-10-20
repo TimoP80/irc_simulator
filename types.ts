@@ -55,6 +55,11 @@ export interface AppConfig {
   channels: string;
   simulationSpeed: 'fast' | 'normal' | 'slow' | 'off';
   aiModel: string; // Now supports any model ID from the API
+  typingDelay: {
+    enabled: boolean;
+    baseDelay: number; // Base delay in milliseconds
+    maxDelay: number; // Maximum delay in milliseconds
+  };
 }
 
 export interface GeminiModel {

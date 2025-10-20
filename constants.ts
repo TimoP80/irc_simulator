@@ -42,6 +42,13 @@ export const FALLBACK_AI_MODELS = [
 // Default AI model
 export const DEFAULT_AI_MODEL = 'gemini-2.5-flash' as const;
 
+// Default typing delay settings
+export const DEFAULT_TYPING_DELAY = {
+  enabled: true,
+  baseDelay: 1000, // 1 second base delay
+  maxDelay: 5000   // 5 seconds maximum delay
+} as const;
+
 // Default list of virtual users for the simulation.
 export const DEFAULT_VIRTUAL_USERS: User[] = [
   { 
