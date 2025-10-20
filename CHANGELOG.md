@@ -4,6 +4,22 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 
 *Note: This project was previously known as "Gemini IRC Simulator" and was renamed to "Station V - Virtual IRC Simulator" as of v1.5.1.*
 
+## 1.11.1 - 2025-01-20
+
+### Fixed
+- **Settings Modal Blank Screen Bug**: Resolved critical issue where the screen would go blank when trying to access settings during background simulation
+  - **Simulation Pause**: Background simulation now automatically pauses when settings modal is opened
+  - **Immediate Stop**: Added immediate simulation stop when opening settings to prevent interference
+  - **Safety Checks**: Added multiple safety checks to prevent simulation from running during modal operations
+  - **Error Boundaries**: Added error handling to SettingsModal and ImportExportModal to prevent crashes
+  - **Graceful Recovery**: If modal rendering fails, users now see a helpful error message instead of blank screen
+  - **Simulation Resume**: Simulation automatically resumes when settings modal is closed (unless manually disabled)
+
+### Enhanced
+- **Modal Stability**: Improved overall stability of modal interfaces during active simulation
+- **Error Handling**: Better error reporting and recovery mechanisms for UI components
+- **User Experience**: Users can now safely access settings and export functionality during simulation
+
 ## 1.11.0 - 2025-01-20
 
 ### Added

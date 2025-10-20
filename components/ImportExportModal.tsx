@@ -135,7 +135,9 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
 
   if (!isOpen) return null;
 
-  return (
+  // Add error boundary for debugging
+  try {
+    return (
     <div 
       className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[70]"
       onClick={(e) => {
@@ -385,5 +387,24 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
         </div>
       </div>
     </div>
-  );
+    );
+  } catch (error) {
+    console.error('Error rendering ImportExportModal:', error);
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[70]">
+        <div className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-2xl border border-gray-700">
+          <h3 className="text-2xl font-bold text-white mb-4">Error</h3>
+          <p className="text-red-400 mb-4">An error occurred while loading the export interface.</p>
+          <p className="text-gray-400 mb-6">Please try refreshing the page or contact support if the issue persists.</p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="bg-gray-600 text-white rounded-lg px-6 py-2 font-semibold hover:bg-gray-500 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
 };
