@@ -4,6 +4,27 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 
 *Note: This project was previously known as "Gemini IRC Simulator" and was renamed to "Station V - Virtual IRC Simulator" as of v1.5.1.*
 
+## 1.11.0 - 2025-01-20
+
+### Added
+- **HTML Chat Log Export**: Export chat logs in beautiful HTML format for better readability and sharing
+  - **Individual Channel Export**: Export any single channel as a standalone HTML file with full styling
+  - **All Channels Export**: Export all channels in one comprehensive HTML file with chronological message ordering
+  - **Professional Styling**: Dark theme with IRC-style colors, proper typography, and responsive design
+  - **Message Type Support**: Full support for all IRC message types (system, action, notice, topic, join, part, quit, kick, ban, PM)
+  - **Rich Formatting**: Preserves all message formatting, colors, and visual styling from the original chat
+  - **Channel Information**: Displays channel name, topic, message count, and user list in the exported HTML
+  - **User Highlighting**: Current user messages are highlighted in green, other users in blue
+  - **Timestamps**: Properly formatted timestamps for all messages
+  - **Mobile Responsive**: HTML files work perfectly on desktop and mobile devices
+  - **Easy Sharing**: Generated HTML files can be shared, archived, or viewed in any web browser
+  - **Export Integration**: Added to Import/Export modal with intuitive UI for both individual and bulk exports
+
+### Enhanced
+- **Import/Export Modal**: Expanded to include chat log export functionality alongside user data export
+- **Export Options**: Now supports CSV, JSON, and HTML export formats for different use cases
+- **User Experience**: Clear visual distinction between user data export and chat log export sections
+
 ## 1.10.2 - 2025-01-20
 
 ### Fixed

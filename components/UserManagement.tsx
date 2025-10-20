@@ -2,15 +2,17 @@ import React, { useState } from 'react';
 import { AddUserModal } from './AddUserModal';
 import { BatchUserModal } from './BatchUserModal';
 import { ImportExportModal } from './ImportExportModal';
-import { User } from '../types';
+import { User, Channel } from '../types';
 
 interface UserManagementProps {
   users: User[];
   onUsersChange: (users: User[]) => void;
   aiModel: string;
+  channels: Channel[];
+  currentUserNickname: string;
 }
 
-export const UserManagement: React.FC<UserManagementProps> = ({ users, onUsersChange, aiModel }) => {
+export const UserManagement: React.FC<UserManagementProps> = ({ users, onUsersChange, aiModel, channels, currentUserNickname }) => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
   const [isImportExportModalOpen, setIsImportExportModalOpen] = useState(false);
@@ -216,6 +218,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onUsersCh
         isOpen={isImportExportModalOpen}
         onClose={handleCloseImportExportModal}
         users={users}
+        channels={channels}
+        currentUserNickname={currentUserNickname}
         onImportUsers={handleImportUsers}
       />
     </div>

@@ -1,11 +1,13 @@
 import React, { useState, useRef } from 'react';
-import { User } from '../types';
-import { exportUsersToCSV, exportUsersToJSON, importUsersFromCSV, importUsersFromJSON, downloadFile, readFileAsText } from '../utils/importExport';
+import { User, Channel } from '../types';
+import { exportUsersToCSV, exportUsersToJSON, importUsersFromCSV, importUsersFromJSON, downloadFile, readFileAsText, exportChannelToHTML, exportAllChannelsToHTML } from '../utils/importExport';
 
 interface ImportExportModalProps {
   isOpen: boolean;
   onClose: () => void;
   users: User[];
+  channels: Channel[];
+  currentUserNickname: string;
   onImportUsers: (users: User[]) => void;
 }
 
@@ -13,6 +15,8 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
   isOpen,
   onClose,
   users,
+  channels,
+  currentUserNickname,
   onImportUsers
 }) => {
   const [activeTab, setActiveTab] = useState<'export' | 'import'>('export');
@@ -41,6 +45,18 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
   const handleExportJSON = () => {
     const jsonContent = exportUsersToJSON(users);
     downloadFile(jsonContent, `station-v-users-${new Date().toISOString().split('T')[0]}.json`, 'application/json');
+  };
+
+  const handleExportChannelHTML = (channel: Channel) => {
+    const htmlContent = exportChannelToHTML(channel, currentUserNickname);
+    const filename = `station-v-${channel.name.replace('#', '')}-${new Date().toISOString().split('T')[0]}.html`;
+    downloadFile(htmlContent, filename, 'text/html');
+  };
+
+  const handleExportAllChannelsHTML = () => {
+    const htmlContent = exportAllChannelsToHTML(channels, currentUserNickname);
+    const filename = `station-v-all-channels-${new Date().toISOString().split('T')[0]}.html`;
+    downloadFile(htmlContent, filename, 'text/html');
   };
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -134,7 +150,8 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
 
         {/* Export Tab */}
         {activeTab === 'export' && (
-          <div className="space-y-6">
+          <div className="space-y-8">
+            {/* Users Export */}
             <div>
               <h4 className="text-lg font-semibold text-gray-200 mb-4">Export Users</h4>
               <p className="text-gray-400 mb-6">
@@ -166,6 +183,63 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
                   </div>
                 </button>
               </div>
+            </div>
+
+            {/* Chat Logs Export */}
+            <div>
+              <h4 className="text-lg font-semibold text-gray-200 mb-4">Export Chat Logs</h4>
+              <p className="text-gray-400 mb-6">
+                Export chat logs in HTML format for better readability and sharing.
+              </p>
+              
+              {/* All Channels Export */}
+              <div className="mb-6">
+                <button
+                  type="button"
+                  onClick={handleExportAllChannelsHTML}
+                  className="w-full p-4 rounded-lg border-2 border-gray-600 bg-gray-700 text-gray-300 hover:border-purple-500 hover:bg-purple-900/20 hover:text-purple-200 transition-colors"
+                >
+                  <div className="text-center">
+                    <div className="text-2xl mb-2">🌐</div>
+                    <div className="font-semibold">Export All Channels</div>
+                    <div className="text-sm opacity-75">
+                      All {channels.length} channels in one HTML file
+                    </div>
+                  </div>
+                </button>
+              </div>
+
+              {/* Individual Channel Exports */}
+              {channels.length > 0 && (
+                <div>
+                  <h5 className="text-md font-semibold text-gray-300 mb-4">Individual Channels</h5>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {channels.map((channel) => (
+                      <button
+                        key={channel.name}
+                        type="button"
+                        onClick={() => handleExportChannelHTML(channel)}
+                        className="p-3 rounded-lg border-2 border-gray-600 bg-gray-700 text-gray-300 hover:border-orange-500 hover:bg-orange-900/20 hover:text-orange-200 transition-colors"
+                      >
+                        <div className="text-center">
+                          <div className="text-lg mb-1">💬</div>
+                          <div className="font-semibold text-sm">{channel.name}</div>
+                          <div className="text-xs opacity-75">
+                            {channel.messages.length} messages
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {channels.length === 0 && (
+                <div className="p-4 bg-gray-700 rounded-lg text-center text-gray-400">
+                  <div className="text-2xl mb-2">📭</div>
+                  <div>No channels available for export</div>
+                </div>
+              )}
             </div>
           </div>
         )}
