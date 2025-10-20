@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { AppConfig, User, GeminiModel } from '../types';
+import type { AppConfig, User, GeminiModel, Channel } from '../types';
 import { loadConfig } from '../utils/config';
 import { DEFAULT_NICKNAME, FALLBACK_AI_MODELS, DEFAULT_AI_MODEL, DEFAULT_TYPING_DELAY } from '../constants';
 import { generateRandomWorldConfiguration, listAvailableModels } from '../services/geminiService';
@@ -10,6 +10,7 @@ import { getDebugConfig, updateDebugConfig, setDebugEnabled, setLogLevel, toggle
 interface SettingsModalProps {
   onSave: (config: AppConfig) => void;
   onCancel: () => void;
+  currentChannels?: Channel[];
 }
 
 const DEFAULT_USERS_TEXT = `nova, A curious tech-savvy individual who loves gadgets.
@@ -70,7 +71,7 @@ const formatChannelsToText = (channels: { name: string; topic: string }[]) => {
   return channels.map(channel => `${channel.name}, ${channel.topic}`).join('\n');
 };
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel }) => {
+export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel, currentChannels }) => {
   const [config, setConfig] = useState<AppConfig>(() => {
     const savedConfig = loadConfig();
     const aiModel = savedConfig?.aiModel || DEFAULT_AI_MODEL;
@@ -232,7 +233,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel }
             users={users} 
             onUsersChange={setUsers} 
             aiModel={config.aiModel}
-            channels={channels}
+            channels={currentChannels || channels}
             currentUserNickname={config.currentUserNickname}
           />
           <ChannelManagement channels={channels} onChannelsChange={setChannels} />
@@ -273,9 +274,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel }
                 availableModels.map((model) => (
                   <option key={model.name} value={model.baseModelId}>
                     {model.displayName} - {model.description}
-                    {model.inputTokenLimit && (
-                      <span> (Input: {Math.floor(model.inputTokenLimit / 1000)}k tokens)</span>
-                    )}
+                    {model.inputTokenLimit && ` (Input: ${Math.floor(model.inputTokenLimit / 1000)}k tokens)`}
                   </option>
                 ))
               ) : (

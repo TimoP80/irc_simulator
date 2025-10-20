@@ -7,6 +7,7 @@ import { DEFAULT_CHANNELS, DEFAULT_VIRTUAL_USERS, DEFAULT_NICKNAME, SIMULATION_I
 import type { Channel, Message, User, ActiveContext, PrivateMessageConversation, AppConfig } from './types';
 import { generateChannelActivity, generateReactionToMessage, generatePrivateMessageResponse } from './services/geminiService';
 import { loadConfig, saveConfig, initializeStateFromConfig, saveChannelLogs, loadChannelLogs, clearChannelLogs, simulateTypingDelay } from './utils/config';
+import { aiLogger, simulationLogger, configLogger } from './utils/debugLogger';
 import { parseIRCCommand, createCommandMessage, getIRCCommandsHelp } from './utils/ircCommands';
 
 const App: React.FC = () => {
@@ -32,13 +33,16 @@ const App: React.FC = () => {
     const savedConfig = loadConfig();
     const savedLogs = loadChannelLogs();
     
+    configLogger.debug('useEffect running - savedConfig:', !!savedConfig, 'savedLogs:', savedLogs?.length || 0);
+    
     if (savedConfig) {
       const { nickname, virtualUsers, channels, simulationSpeed, aiModel: savedAiModel, typingDelay } = initializeStateFromConfig(savedConfig);
-      console.log('Loaded configuration:', { 
+      configLogger.debug('Loaded configuration:', { 
         nickname, 
         virtualUsersCount: virtualUsers.length, 
         channelsCount: channels.length,
         channelNames: channels.map(c => c.name),
+        channelMessages: channels.map(c => ({ name: c.name, messageCount: c.messages?.length || 0 })),
         aiModel: savedAiModel,
         typingDelay
       });
@@ -48,40 +52,45 @@ const App: React.FC = () => {
       setAiModel(savedAiModel || DEFAULT_AI_MODEL);
       setTypingDelayConfig(typingDelay || DEFAULT_TYPING_DELAY);
       
-      // Use saved logs if available and they match the current configuration
+      // Merge saved logs with configured channels
       if (savedLogs && savedLogs.length > 0) {
-        // Check if saved logs match the configured channels
-        const configuredChannelNames = channels.map(c => c.name).sort();
-        const savedChannelNames = savedLogs.map(c => c.name).sort();
+        configLogger.debug('Saved logs details:', savedLogs.map(c => ({ 
+          name: c.name, 
+          messageCount: c.messages?.length || 0,
+          messages: c.messages?.slice(0, 2) // Show first 2 messages
+        })));
         
-        console.log('Channel comparison:', {
-          configured: configuredChannelNames,
-          saved: savedChannelNames,
-          match: JSON.stringify(configuredChannelNames) === JSON.stringify(savedChannelNames)
+        // Merge saved messages with configured channels
+        const mergedChannels = channels.map(configuredChannel => {
+          const savedChannel = savedLogs.find(saved => saved.name === configuredChannel.name);
+          configLogger.debug(`Looking for saved channel ${configuredChannel.name}:`, {
+            found: !!savedChannel,
+            messageCount: savedChannel?.messages?.length || 0,
+            savedChannelNames: savedLogs.map(s => s.name)
+          });
+          
+          if (savedChannel && savedChannel.messages && savedChannel.messages.length > 0) {
+            // Use saved messages but keep configured users and topic
+            configLogger.debug(`Merging saved messages for ${configuredChannel.name}: ${savedChannel.messages.length} messages`);
+            return {
+              ...configuredChannel,
+              messages: savedChannel.messages, // Use saved messages
+              users: configuredChannel.users, // Keep configured users
+              topic: configuredChannel.topic  // Keep configured topic
+            };
+          } else {
+            // No saved messages for this channel, use configured channel
+            configLogger.debug(`No saved messages for ${configuredChannel.name}, using configured channel`);
+            return configuredChannel;
+          }
         });
         
-        if (JSON.stringify(configuredChannelNames) === JSON.stringify(savedChannelNames)) {
-          // Use saved logs but ensure they have the correct users
-          const updatedLogs = savedLogs.map(savedChannel => {
-            const configuredChannel = channels.find(c => c.name === savedChannel.name);
-            if (configuredChannel) {
-              return {
-                ...savedChannel,
-                users: configuredChannel.users, // Use configured users
-                topic: configuredChannel.topic  // Use configured topic
-              };
-            }
-            return savedChannel;
-          });
-          console.log('Using saved logs with updated users');
-          setChannels(updatedLogs);
-        } else {
-          // Channel configuration changed, use new channels
-          console.log('Channel configuration changed, using new channels');
-          setChannels(channels);
-        }
+        
+        configLogger.debug('Merged channels message counts:', mergedChannels.map(c => ({ name: c.name, messageCount: c.messages?.length || 0 })));
+        setChannels(mergedChannels);
       } else {
-        console.log('No saved logs, using configured channels');
+        configLogger.debug('No saved logs, using configured channels');
+        configLogger.debug('Configured channels message counts:', channels.map(c => ({ name: c.name, messageCount: c.messages?.length || 0 })));
         setChannels(channels);
       }
     } else {
@@ -93,6 +102,10 @@ const App: React.FC = () => {
   // Save channel logs whenever channels change
   useEffect(() => {
     if (channels.length > 0) {
+      configLogger.debug('Saving channel logs:', channels.map(c => ({ 
+        name: c.name, 
+        messageCount: c.messages?.length || 0 
+      })));
       saveChannelLogs(channels);
     }
   }, [channels]);
@@ -140,13 +153,15 @@ const App: React.FC = () => {
   const addMessageToContext = useCallback((message: Message, context: ActiveContext | null) => {
     if (!context) return;
     if (context.type === 'channel') {
-      setChannels(prev =>
-        prev.map(c =>
+      setChannels(prev => {
+        const updatedChannels = prev.map(c =>
           c.name === context.name
-            ? { ...c, messages: [...c.messages, message].slice(-100) }
+            ? { ...c, messages: [...(c.messages || []), message].slice(-100) }
             : c
-        )
-      );
+        );
+        simulationLogger.debug(`Message added to channel ${context.name}. Updated channel messages count: ${updatedChannels.find(c => c.name === context.name)?.messages?.length || 0}`);
+        return updatedChannels;
+      });
     } else { // 'pm'
       setPrivateMessages(prev => {
         const conversation = prev[context.with] || { user: virtualUsers.find(u => u.nickname === context.with)!, messages: [] };
@@ -428,12 +443,12 @@ const App: React.FC = () => {
                     const msgLine = aiMessages[index];
                     const [nickname, ...contentParts] = msgLine.split(':');
                     const content = contentParts.join(':').trim();
-                    if (nickname && content) {
+                    if (nickname && content && nickname.trim()) {
                       // Show typing indicator for reaction message
                       setTyping(nickname.trim(), true);
                       
                       // Simulate typing delay for each reaction message
-                      console.log(`[Simulation Debug] Simulating typing delay for reaction message: "${content}"`);
+                      simulationLogger.debug(`Simulating typing delay for reaction message: "${content}"`);
                       await simulateTypingDelay(content.length, typingDelayConfig);
                       
                       // Hide typing indicator
@@ -491,12 +506,12 @@ const App: React.FC = () => {
           const msgLine = aiMessages[index];
           const [nickname, ...contentParts] = msgLine.split(':');
           const content = contentParts.join(':').trim();
-          if (nickname && content) {
+          if (nickname && content && nickname.trim()) {
             // Show typing indicator for AI response
             setTyping(nickname.trim(), true);
             
             // Simulate typing delay for each AI response message
-            console.log(`[Simulation Debug] Simulating typing delay for AI response: "${content}"`);
+            simulationLogger.debug(`Simulating typing delay for AI response: "${content}"`);
             await simulateTypingDelay(content.length, typingDelayConfig);
             
             // Hide typing indicator
@@ -572,12 +587,12 @@ The response must be a single line in the format: "nickname: greeting message"
           const msgLine = greetingMessages[index];
           const [nickname, ...contentParts] = msgLine.split(':');
           const content = contentParts.join(':').trim();
-          if (nickname && content) {
+          if (nickname && content && nickname.trim()) {
             // Show typing indicator for greeting
             setTyping(nickname.trim(), true);
             
             // Simulate typing delay for greeting messages
-            console.log(`[Simulation Debug] Simulating typing delay for greeting: "${content}"`);
+            simulationLogger.debug(`Simulating typing delay for greeting: "${content}"`);
             await simulateTypingDelay(content.length, typingDelayConfig);
             
             // Hide typing indicator
@@ -602,12 +617,12 @@ The response must be a single line in the format: "nickname: greeting message"
   const runSimulation = useCallback(async () => {
     // Safety check: Don't run simulation if settings modal is open
     if (isSettingsOpen) {
-      console.log('[Simulation Debug] Settings modal is open, skipping simulation');
+      simulationLogger.debug('Settings modal is open, skipping simulation');
       return;
     }
     
     if (channels.length === 0) {
-      console.log('[Simulation Debug] No channels available for simulation');
+      simulationLogger.debug('No channels available for simulation');
       return;
     }
     
@@ -616,7 +631,7 @@ The response must be a single line in the format: "nickname: greeting message"
     const timeSinceLastUserMessage = now - lastUserMessageTimeRef.current;
     const shouldBurst = timeSinceLastUserMessage < 30000; // 30 seconds
     
-    console.log(`[Simulation Debug] Running simulation - burst mode: ${shouldBurst}, time since last user message: ${timeSinceLastUserMessage}ms`);
+    simulationLogger.debug(`Running simulation - burst mode: ${shouldBurst}, time since last user message: ${timeSinceLastUserMessage}ms`);
     
     // Prioritize the active channel for more responsive conversation
     let targetChannel: Channel;
@@ -624,31 +639,33 @@ The response must be a single line in the format: "nickname: greeting message"
       const activeChannel = channels.find(c => c.name === activeContext.name);
       if (activeChannel) {
         targetChannel = activeChannel;
-        console.log(`[Simulation Debug] Using active channel: ${targetChannel.name}`);
+        simulationLogger.debug(`Using active channel: ${targetChannel.name}`);
       } else {
         const randomChannelIndex = Math.floor(Math.random() * channels.length);
         targetChannel = channels[randomChannelIndex];
-        console.log(`[Simulation Debug] Active channel not found, using random channel: ${targetChannel.name}`);
+        simulationLogger.debug(`Active channel not found, using random channel: ${targetChannel.name}`);
       }
     } else {
       const randomChannelIndex = Math.floor(Math.random() * channels.length);
       targetChannel = channels[randomChannelIndex];
-      console.log(`[Simulation Debug] No active context, using random channel: ${targetChannel.name}`);
+      simulationLogger.debug(`No active context, using random channel: ${targetChannel.name}`);
     }
 
     try {
-      console.log(`[Simulation Debug] Generating channel activity for ${targetChannel.name}`);
+      simulationLogger.debug(`Generating channel activity for ${targetChannel.name}`);
       const response = await generateChannelActivity(targetChannel, currentUserNickname, aiModel);
       if (response) {
         const [nickname, ...contentParts] = response.split(':');
         const content = contentParts.join(':').trim();
 
-        if (nickname && content) {
+        simulationLogger.debug(`Parsed response - nickname: "${nickname}", content: "${content}"`);
+
+        if (nickname && content && nickname.trim()) {
           // Show typing indicator
           setTyping(nickname.trim(), true);
           
           // Simulate typing delay before adding the message
-          console.log(`[Simulation Debug] Simulating typing delay for message: "${content}"`);
+          simulationLogger.debug(`Simulating typing delay for message: "${content}"`);
           await simulateTypingDelay(content.length, typingDelayConfig);
           
           // Hide typing indicator
@@ -661,19 +678,19 @@ The response must be a single line in the format: "nickname: greeting message"
             timestamp: new Date(),
             type: 'ai'
           };
-          console.log(`[Simulation Debug] Adding AI message from ${nickname.trim()}: "${content}"`);
+          simulationLogger.debug(`Adding AI message from ${nickname.trim()}: "${content}"`);
           addMessageToContext(aiMessage, { type: 'channel', name: targetChannel.name });
         } else {
-          console.log(`[Simulation Debug] Invalid response format: "${response}"`);
+          simulationLogger.debug(`Invalid response format: "${response}" - nickname: "${nickname}", content: "${content}"`);
         }
       } else {
-        console.log(`[Simulation Debug] No response generated for ${targetChannel.name}`);
+        simulationLogger.debug(`No response generated for ${targetChannel.name}`);
       }
       
       // In burst mode, sometimes generate a second message for more activity
       // Reduced probability and increased delay for Tier 1 API stability
       if (shouldBurst && Math.random() < 0.15) { // Reduced from 0.3 to 0.15
-        console.log(`[Simulation Debug] Burst mode: generating second message for ${targetChannel.name}`);
+        simulationLogger.debug(`Burst mode: generating second message for ${targetChannel.name}`);
         setTimeout(async () => {
           try {
             const secondResponse = await generateChannelActivity(targetChannel, currentUserNickname, aiModel);
@@ -681,12 +698,14 @@ The response must be a single line in the format: "nickname: greeting message"
               const [nickname, ...contentParts] = secondResponse.split(':');
               const content = contentParts.join(':').trim();
 
-              if (nickname && content) {
+              simulationLogger.debug(`Burst mode parsed response - nickname: "${nickname}", content: "${content}"`);
+
+              if (nickname && content && nickname.trim()) {
                 // Show typing indicator for burst message
                 setTyping(nickname.trim(), true);
                 
                 // Simulate typing delay for burst message too
-                console.log(`[Simulation Debug] Simulating typing delay for burst message: "${content}"`);
+                simulationLogger.debug(`Simulating typing delay for burst message: "${content}"`);
                 await simulateTypingDelay(content.length, typingDelayConfig);
                 
                 // Hide typing indicator
@@ -699,7 +718,7 @@ The response must be a single line in the format: "nickname: greeting message"
                   timestamp: new Date(),
                   type: 'ai'
                 };
-                console.log(`[Simulation Debug] Adding burst AI message from ${nickname.trim()}: "${content}"`);
+                simulationLogger.debug(`Adding burst AI message from ${nickname.trim()}: "${content}"`);
                 addMessageToContext(aiMessage, { type: 'channel', name: targetChannel.name });
               }
             }
@@ -723,7 +742,7 @@ The response must be a single line in the format: "nickname: greeting message"
       // Only show error message if the last one was more than 5 minutes ago
       if (now - lastSimErrorTimestampRef.current > 300000) { 
           lastSimErrorTimestampRef.current = now;
-          console.log(`[Simulation Debug] Showing error message to user for ${targetChannel.name}`);
+          simulationLogger.debug(`Showing error message to user for ${targetChannel.name}`);
           const errorMessage: Message = {
               id: now,
               nickname: 'system',
@@ -733,18 +752,19 @@ The response must be a single line in the format: "nickname: greeting message"
           };
           addMessageToContext(errorMessage, { type: 'channel', name: targetChannel.name });
       } else {
-        console.log(`[Simulation Debug] Error rate limited, not showing alert for ${targetChannel.name}`);
+        simulationLogger.debug(`Error rate limited, not showing alert for ${targetChannel.name}`);
       }
       
       // Pause simulation for 30 seconds when API errors occur
-      console.log(`[Simulation Debug] Pausing simulation for 30 seconds due to API error`);
+      simulationLogger.debug(`Pausing simulation for 30 seconds due to API error`);
       setTimeout(() => {
-        console.log(`[Simulation Debug] Resuming simulation after API error pause`);
+        simulationLogger.debug(`Resuming simulation after API error pause`);
       }, 30000);
     }
   }, [channels, activeContext, addMessageToContext, currentUserNickname, isSettingsOpen]);
 
   useEffect(() => {
+    simulationLogger.debug(`useEffect triggered - simulationSpeed: ${simulationSpeed}, isSettingsOpen: ${isSettingsOpen}`);
     const stopSimulation = () => {
       if (simulationIntervalRef.current) {
         clearInterval(simulationIntervalRef.current);
@@ -755,9 +775,11 @@ The response must be a single line in the format: "nickname: greeting message"
     const startSimulation = () => {
       stopSimulation(); // Ensure no multiple intervals are running
       if (simulationSpeed === 'off' || document.hidden || isSettingsOpen) {
+        simulationLogger.debug(`Not starting simulation - speed: ${simulationSpeed}, hidden: ${document.hidden}, settingsOpen: ${isSettingsOpen}`);
         return;
       }
       const interval = SIMULATION_INTERVALS[simulationSpeed];
+      simulationLogger.debug(`Starting simulation with interval: ${interval}ms (${simulationSpeed})`);
       simulationIntervalRef.current = window.setInterval(runSimulation, interval);
     };
     
@@ -769,6 +791,7 @@ The response must be a single line in the format: "nickname: greeting message"
         }
     };
 
+    simulationLogger.debug(`Calling startSimulation from useEffect`);
     startSimulation();
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -804,7 +827,7 @@ The response must be a single line in the format: "nickname: greeting message"
 
   return (
     <div className="flex h-screen w-screen bg-gray-800 font-mono">
-      {isSettingsOpen && <SettingsModal onSave={handleSaveSettings} onCancel={handleCloseSettings} />}
+      {isSettingsOpen && <SettingsModal onSave={handleSaveSettings} onCancel={handleCloseSettings} currentChannels={channels} />}
       <ChannelList 
         channels={channels}
         privateMessageUsers={allPMUsers}

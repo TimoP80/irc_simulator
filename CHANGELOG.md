@@ -4,6 +4,33 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 
 *Note: This project was previously known as "Gemini IRC Simulator" and was renamed to "Station V - Virtual IRC Simulator" as of v1.5.1.*
 
+## 1.11.3 - 2025-01-20
+
+### Fixed
+- **Message Persistence & Export System**: Completely resolved critical issue where chat messages were not being saved or exported properly
+  - **Root Cause**: Export modal was receiving stale channel data from SettingsModal instead of live channel state from App.tsx
+  - **State Management**: Fixed disconnect between simulation-generated messages and export functionality
+  - **SettingsModal Integration**: Updated SettingsModal to receive current channel state with messages via `currentChannels` prop
+  - **Message Persistence**: Messages generated during simulation now properly persist and appear in exports
+  - **Export Functionality**: Both individual channel and all-channels export now show actual messages instead of 0
+
+### Enhanced
+- **HTML Export Formatting**: Completely redesigned HTML export with professional, beautiful formatting
+  - **Professional Design**: Dark theme with IRC-style colors, responsive layout, and modern UI
+  - **Rich Message Formatting**: Proper timestamps, message type color coding, and current user highlighting
+  - **Message Type Support**: Full support for all IRC message types (action, system, join, part, quit, kick, ban, topic, notice, PM)
+  - **Visual Enhancements**: Gradient headers, card-based information display, custom scrollbars, and hover effects
+  - **Responsive Design**: Works perfectly on desktop, tablet, and mobile devices
+  - **Technical Improvements**: Proper HTML5 structure, CSS Grid/Flexbox layouts, and error handling
+  - **Export Statistics**: Comprehensive channel information, user statistics, and export metadata
+
+### Technical Changes
+- **SettingsModal Interface**: Added `currentChannels?: Channel[]` prop to receive live channel state
+- **App.tsx Integration**: Updated SettingsModal call to pass current channels state
+- **Message Processing**: Enhanced message formatting with proper timestamp handling and type classification
+- **Error Handling**: Improved error handling for malformed messages and edge cases
+- **State Synchronization**: Fixed race conditions between simulation and export functionality
+
 ## 1.11.2 - 2025-01-20
 
 ### Fixed
@@ -14,6 +41,14 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
   - **UsernameGeneration**: Fixed invalid style type `'abstract'` to `'mixed'` in username generation options
   - **Component Rendering**: All modal components now render correctly without falling back to error boundaries
   - **Export Functionality**: Users can now successfully access and use all export features (CSV, JSON, HTML)
+- **Typing Indicator Bug**: Fixed issue where typing indicator sometimes showed "AI is typing" instead of specific nickname
+  - **Duplicate Indicators**: Removed generic "AI is typing" message that conflicted with specific nickname indicators
+  - **Nickname Validation**: Enhanced nickname parsing to properly validate non-empty nicknames
+  - **Consistent Behavior**: All message types now use consistent nickname validation logic
+  - **Better Error Handling**: Invalid AI responses no longer cause incorrect typing indicators
+- **Hydration Error**: Fixed React hydration error caused by invalid HTML structure in AI model selector
+  - **Invalid HTML**: Removed `<span>` element inside `<option>` element in model selector
+  - **Valid Structure**: Replaced with template literal for proper HTML compliance
 
 ### Enhanced
 - **Type Safety**: Improved overall TypeScript type safety across the application
