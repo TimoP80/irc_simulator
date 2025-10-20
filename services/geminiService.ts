@@ -25,11 +25,17 @@ Keep messages concise and natural for a chat room setting.
 The human user's nickname is '${currentUserNickname}'.
 `;
 
-export const generateChannelActivity = async (channel: Channel, currentUserNickname: string): Promise<string> => {
+export const generateChannelActivity = async (channel: Channel, currentUserNickname: string, model: string = 'gemini-2.5-flash'): Promise<string> => {
+  console.log(`[AI Debug] generateChannelActivity called for channel: ${channel.name}`);
+  
   const usersInChannel = channel.users.filter(u => u.nickname !== currentUserNickname);
-  if (usersInChannel.length === 0) return '';
+  if (usersInChannel.length === 0) {
+    console.log(`[AI Debug] No users in channel ${channel.name} (excluding current user)`);
+    return '';
+  }
   
   const randomUser = usersInChannel[Math.floor(Math.random() * usersInChannel.length)];
+  console.log(`[AI Debug] Selected user: ${randomUser.nickname} for channel activity`);
 
   const prompt = `
 The topic of channel ${channel.name} is: "${channel.topic}".
@@ -52,26 +58,47 @@ Consider ${randomUser.nickname}'s writing style:
 ${randomUser.languageSkills.accent ? `- Accent: ${randomUser.languageSkills.accent}` : ''}
 `;
 
-  const response = await withRateLimitAndRetries(() => 
-    ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
-        config: {
-            systemInstruction: getBaseSystemInstruction(currentUserNickname),
-            temperature: 0.9,
-            maxOutputTokens: 100,
-            thinkingConfig: { thinkingBudget: 0 },
-        },
-    })
-  );
-  return response.text.trim();
+  try {
+    console.log(`[AI Debug] Sending request to Gemini for channel activity in ${channel.name}`);
+    const response = await withRateLimitAndRetries(() => 
+      ai.models.generateContent({
+          model: model,
+          contents: prompt,
+          config: {
+              systemInstruction: getBaseSystemInstruction(currentUserNickname),
+              temperature: 0.9,
+              maxOutputTokens: 100,
+              thinkingConfig: { thinkingBudget: 0 },
+          },
+      })
+    );
+    
+    const result = response.text.trim();
+    console.log(`[AI Debug] Successfully generated channel activity: "${result}"`);
+    return result;
+  } catch (error) {
+    console.error(`[AI Debug] Error generating channel activity for ${channel.name}:`, {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      channelName: channel.name,
+      selectedUser: randomUser.nickname,
+      userCount: usersInChannel.length
+    });
+    throw error;
+  }
 };
 
-export const generateReactionToMessage = async (channel: Channel, userMessage: Message, currentUserNickname: string): Promise<string> => {
+export const generateReactionToMessage = async (channel: Channel, userMessage: Message, currentUserNickname: string, model: string = 'gemini-2.5-flash'): Promise<string> => {
+    console.log(`[AI Debug] generateReactionToMessage called for channel: ${channel.name}, reacting to: ${userMessage.nickname}`);
+    
     const usersInChannel = channel.users.filter(u => u.nickname !== currentUserNickname);
-    if (usersInChannel.length === 0) return '';
+    if (usersInChannel.length === 0) {
+        console.log(`[AI Debug] No users in channel ${channel.name} to react (excluding current user)`);
+        return '';
+    }
 
     const randomUser = usersInChannel[Math.floor(Math.random() * usersInChannel.length)];
+    console.log(`[AI Debug] Selected user: ${randomUser.nickname} to react to ${userMessage.nickname}'s message`);
     
     // Handle different message types
     let messageDescription = '';
@@ -102,22 +129,42 @@ Consider ${randomUser.nickname}'s writing style:
 - Languages: ${randomUser.languageSkills.languages.join(', ')}
 ${randomUser.languageSkills.accent ? `- Accent: ${randomUser.languageSkills.accent}` : ''}
 `;
-    const response = await withRateLimitAndRetries(() => 
-        ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: {
-                systemInstruction: getBaseSystemInstruction(currentUserNickname),
-                temperature: 0.8,
-                maxOutputTokens: 150,
-                thinkingConfig: { thinkingBudget: 0 },
-            },
-        })
-    );
-    return response.text.trim();
+    
+    try {
+        console.log(`[AI Debug] Sending request to Gemini for reaction in ${channel.name}`);
+        const response = await withRateLimitAndRetries(() => 
+            ai.models.generateContent({
+                model: model,
+                contents: prompt,
+                config: {
+                    systemInstruction: getBaseSystemInstruction(currentUserNickname),
+                    temperature: 0.8,
+                    maxOutputTokens: 150,
+                    thinkingConfig: { thinkingBudget: 0 },
+                },
+            })
+        );
+        
+        const result = response.text.trim();
+        console.log(`[AI Debug] Successfully generated reaction: "${result}"`);
+        return result;
+    } catch (error) {
+        console.error(`[AI Debug] Error generating reaction for ${channel.name}:`, {
+            error: error instanceof Error ? error.message : 'Unknown error',
+            stack: error instanceof Error ? error.stack : undefined,
+            channelName: channel.name,
+            reactingUser: randomUser.nickname,
+            originalMessage: userMessage.content,
+            originalUser: userMessage.nickname,
+            messageType: userMessage.type
+        });
+        throw error;
+    }
 };
 
-export const generatePrivateMessageResponse = async (conversation: PrivateMessageConversation, userMessage: Message, currentUserNickname: string): Promise<string> => {
+export const generatePrivateMessageResponse = async (conversation: PrivateMessageConversation, userMessage: Message, currentUserNickname: string, model: string = 'gemini-2.5-flash'): Promise<string> => {
+    console.log(`[AI Debug] generatePrivateMessageResponse called for user: ${conversation.user.nickname}`);
+    
     const aiUser = conversation.user;
     const prompt = `
 You are roleplaying as an IRC user named '${aiUser.nickname}'. 
@@ -142,23 +189,41 @@ Generate a natural, in-character response.
 The response must be a single line in the format: "${aiUser.nickname}: message"
 `;
 
-    const response = await withRateLimitAndRetries(() => 
-        ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: {
-                systemInstruction: getBaseSystemInstruction(currentUserNickname),
-                temperature: 0.75,
-                maxOutputTokens: 200,
-                thinkingConfig: { thinkingBudget: 0 },
-            },
-        })
-    );
-    return response.text.trim();
+    try {
+        console.log(`[AI Debug] Sending request to Gemini for private message response from ${aiUser.nickname}`);
+        const response = await withRateLimitAndRetries(() => 
+            ai.models.generateContent({
+                model: model,
+                contents: prompt,
+                config: {
+                    systemInstruction: getBaseSystemInstruction(currentUserNickname),
+                    temperature: 0.75,
+                    maxOutputTokens: 200,
+                    thinkingConfig: { thinkingBudget: 0 },
+                },
+            })
+        );
+        
+        const result = response.text.trim();
+        console.log(`[AI Debug] Successfully generated private message response: "${result}"`);
+        return result;
+    } catch (error) {
+        console.error(`[AI Debug] Error generating private message response from ${aiUser.nickname}:`, {
+            error: error instanceof Error ? error.message : 'Unknown error',
+            stack: error instanceof Error ? error.stack : undefined,
+            aiUser: aiUser.nickname,
+            currentUser: currentUserNickname,
+            messageContent: userMessage.content,
+            conversationLength: conversation.messages.length
+        });
+        throw error;
+    }
 };
 
 
-export const generateBatchUsers = async (count: number): Promise<User[]> => {
+export const generateBatchUsers = async (count: number, model: string = 'gemini-2.5-flash'): Promise<User[]> => {
+  console.log(`[AI Debug] generateBatchUsers called for count: ${count}`);
+  
   const prompt = `
 Generate ${count} unique IRC users with diverse personalities, language skills, and writing styles.
 Each user should have:
@@ -171,102 +236,116 @@ Make each user distinct and interesting for an IRC chat environment.
 Provide the output in JSON format.
 `;
 
-  const response = await withRateLimitAndRetries(() =>
-    ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: {
-        systemInstruction: "You are a creative character generator for an IRC simulation. Generate diverse, interesting users with unique personalities and communication styles. Provide a valid JSON response.",
-        temperature: 1.0,
-        maxOutputTokens: 2000,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            users: {
-              type: Type.ARRAY,
-              description: `A list of ${count} virtual users.`,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  nickname: {
-                    type: Type.STRING,
-                    description: "The user's lowercase nickname."
-                  },
-                  personality: {
-                    type: Type.STRING,
-                    description: "A detailed personality description."
-                  },
-                  languageSkills: {
-                    type: Type.OBJECT,
-                    properties: {
-                      fluency: {
-                        type: Type.STRING,
-                        enum: ['beginner', 'intermediate', 'advanced', 'native'],
-                        description: "Language fluency level."
-                      },
-                      languages: {
-                        type: Type.ARRAY,
-                        items: { type: Type.STRING },
-                        description: "List of languages the user speaks."
-                      },
-                      accent: {
-                        type: Type.STRING,
-                        description: "Optional accent or dialect description."
-                      }
+  try {
+    console.log(`[AI Debug] Sending request to Gemini for batch user generation (${count} users)`);
+    const response = await withRateLimitAndRetries(() =>
+      ai.models.generateContent({
+        model: model,
+        contents: prompt,
+        config: {
+          systemInstruction: "You are a creative character generator for an IRC simulation. Generate diverse, interesting users with unique personalities and communication styles. Provide a valid JSON response.",
+          temperature: 1.0,
+          maxOutputTokens: 2000,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              users: {
+                type: Type.ARRAY,
+                description: `A list of ${count} virtual users.`,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    nickname: {
+                      type: Type.STRING,
+                      description: "The user's lowercase nickname."
                     },
-                    required: ['fluency', 'languages']
-                  },
-                  writingStyle: {
-                    type: Type.OBJECT,
-                    properties: {
-                      formality: {
-                        type: Type.STRING,
-                        enum: ['casual', 'formal', 'mixed'],
-                        description: "Writing formality level."
-                      },
-                      verbosity: {
-                        type: Type.STRING,
-                        enum: ['concise', 'moderate', 'verbose'],
-                        description: "Writing verbosity level."
-                      },
-                      humor: {
-                        type: Type.STRING,
-                        enum: ['none', 'light', 'heavy'],
-                        description: "Humor level in writing."
-                      },
-                      emojiUsage: {
-                        type: Type.STRING,
-                        enum: ['none', 'minimal', 'frequent'],
-                        description: "Emoji usage frequency."
-                      },
-                      punctuation: {
-                        type: Type.STRING,
-                        enum: ['minimal', 'standard', 'excessive'],
-                        description: "Punctuation style."
-                      }
+                    personality: {
+                      type: Type.STRING,
+                      description: "A detailed personality description."
                     },
-                    required: ['formality', 'verbosity', 'humor', 'emojiUsage', 'punctuation']
-                  }
-                },
-                required: ['nickname', 'personality', 'languageSkills', 'writingStyle']
+                    languageSkills: {
+                      type: Type.OBJECT,
+                      properties: {
+                        fluency: {
+                          type: Type.STRING,
+                          enum: ['beginner', 'intermediate', 'advanced', 'native'],
+                          description: "Language fluency level."
+                        },
+                        languages: {
+                          type: Type.ARRAY,
+                          items: { type: Type.STRING },
+                          description: "List of languages the user speaks."
+                        },
+                        accent: {
+                          type: Type.STRING,
+                          description: "Optional accent or dialect description."
+                        }
+                      },
+                      required: ['fluency', 'languages']
+                    },
+                    writingStyle: {
+                      type: Type.OBJECT,
+                      properties: {
+                        formality: {
+                          type: Type.STRING,
+                          enum: ['casual', 'formal', 'mixed'],
+                          description: "Writing formality level."
+                        },
+                        verbosity: {
+                          type: Type.STRING,
+                          enum: ['concise', 'moderate', 'verbose'],
+                          description: "Writing verbosity level."
+                        },
+                        humor: {
+                          type: Type.STRING,
+                          enum: ['none', 'light', 'heavy'],
+                          description: "Humor level in writing."
+                        },
+                        emojiUsage: {
+                          type: Type.STRING,
+                          enum: ['none', 'minimal', 'frequent'],
+                          description: "Emoji usage frequency."
+                        },
+                        punctuation: {
+                          type: Type.STRING,
+                          enum: ['minimal', 'standard', 'excessive'],
+                          description: "Punctuation style."
+                        }
+                      },
+                      required: ['formality', 'verbosity', 'humor', 'emojiUsage', 'punctuation']
+                    }
+                  },
+                  required: ['nickname', 'personality', 'languageSkills', 'writingStyle']
+                }
               }
-            }
-          },
-          required: ['users']
+            },
+            required: ['users']
+          }
         }
-      }
-    })
-  );
+      })
+    );
 
-  const result = JSON.parse(response.text);
-  return result.users.map((user: any) => ({
-    ...user,
-    status: 'online' as const
-  }));
+    console.log(`[AI Debug] Successfully received response from Gemini for batch user generation`);
+    const result = JSON.parse(response.text);
+    const users = result.users.map((user: any) => ({
+      ...user,
+      status: 'online' as const
+    }));
+    
+    console.log(`[AI Debug] Successfully generated ${users.length} users:`, users.map(u => u.nickname));
+    return users;
+  } catch (error) {
+    console.error(`[AI Debug] Error generating batch users (${count} requested):`, {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      requestedCount: count
+    });
+    throw error;
+  }
 };
 
-export const generateRandomWorldConfiguration = async (): Promise<RandomWorldConfig> => {
+export const generateRandomWorldConfiguration = async (model: string = 'gemini-2.5-flash'): Promise<RandomWorldConfig> => {
     const prompt = `
 Generate a creative and interesting configuration for a simulated IRC world.
 Create a list of 8 unique virtual users with distinct, concise, and interesting personalities. Nicknames should be lowercase and simple.
@@ -282,7 +361,7 @@ Provide the output in JSON format.
 
     const response = await withRateLimitAndRetries(() =>
         ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: model,
             contents: prompt,
             config: {
                 systemInstruction: "You are a creative world-builder for a simulated IRC environment. Generate a valid JSON response based on the provided schema.",

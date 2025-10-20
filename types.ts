@@ -54,6 +54,7 @@ export interface AppConfig {
   virtualUsers: string; 
   channels: string;
   simulationSpeed: 'fast' | 'normal' | 'slow' | 'off';
+  aiModel: 'gemini-2.5-flash' | 'gemini-1.5-flash' | 'gemini-1.5-pro';
 }
 
 /**

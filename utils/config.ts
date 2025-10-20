@@ -168,8 +168,9 @@ export const initializeStateFromConfig = (config: AppConfig) => {
     }
     
     const simulationSpeed = config.simulationSpeed || 'normal';
+    const aiModel = config.aiModel || 'gemini-2.5-flash';
 
-    return { nickname, virtualUsers, channels, simulationSpeed };
+    return { nickname, virtualUsers, channels, simulationSpeed, aiModel };
 };
 
 /**

@@ -11,6 +11,31 @@ export const SIMULATION_INTERVALS: Record<'fast' | 'normal' | 'slow', number> = 
   slow: 12000,   // 12 seconds - slower but still active
 };
 
+// Available AI models for message generation
+export const AI_MODELS = [
+  { 
+    id: 'gemini-2.5-flash' as const, 
+    name: 'Gemini 2.5 Flash', 
+    description: 'Fastest model, good for quick responses',
+    cost: 'Low'
+  },
+  { 
+    id: 'gemini-1.5-flash' as const, 
+    name: 'Gemini 1.5 Flash', 
+    description: 'Balanced speed and quality',
+    cost: 'Low'
+  },
+  { 
+    id: 'gemini-1.5-pro' as const, 
+    name: 'Gemini 1.5 Pro', 
+    description: 'Highest quality, best for complex conversations',
+    cost: 'High'
+  }
+];
+
+// Default AI model
+export const DEFAULT_AI_MODEL = 'gemini-2.5-flash' as const;
+
 // Default list of virtual users for the simulation.
 export const DEFAULT_VIRTUAL_USERS: User[] = [
   { 

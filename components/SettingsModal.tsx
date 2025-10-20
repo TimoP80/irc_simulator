@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import type { AppConfig, User } from '../types';
 import { loadConfig } from '../utils/config';
-import { DEFAULT_NICKNAME } from '../constants';
+import { DEFAULT_NICKNAME, AI_MODELS, DEFAULT_AI_MODEL } from '../constants';
 import { generateRandomWorldConfiguration } from '../services/geminiService';
 import { UserManagement } from './UserManagement';
 import { ChannelManagement } from './ChannelManagement';
+import { getDebugConfig, updateDebugConfig, setDebugEnabled, setLogLevel, toggleCategory } from '../utils/debugLogger';
 
 interface SettingsModalProps {
   onSave: (config: AppConfig) => void;
@@ -77,11 +78,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel }
       virtualUsers: savedConfig?.virtualUsers || DEFAULT_USERS_TEXT,
       channels: savedConfig?.channels || DEFAULT_CHANNELS_TEXT,
       simulationSpeed: savedConfig?.simulationSpeed || 'normal',
+      aiModel: savedConfig?.aiModel || DEFAULT_AI_MODEL,
     };
   });
   const [users, setUsers] = useState<User[]>(() => parseUsersFromText(config.virtualUsers));
   const [channels, setChannels] = useState(() => parseChannelsFromText(config.channels));
   const [isRandomizing, setIsRandomizing] = useState(false);
+  const [debugConfig, setDebugConfig] = useState(getDebugConfig());
 
   // Handle Escape key to close modal
   useEffect(() => {
@@ -122,6 +125,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel }
     }
   };
 
+  const handleDebugConfigChange = (updates: Partial<typeof debugConfig>) => {
+    const newConfig = { ...debugConfig, ...updates };
+    setDebugConfig(newConfig);
+    updateDebugConfig(newConfig);
+  };
+
+  const handleDebugCategoryToggle = (category: keyof typeof debugConfig.categories) => {
+    const newConfig = {
+      ...debugConfig,
+      categories: {
+        ...debugConfig.categories,
+        [category]: !debugConfig.categories[category]
+      }
+    };
+    setDebugConfig(newConfig);
+    updateDebugConfig(newConfig);
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
       <div className="bg-gray-800 rounded-lg shadow-xl p-8 w-full max-w-4xl border border-gray-700 max-h-[90vh] overflow-y-auto">
@@ -141,7 +162,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel }
             />
           </div>
           
-          <UserManagement users={users} onUsersChange={setUsers} />
+          <UserManagement users={users} onUsersChange={setUsers} aiModel={config.aiModel} />
           <ChannelManagement channels={channels} onChannelsChange={setChannels} />
           
           <div>
@@ -162,6 +183,73 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel }
               ))}
             </div>
             <p className="text-xs text-gray-500 mt-2">"Off" disables autonomous AI messages to conserve API quota. Simulation also pauses when the tab is not visible.</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">AI Model</label>
+            <select
+              name="aiModel"
+              value={config.aiModel}
+              onChange={handleChange}
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              {AI_MODELS.map((model) => (
+                <option key={model.id} value={model.id}>
+                  {model.name} - {model.description} ({model.cost} cost)
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-500 mt-2">
+              Choose the AI model for message generation. Flash models are faster and cheaper, Pro models provide higher quality responses.
+            </p>
+          </div>
+
+          <div className="border-t border-gray-600 pt-6">
+            <h3 className="text-lg font-semibold text-gray-200 mb-4">Debug Logging</h3>
+            <p className="text-sm text-gray-400 mb-4">Control debug logging for troubleshooting and monitoring. Logs appear in the browser console.</p>
+            
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-gray-300">Enable Debug Logging</label>
+                <input
+                  type="checkbox"
+                  checked={debugConfig.enabled}
+                  onChange={(e) => handleDebugConfigChange({ enabled: e.target.checked })}
+                  className="h-4 w-4 bg-gray-700 border-gray-600 text-indigo-600 focus:ring-indigo-500 rounded"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Log Level</label>
+                <select
+                  value={debugConfig.level}
+                  onChange={(e) => handleDebugConfigChange({ level: e.target.value as any })}
+                  className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="debug">Debug (All)</option>
+                  <option value="info">Info</option>
+                  <option value="warn">Warnings</option>
+                  <option value="error">Errors Only</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Log Categories</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {Object.entries(debugConfig.categories).map(([category, enabled]) => (
+                    <label key={category} className="flex items-center text-sm text-gray-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={enabled}
+                        onChange={() => handleDebugCategoryToggle(category as keyof typeof debugConfig.categories)}
+                        className="h-4 w-4 bg-gray-700 border-gray-600 text-indigo-600 focus:ring-indigo-500 rounded mr-2"
+                      />
+                      <span className="capitalize">{category}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
           
           <div className="flex justify-end pt-2 gap-4">

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User } from '../types';
+import { generateRandomNicknameAsync } from '../utils/personalityTemplates';
 
 interface AddUserModalProps {
   isOpen: boolean;
@@ -33,6 +34,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
     punctuation: 'standard' as 'minimal' | 'standard' | 'excessive'
   });
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [isRandomizing, setIsRandomizing] = useState(false);
 
   const isEditing = !!editingUser;
 
@@ -136,6 +138,23 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
     onClose();
   };
 
+  const handleRandomizeNickname = async () => {
+    setIsRandomizing(true);
+    try {
+      const randomNickname = await generateRandomNicknameAsync(existingNicknames);
+      setNickname(randomNickname);
+      // Clear any existing nickname errors
+      setErrors(prev => ({ ...prev, nickname: '' }));
+    } catch (error) {
+      console.error('Failed to generate random nickname:', error);
+      // Fallback to a simple random nickname
+      const fallbackNickname = `user${Date.now()}`;
+      setNickname(fallbackNickname);
+    } finally {
+      setIsRandomizing(false);
+    }
+  };
+
   const handleCancel = () => {
     setNickname('');
     setPersonality('');
@@ -206,22 +225,47 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
               <label htmlFor="nickname" className="block text-sm font-medium text-gray-300 mb-2">
                 Nickname
               </label>
-              <input
-                type="text"
-                id="nickname"
-                value={nickname}
-                onChange={(e) => setNickname(e.target.value)}
-                className={`w-full bg-gray-700 border rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                  errors.nickname ? 'border-red-500' : 'border-gray-600'
-                }`}
-                placeholder="e.g., nova, seraph, jinx"
-                maxLength={20}
-              />
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  id="nickname"
+                  value={nickname}
+                  onChange={(e) => setNickname(e.target.value)}
+                  className={`flex-1 bg-gray-700 border rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                    errors.nickname ? 'border-red-500' : 'border-gray-600'
+                  }`}
+                  placeholder="e.g., nova, seraph, jinx"
+                  maxLength={20}
+                />
+                <button
+                  type="button"
+                  onClick={handleRandomizeNickname}
+                  disabled={isRandomizing}
+                  className="bg-purple-600 hover:bg-purple-500 disabled:bg-purple-700 disabled:cursor-not-allowed text-white rounded-lg px-4 py-2 text-sm font-semibold transition-colors flex items-center gap-2 min-w-[120px]"
+                  title="Generate a random AI-powered username"
+                >
+                  {isRandomizing ? (
+                    <>
+                      <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Randomize
+                    </>
+                  )}
+                </button>
+              </div>
               {errors.nickname && (
                 <p className="text-red-400 text-xs mt-1">{errors.nickname}</p>
               )}
               <p className="text-gray-500 text-xs mt-1">
-                Letters, numbers, underscores, and hyphens only. 2-20 characters.
+                Letters, numbers, underscores, and hyphens only. 2-20 characters. Use the randomize button for AI-generated usernames.
               </p>
             </div>
 

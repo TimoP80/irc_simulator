@@ -4,6 +4,49 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 
 *Note: This project was previously known as "Gemini IRC Simulator" and was renamed to "Station V - Virtual IRC Simulator" as of v1.5.1.*
 
+## 1.8.0 - 2025-01-20
+
+### Added
+- **Username Randomization in User Management**: Enhanced user creation and editing experience
+  - **Randomize Button**: Purple "Randomize" button next to nickname input field
+  - **AI-Powered Generation**: Uses the same AI username generation system as batch creation
+  - **Loading States**: Visual feedback with spinner and "Generating..." text during AI generation
+  - **Fallback System**: Automatic fallback to simple random nickname if AI fails
+  - **Error Handling**: Clears nickname validation errors when generating new names
+  - **Enhanced UX**: Improved user experience with intuitive randomize functionality
+  - **Consistent Design**: Matches the existing UI design language and color scheme
+
+- **Comprehensive Debug Logging System**: Enhanced troubleshooting and monitoring capabilities
+  - **AI Message Generation Logging**: Detailed logs for channel activity, reactions, and private message generation
+  - **Username Generation Logging**: Complete logging for AI-powered username generation with fallback tracking
+  - **Simulation Debug Logging**: Comprehensive simulation flow logging including burst mode and channel selection
+  - **Error Context Logging**: Structured error logging with stack traces, context data, and error categorization
+  - **Performance Monitoring**: Logging of API response times, retry attempts, and rate limiting
+  - **Configuration Loading Logging**: Detailed logs for configuration loading, merging, and validation
+  - **Debug Prefixes**: All debug logs use `[AI Debug]`, `[Simulation Debug]`, `[Config Debug]` prefixes for easy filtering
+  - **Debug Logger Utility**: Centralized debug logging system with configurable categories and log levels
+  - **Persistent Configuration**: Debug settings saved to localStorage for consistent debugging experience
+  - **Category-Based Logging**: Separate loggers for AI, simulation, config, and username generation
+  - **Log Level Control**: Debug, info, warn, and error levels with filtering capabilities
+  - **Debug Control Panel**: User-friendly interface in settings modal to control debug logging
+  - **Real-time Configuration**: Debug settings can be changed without restarting the application
+
+- **AI Model Selector**: Configurable AI model selection for message generation
+  - **Model Options**: Choose between Gemini 2.5 Flash, 1.5 Flash, and 1.5 Pro models
+  - **Cost Information**: Clear cost indicators (Low/High) for each model option
+  - **Performance Descriptions**: Detailed descriptions of speed vs quality trade-offs
+  - **Persistent Configuration**: AI model selection saved to localStorage
+  - **Real-time Switching**: Model changes apply immediately to new AI messages
+  - **Service Integration**: All AI functions (channel activity, reactions, batch generation) use selected model
+
+### Enhanced
+- **User Creation Workflow**: Much easier to create users with creative usernames
+- **AI Integration**: Seamless integration of AI username generation in individual user creation
+- **Form Validation**: Smart error handling that clears when generating new usernames
+- **Visual Feedback**: Clear loading states and intuitive button design
+- **Error Troubleshooting**: Much easier to diagnose and fix AI-related issues
+- **Development Experience**: Comprehensive logging for debugging and monitoring
+
 ## 1.7.0 - 2025-10-20
 
 ### Added

@@ -3,7 +3,7 @@ import { ChannelList } from './components/ChannelList';
 import { UserList } from './components/UserList';
 import { ChatWindow } from './components/ChatWindow';
 import { SettingsModal } from './components/SettingsModal';
-import { DEFAULT_CHANNELS, DEFAULT_VIRTUAL_USERS, DEFAULT_NICKNAME, SIMULATION_INTERVALS } from './constants';
+import { DEFAULT_CHANNELS, DEFAULT_VIRTUAL_USERS, DEFAULT_NICKNAME, SIMULATION_INTERVALS, DEFAULT_AI_MODEL } from './constants';
 import type { Channel, Message, User, ActiveContext, PrivateMessageConversation, AppConfig } from './types';
 import { generateChannelActivity, generateReactionToMessage, generatePrivateMessageResponse } from './services/geminiService';
 import { loadConfig, saveConfig, initializeStateFromConfig, saveChannelLogs, loadChannelLogs, clearChannelLogs } from './utils/config';
@@ -16,6 +16,7 @@ const App: React.FC = () => {
   const [privateMessages, setPrivateMessages] = useState<Record<string, PrivateMessageConversation>>({});
   const [activeContext, setActiveContext] = useState<ActiveContext | null>(null);
   const [simulationSpeed, setSimulationSpeed] = useState<AppConfig['simulationSpeed']>('normal');
+  const [aiModel, setAiModel] = useState<AppConfig['aiModel']>(DEFAULT_AI_MODEL);
   const [isLoading, setIsLoading] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   
@@ -30,16 +31,18 @@ const App: React.FC = () => {
     const savedLogs = loadChannelLogs();
     
     if (savedConfig) {
-      const { nickname, virtualUsers, channels, simulationSpeed } = initializeStateFromConfig(savedConfig);
+      const { nickname, virtualUsers, channels, simulationSpeed, aiModel: savedAiModel } = initializeStateFromConfig(savedConfig);
       console.log('Loaded configuration:', { 
         nickname, 
         virtualUsersCount: virtualUsers.length, 
         channelsCount: channels.length,
-        channelNames: channels.map(c => c.name)
+        channelNames: channels.map(c => c.name),
+        aiModel: savedAiModel
       });
       setCurrentUserNickname(nickname);
       setVirtualUsers(virtualUsers);
       setSimulationSpeed(simulationSpeed);
+      setAiModel(savedAiModel || DEFAULT_AI_MODEL);
       
       // Use saved logs if available and they match the current configuration
       if (savedLogs && savedLogs.length > 0) {
@@ -92,11 +95,12 @@ const App: React.FC = () => {
 
   const handleSaveSettings = (config: AppConfig) => {
     saveConfig(config);
-    const { nickname, virtualUsers, channels, simulationSpeed } = initializeStateFromConfig(config);
+    const { nickname, virtualUsers, channels, simulationSpeed, aiModel: savedAiModel } = initializeStateFromConfig(config);
     setCurrentUserNickname(nickname);
     setVirtualUsers(virtualUsers);
     setChannels(channels);
     setSimulationSpeed(simulationSpeed);
+    setAiModel(savedAiModel || DEFAULT_AI_MODEL);
     setPrivateMessages({});
     // Don't automatically join any channel - user needs to join manually
     setActiveContext(null);
@@ -387,7 +391,7 @@ const App: React.FC = () => {
             const channel = channels.find(c => c.name === activeContext.name);
             if (channel) {
               try {
-                const aiResponse = await generateReactionToMessage(channel, userMessage, currentUserNickname);
+                const aiResponse = await generateReactionToMessage(channel, userMessage, currentUserNickname, aiModel);
                 if (aiResponse) {
                   const aiMessages = aiResponse.split('\n').filter(line => line.includes(':'));
                   aiMessages.forEach((msgLine, index) => {
@@ -433,11 +437,11 @@ const App: React.FC = () => {
       if (activeContext && activeContext.type === 'channel') {
         const channel = channels.find(c => c.name === activeContext.name);
         if (channel) {
-          aiResponse = await generateReactionToMessage(channel, userMessage, currentUserNickname);
+          aiResponse = await generateReactionToMessage(channel, userMessage, currentUserNickname, aiModel);
         }
       } else if (activeContext && activeContext.type === 'pm') { // 'pm'
         const conversation = privateMessages[activeContext.with] || { user: virtualUsers.find(u => u.nickname === activeContext.with)!, messages: [] };
-        aiResponse = await generatePrivateMessageResponse(conversation, userMessage, currentUserNickname);
+        aiResponse = await generatePrivateMessageResponse(conversation, userMessage, currentUserNickname, aiModel);
       }
       
       if (aiResponse) {
@@ -492,7 +496,7 @@ The greeting should be friendly, brief, and in-character for the user who is gre
 The response must be a single line in the format: "nickname: greeting message"
 `;
 
-      const response = await generateChannelActivity(channel, newUserNickname);
+      const response = await generateChannelActivity(channel, newUserNickname, aiModel);
       if (response) {
         const greetingMessages = response.split('\n').filter(line => line.includes(':'));
         greetingMessages.forEach((msgLine, index) => {
@@ -516,12 +520,17 @@ The response must be a single line in the format: "nickname: greeting message"
   };
 
   const runSimulation = useCallback(async () => {
-    if (channels.length === 0) return;
+    if (channels.length === 0) {
+      console.log('[Simulation Debug] No channels available for simulation');
+      return;
+    }
     
     // Check if we should enter burst mode (user recently sent a message)
     const now = Date.now();
     const timeSinceLastUserMessage = now - lastUserMessageTimeRef.current;
     const shouldBurst = timeSinceLastUserMessage < 30000; // 30 seconds
+    
+    console.log(`[Simulation Debug] Running simulation - burst mode: ${shouldBurst}, time since last user message: ${timeSinceLastUserMessage}ms`);
     
     // Prioritize the active channel for more responsive conversation
     let targetChannel: Channel;
@@ -529,17 +538,21 @@ The response must be a single line in the format: "nickname: greeting message"
       const activeChannel = channels.find(c => c.name === activeContext.name);
       if (activeChannel) {
         targetChannel = activeChannel;
+        console.log(`[Simulation Debug] Using active channel: ${targetChannel.name}`);
       } else {
         const randomChannelIndex = Math.floor(Math.random() * channels.length);
         targetChannel = channels[randomChannelIndex];
+        console.log(`[Simulation Debug] Active channel not found, using random channel: ${targetChannel.name}`);
       }
     } else {
       const randomChannelIndex = Math.floor(Math.random() * channels.length);
       targetChannel = channels[randomChannelIndex];
+      console.log(`[Simulation Debug] No active context, using random channel: ${targetChannel.name}`);
     }
 
     try {
-      const response = await generateChannelActivity(targetChannel, currentUserNickname);
+      console.log(`[Simulation Debug] Generating channel activity for ${targetChannel.name}`);
+      const response = await generateChannelActivity(targetChannel, currentUserNickname, aiModel);
       if (response) {
         const [nickname, ...contentParts] = response.split(':');
         const content = contentParts.join(':').trim();
@@ -552,15 +565,21 @@ The response must be a single line in the format: "nickname: greeting message"
             timestamp: new Date(),
             type: 'ai'
           };
+          console.log(`[Simulation Debug] Adding AI message from ${nickname.trim()}: "${content}"`);
           addMessageToContext(aiMessage, { type: 'channel', name: targetChannel.name });
+        } else {
+          console.log(`[Simulation Debug] Invalid response format: "${response}"`);
         }
+      } else {
+        console.log(`[Simulation Debug] No response generated for ${targetChannel.name}`);
       }
       
       // In burst mode, sometimes generate a second message for more activity
       if (shouldBurst && Math.random() < 0.3) {
+        console.log(`[Simulation Debug] Burst mode: generating second message for ${targetChannel.name}`);
         setTimeout(async () => {
           try {
-            const secondResponse = await generateChannelActivity(targetChannel, currentUserNickname);
+            const secondResponse = await generateChannelActivity(targetChannel, currentUserNickname, aiModel);
             if (secondResponse) {
               const [nickname, ...contentParts] = secondResponse.split(':');
               const content = contentParts.join(':').trim();
@@ -573,20 +592,31 @@ The response must be a single line in the format: "nickname: greeting message"
                   timestamp: new Date(),
                   type: 'ai'
                 };
+                console.log(`[Simulation Debug] Adding burst AI message from ${nickname.trim()}: "${content}"`);
                 addMessageToContext(aiMessage, { type: 'channel', name: targetChannel.name });
               }
             }
           } catch (error) {
-            console.error(`Burst simulation failed for ${targetChannel.name}:`, error);
+            console.error(`[Simulation Debug] Burst simulation failed for ${targetChannel.name}:`, {
+              error: error instanceof Error ? error.message : 'Unknown error',
+              stack: error instanceof Error ? error.stack : undefined,
+              channel: targetChannel.name
+            });
           }
         }, Math.random() * 3000 + 1000); // 1-4 seconds delay
       }
     } catch (error) {
-      console.error(`Simulation failed for ${targetChannel.name}:`, error);
+      console.error(`[Simulation Debug] Simulation failed for ${targetChannel.name}:`, {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        channel: targetChannel.name,
+        burstMode: shouldBurst
+      });
       const now = Date.now();
       // Only show error message if the last one was more than 2 minutes ago
       if (now - lastSimErrorTimestampRef.current > 120000) { 
           lastSimErrorTimestampRef.current = now;
+          console.log(`[Simulation Debug] Showing error message to user for ${targetChannel.name}`);
           const errorMessage: Message = {
               id: now,
               nickname: 'system',
@@ -595,6 +625,8 @@ The response must be a single line in the format: "nickname: greeting message"
               type: 'system'
           };
           addMessageToContext(errorMessage, { type: 'channel', name: targetChannel.name });
+      } else {
+        console.log(`[Simulation Debug] Error rate limited, not showing alert for ${targetChannel.name}`);
       }
     }
   }, [channels, activeContext, addMessageToContext, currentUserNickname]);
