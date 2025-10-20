@@ -150,10 +150,12 @@ Upon first launch, you'll be greeted by a **Settings** modal with a modern, user
 - This will be your display name in all channels and conversations
 
 #### **Step 2: Configure AI Model**
-- Choose your preferred AI model from the dropdown:
-  - **Gemini 2.5 Flash** (Fastest, Low cost) - Recommended for most users
-  - **Gemini 1.5 Flash** (Balanced, Low cost) - Good balance of speed and quality
-  - **Gemini 1.5 Pro** (Highest quality, High cost) - Best for complex conversations
+- Choose your preferred AI model from the dynamically loaded dropdown:
+  - **Models are fetched live** from Google's Gemini API models endpoint
+  - **Real-time availability** - Shows only models currently available to your API key
+  - **Detailed information** - Each model displays token limits, performance characteristics, and cost indicators
+  - **Automatic fallback** - If the API is unavailable, falls back to standard models (Gemini 2.5 Flash, 1.5 Flash, 1.5 Pro)
+  - **Loading indicator** - Shows "Loading..." while fetching available models
 
 #### **Step 3: Create Virtual Users**
 You have several options for creating AI users:
@@ -290,9 +292,10 @@ npx tsc --noEmit
 Station V has recently received major enhancements with AI model selection, comprehensive debug logging, and enhanced user management capabilities:
 
 ### 🤖 **AI Model Selector**
-- **Model Options**: Choose between Gemini 2.5 Flash, 1.5 Flash, and 1.5 Pro models
-- **Cost Information**: Clear cost indicators (Low/High) for each model option
-- **Performance Descriptions**: Detailed descriptions of speed vs quality trade-offs
+- **Dynamic Model Loading**: Models are fetched live from Google's Gemini API models endpoint
+- **Real-time Availability**: Shows only models currently available to your API key
+- **Detailed Model Information**: Each model displays token limits, performance characteristics, and cost indicators
+- **Automatic Fallback**: Falls back to standard models if API is unavailable
 - **Real-time Switching**: Model changes apply immediately to new AI messages
 - **Service Integration**: All AI functions use the selected model
 
@@ -412,10 +415,11 @@ A: All settings are saved in your browser's localStorage, so they persist betwee
 A: Yes! Use the Import/Export feature in User Management to export your users as CSV or JSON files, which can be shared with others.
 
 **Q: What's the difference between the AI models?**
-A: 
+A: The available models are dynamically loaded from Google's Gemini API, so the exact models may vary based on your API key and current availability. Generally:
 - **Gemini 2.5 Flash**: Fastest responses, lowest cost, good for casual use
-- **Gemini 1.5 Flash**: Balanced speed and quality, low cost
+- **Gemini 1.5 Flash**: Balanced speed and quality, low cost  
 - **Gemini 1.5 Pro**: Highest quality responses, higher cost, best for complex conversations
+- **Other models** may appear based on your API access and Google's current offerings
 
 **Q: Can I change the AI model after starting?**
 A: Yes! Go to Settings and change the AI model. It will apply to all new AI messages immediately.
