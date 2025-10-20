@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import type { Channel, Message, PrivateMessageConversation, RandomWorldConfig } from '../types';
+import type { Channel, Message, PrivateMessageConversation, RandomWorldConfig, GeminiModel, ModelsListResponse } from '../types';
 import { withRateLimitAndRetries } from '../utils/config';
 
 const API_KEY = process.env.GEMINI_API_KEY;
@@ -473,4 +473,60 @@ Provide the output in JSON format.
     }
 
     return parsedConfig;
+};
+
+/**
+ * Lists all available Gemini models from the API.
+ * @returns Promise<GeminiModel[]> Array of available models
+ */
+export const listAvailableModels = async (): Promise<GeminiModel[]> => {
+    console.log("🔍 Fetching available Gemini models...");
+    
+    try {
+        const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models?key=' + API_KEY);
+        
+        if (!response.ok) {
+            throw new Error(`Failed to fetch models: ${response.status} ${response.statusText}`);
+        }
+        
+        const data: ModelsListResponse = await response.json();
+        console.log(`✅ Successfully fetched ${data.models.length} models`);
+        
+        // Filter for models that support generateContent
+        const supportedModels = data.models.filter(model => 
+            model.supportedGenerationMethods?.includes('generateContent')
+        );
+        
+        console.log(`📝 Found ${supportedModels.length} models supporting generateContent`);
+        
+        return supportedModels;
+    } catch (error) {
+        console.error("❌ Error fetching available models:", error);
+        throw new Error(`Failed to fetch available models: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+};
+
+/**
+ * Gets detailed information about a specific model.
+ * @param modelId The model ID (e.g., 'gemini-2.0-flash')
+ * @returns Promise<GeminiModel> Model information
+ */
+export const getModelInfo = async (modelId: string): Promise<GeminiModel> => {
+    console.log(`🔍 Fetching info for model: ${modelId}`);
+    
+    try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelId}?key=` + API_KEY);
+        
+        if (!response.ok) {
+            throw new Error(`Failed to fetch model info: ${response.status} ${response.statusText}`);
+        }
+        
+        const model: GeminiModel = await response.json();
+        console.log(`✅ Successfully fetched info for model: ${model.displayName}`);
+        
+        return model;
+    } catch (error) {
+        console.error(`❌ Error fetching model info for ${modelId}:`, error);
+        throw new Error(`Failed to fetch model info: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
 };

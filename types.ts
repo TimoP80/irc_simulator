@@ -54,7 +54,28 @@ export interface AppConfig {
   virtualUsers: string; 
   channels: string;
   simulationSpeed: 'fast' | 'normal' | 'slow' | 'off';
-  aiModel: 'gemini-2.5-flash' | 'gemini-1.5-flash' | 'gemini-1.5-pro';
+  aiModel: string; // Now supports any model ID from the API
+}
+
+export interface GeminiModel {
+  name: string;
+  baseModelId: string;
+  version: string;
+  displayName: string;
+  description: string;
+  inputTokenLimit: number;
+  outputTokenLimit: number;
+  supportedGenerationMethods: string[];
+  thinking: boolean;
+  temperature: number;
+  maxTemperature: number;
+  topP: number;
+  topK: number;
+}
+
+export interface ModelsListResponse {
+  models: GeminiModel[];
+  nextPageToken?: string;
 }
 
 /**

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import type { AppConfig, User } from '../types';
+import type { AppConfig, User, GeminiModel } from '../types';
 import { loadConfig } from '../utils/config';
-import { DEFAULT_NICKNAME, AI_MODELS, DEFAULT_AI_MODEL } from '../constants';
-import { generateRandomWorldConfiguration } from '../services/geminiService';
+import { DEFAULT_NICKNAME, FALLBACK_AI_MODELS, DEFAULT_AI_MODEL } from '../constants';
+import { generateRandomWorldConfiguration, listAvailableModels } from '../services/geminiService';
 import { UserManagement } from './UserManagement';
 import { ChannelManagement } from './ChannelManagement';
 import { getDebugConfig, updateDebugConfig, setDebugEnabled, setLogLevel, toggleCategory } from '../utils/debugLogger';
@@ -85,6 +85,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel }
   const [channels, setChannels] = useState(() => parseChannelsFromText(config.channels));
   const [isRandomizing, setIsRandomizing] = useState(false);
   const [debugConfig, setDebugConfig] = useState(getDebugConfig());
+  const [availableModels, setAvailableModels] = useState<GeminiModel[]>([]);
+  const [isLoadingModels, setIsLoadingModels] = useState(false);
+  const [modelsError, setModelsError] = useState<string | null>(null);
 
   // Handle Escape key to close modal
   useEffect(() => {
@@ -97,6 +100,41 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel }
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onCancel]);
+
+  // Fetch available models on component mount
+  useEffect(() => {
+    const fetchModels = async () => {
+      setIsLoadingModels(true);
+      setModelsError(null);
+      try {
+        const models = await listAvailableModels();
+        setAvailableModels(models);
+      } catch (error) {
+        console.error('Failed to fetch available models:', error);
+        setModelsError(error instanceof Error ? error.message : 'Failed to fetch models');
+        // Fall back to static models if API fails
+        setAvailableModels(FALLBACK_AI_MODELS.map(model => ({
+          name: model.id,
+          baseModelId: model.id,
+          version: model.id.includes('2.5') ? '2.5' : '1.5',
+          displayName: model.name,
+          description: model.description,
+          inputTokenLimit: model.inputTokenLimit,
+          outputTokenLimit: model.outputTokenLimit,
+          supportedGenerationMethods: ['generateContent'],
+          thinking: false,
+          temperature: 0.7,
+          maxTemperature: 1.0,
+          topP: 0.95,
+          topK: 40
+        })));
+      } finally {
+        setIsLoadingModels(false);
+      }
+    };
+
+    fetchModels();
+  }, []);
 
   const handleSave = () => {
     const configToSave = {
@@ -186,21 +224,40 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel }
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">AI Model</label>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              AI Model
+              {isLoadingModels && <span className="ml-2 text-blue-400">(Loading...)</span>}
+            </label>
             <select
               name="aiModel"
               value={config.aiModel}
               onChange={handleChange}
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              disabled={isLoadingModels}
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
             >
-              {AI_MODELS.map((model) => (
-                <option key={model.id} value={model.id}>
-                  {model.name} - {model.description} ({model.cost} cost)
-                </option>
-              ))}
+              {availableModels.length > 0 ? (
+                availableModels.map((model) => (
+                  <option key={model.name} value={model.baseModelId}>
+                    {model.displayName} - {model.description}
+                    {model.inputTokenLimit && (
+                      <span> (Input: {Math.floor(model.inputTokenLimit / 1000)}k tokens)</span>
+                    )}
+                  </option>
+                ))
+              ) : (
+                <option value={DEFAULT_AI_MODEL}>Loading models...</option>
+              )}
             </select>
+            {modelsError && (
+              <p className="text-xs text-red-400 mt-1">
+                ⚠️ {modelsError} (Using fallback models)
+              </p>
+            )}
             <p className="text-xs text-gray-500 mt-2">
-              Choose the AI model for message generation. Flash models are faster and cheaper, Pro models provide higher quality responses.
+              Choose the AI model for message generation. Models are fetched dynamically from the Gemini API.
+              {availableModels.length > 0 && (
+                <span> Found {availableModels.length} available models.</span>
+              )}
             </p>
           </div>
 
