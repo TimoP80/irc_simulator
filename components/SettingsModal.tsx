@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { AppConfig, User, GeminiModel } from '../types';
 import { loadConfig } from '../utils/config';
-import { DEFAULT_NICKNAME, FALLBACK_AI_MODELS, DEFAULT_AI_MODEL } from '../constants';
+import { DEFAULT_NICKNAME, FALLBACK_AI_MODELS, DEFAULT_AI_MODEL, DEFAULT_TYPING_DELAY } from '../constants';
 import { generateRandomWorldConfiguration, listAvailableModels } from '../services/geminiService';
 import { UserManagement } from './UserManagement';
 import { ChannelManagement } from './ChannelManagement';
@@ -79,6 +79,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel }
       channels: savedConfig?.channels || DEFAULT_CHANNELS_TEXT,
       simulationSpeed: savedConfig?.simulationSpeed || 'normal',
       aiModel: savedConfig?.aiModel || DEFAULT_AI_MODEL,
+      typingDelay: savedConfig?.typingDelay || DEFAULT_TYPING_DELAY,
     };
   });
   const [users, setUsers] = useState<User[]>(() => parseUsersFromText(config.virtualUsers));
@@ -259,6 +260,82 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel }
                 <span> Found {availableModels.length} available models.</span>
               )}
             </p>
+          </div>
+
+          <div className="border-t border-gray-600 pt-6">
+            <h3 className="text-lg font-semibold text-gray-200 mb-4">Typing Delay Settings</h3>
+            <p className="text-sm text-gray-400 mb-4">Configure how long AI users take to "type" their messages, making conversations feel more realistic.</p>
+            
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-gray-300">Enable Typing Delay</label>
+                <input
+                  type="checkbox"
+                  checked={config.typingDelay.enabled}
+                  onChange={(e) => setConfig(prev => ({
+                    ...prev,
+                    typingDelay: { ...prev.typingDelay, enabled: e.target.checked }
+                  }))}
+                  className="h-4 w-4 bg-gray-700 border-gray-600 text-indigo-600 focus:ring-indigo-500 rounded"
+                />
+              </div>
+              
+              {config.typingDelay.enabled && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Base Delay: {config.typingDelay.baseDelay}ms
+                    </label>
+                    <input
+                      type="range"
+                      min="200"
+                      max="3000"
+                      step="100"
+                      value={config.typingDelay.baseDelay}
+                      onChange={(e) => setConfig(prev => ({
+                        ...prev,
+                        typingDelay: { ...prev.typingDelay, baseDelay: parseInt(e.target.value) }
+                      }))}
+                      className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                    />
+                    <div className="flex justify-between text-xs text-gray-500 mt-1">
+                      <span>200ms (Fast)</span>
+                      <span>3000ms (Slow)</span>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Maximum Delay: {config.typingDelay.maxDelay}ms
+                    </label>
+                    <input
+                      type="range"
+                      min="1000"
+                      max="10000"
+                      step="500"
+                      value={config.typingDelay.maxDelay}
+                      onChange={(e) => setConfig(prev => ({
+                        ...prev,
+                        typingDelay: { ...prev.typingDelay, maxDelay: parseInt(e.target.value) }
+                      }))}
+                      className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                    />
+                    <div className="flex justify-between text-xs text-gray-500 mt-1">
+                      <span>1000ms (1s)</span>
+                      <span>10000ms (10s)</span>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-gray-700 p-3 rounded-lg">
+                    <p className="text-xs text-gray-400">
+                      <strong>How it works:</strong> AI users will wait a random amount of time before sending messages. 
+                      Longer messages take more time to "type". The delay is calculated as: 
+                      base delay + (message length factor × random factor), capped at the maximum delay.
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
 
           <div className="border-t border-gray-600 pt-6">

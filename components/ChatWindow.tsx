@@ -10,9 +10,10 @@ interface ChatWindowProps {
   onSendMessage: (content: string) => void;
   isLoading: boolean;
   currentUserNickname: string;
+  typingUsers: string[];
 }
 
-export const ChatWindow: React.FC<ChatWindowProps> = ({ title, messages, onSendMessage, isLoading, currentUserNickname }) => {
+export const ChatWindow: React.FC<ChatWindowProps> = ({ title, messages, onSendMessage, isLoading, currentUserNickname, typingUsers }) => {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -44,6 +45,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ title, messages, onSendM
             <MessageEntry key={msg.id} message={msg} currentUserNickname={currentUserNickname} />
           ))}
           {isLoading && <div className="text-gray-400 italic text-sm px-2">AI is typing...</div>}
+          {typingUsers.length > 0 && (
+            <div className="text-gray-400 italic text-sm px-2 flex items-center gap-2">
+              <div className="flex space-x-1">
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+              </div>
+              <span>
+                {typingUsers.length === 1 
+                  ? `${typingUsers[0]} is typing...`
+                  : `${typingUsers.join(', ')} are typing...`
+                }
+              </span>
+            </div>
+          )}
         </div>
         <div ref={messagesEndRef} />
       </div>

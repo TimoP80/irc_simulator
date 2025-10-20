@@ -4,6 +4,40 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 
 *Note: This project was previously known as "Gemini IRC Simulator" and was renamed to "Station V - Virtual IRC Simulator" as of v1.5.1.*
 
+## 1.10.0 - 2025-01-20
+
+### Added
+- **Realistic Typing Delays**: Enhanced AI message simulation with human-like typing behavior
+  - **Smart Delay Calculation**: Delay based on message length - longer messages take more time to "type"
+  - **Random Variation**: Natural randomness in typing speed to avoid robotic patterns
+  - **Configurable Settings**: Full control over typing delay behavior in Settings
+  - **Visual Typing Indicators**: Animated dots showing when AI users are "typing"
+  - **Multiple User Support**: Shows typing indicators for multiple users simultaneously
+  - **Realistic Timing**: Base delay (200ms-3s) + length factor + random variation, capped at maximum delay
+  - **Disable Option**: Can be completely disabled for instant responses
+  - **Persistent Configuration**: Settings saved and restored between sessions
+
+### Enhanced
+- **AI Message Simulation**: All AI responses now include realistic typing delays
+  - **Channel Messages**: Background simulation includes typing delays
+  - **Reaction Messages**: AI responses to user messages include delays
+  - **Greeting Messages**: Welcome messages include typing delays
+  - **Burst Mode**: Even rapid-fire messages include appropriate delays
+  - **Private Messages**: One-on-one conversations include typing delays
+- **User Experience**: More immersive and realistic chat simulation
+  - **Typing Indicators**: Visual feedback with animated bouncing dots
+  - **Multiple Users**: Shows when multiple AI users are typing simultaneously
+  - **Natural Flow**: Conversations feel more human and less robotic
+  - **Configurable Timing**: Users can adjust delay settings to their preference
+
+### Technical Changes
+- **New Configuration**: Added `typingDelay` settings to `AppConfig` interface
+- **Delay Algorithm**: Smart calculation based on message length and random factors
+- **State Management**: Added `typingUsers` state to track who is currently typing
+- **Settings UI**: New "Typing Delay Settings" section in SettingsModal
+- **Visual Components**: Enhanced ChatWindow with animated typing indicators
+- **Configuration Persistence**: Typing delay settings saved to localStorage
+
 ## 1.9.0 - 2025-01-20
 
 ### Added

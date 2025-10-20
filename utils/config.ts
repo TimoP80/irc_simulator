@@ -1,5 +1,5 @@
 import type { AppConfig, User, Channel } from '../types';
-import { DEFAULT_NICKNAME, DEFAULT_VIRTUAL_USERS, DEFAULT_CHANNELS } from '../constants';
+import { DEFAULT_NICKNAME, DEFAULT_VIRTUAL_USERS, DEFAULT_CHANNELS, DEFAULT_TYPING_DELAY } from '../constants';
 
 const CONFIG_STORAGE_KEY = 'gemini-irc-simulator-config';
 const CHANNEL_LOGS_STORAGE_KEY = 'station-v-channel-logs';
@@ -11,7 +11,13 @@ const CHANNEL_LOGS_STORAGE_KEY = 'station-v-channel-logs';
 export const loadConfig = (): AppConfig | null => {
   try {
     const savedConfig = localStorage.getItem(CONFIG_STORAGE_KEY);
-    return savedConfig ? JSON.parse(savedConfig) : null;
+    if (!savedConfig) return null;
+    
+    const parsed = JSON.parse(savedConfig);
+    return {
+      ...parsed,
+      typingDelay: parsed.typingDelay || DEFAULT_TYPING_DELAY
+    };
   } catch (error) {
     console.error("Failed to load config from localStorage:", error);
     return null;
@@ -169,8 +175,9 @@ export const initializeStateFromConfig = (config: AppConfig) => {
     
     const simulationSpeed = config.simulationSpeed || 'normal';
     const aiModel = config.aiModel || 'gemini-2.5-flash';
+    const typingDelay = config.typingDelay || DEFAULT_TYPING_DELAY;
 
-    return { nickname, virtualUsers, channels, simulationSpeed, aiModel };
+    return { nickname, virtualUsers, channels, simulationSpeed, aiModel, typingDelay };
 };
 
 /**
@@ -228,4 +235,38 @@ export const clearChannelLogs = () => {
   } catch (error) {
     console.error("Failed to clear channel logs from localStorage:", error);
   }
+};
+
+/**
+ * Generates a random typing delay to simulate human typing time.
+ * @param messageLength The length of the message being typed
+ * @param config Optional typing delay configuration
+ * @returns Promise that resolves after the calculated delay
+ */
+export const simulateTypingDelay = async (
+  messageLength: number, 
+  config?: { enabled: boolean; baseDelay: number; maxDelay: number }
+): Promise<void> => {
+  // Use provided config or defaults
+  const typingConfig = config || DEFAULT_TYPING_DELAY;
+  
+  // If typing delay is disabled, return immediately
+  if (!typingConfig.enabled) {
+    return Promise.resolve();
+  }
+  
+  // Calculate delay based on message length (longer messages take more time to type)
+  const lengthFactor = Math.min(messageLength / 100, 3); // Cap at 3x for very long messages
+  const randomFactor = 0.5 + Math.random() * 1.5; // Random factor between 0.5 and 2.0
+  
+  // Calculate final delay: base + (length factor * random factor)
+  const calculatedDelay = Math.min(
+    typingConfig.baseDelay + (lengthFactor * 500 * randomFactor),
+    typingConfig.maxDelay
+  );
+  
+  // Add some randomness to make it feel more natural
+  const finalDelay = calculatedDelay + (Math.random() * 500 - 250); // ±250ms variation
+  
+  return new Promise(resolve => setTimeout(resolve, Math.max(finalDelay, 200))); // Minimum 200ms delay
 };
