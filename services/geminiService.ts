@@ -40,6 +40,16 @@ ${formatMessageHistory(channel.messages)}
 
 Generate a new, single, in-character message from ${randomUser.nickname} that is relevant to the topic or the recent conversation.
 The message must be a single line in the format: "nickname: message"
+
+Consider ${randomUser.nickname}'s writing style:
+- Formality: ${randomUser.writingStyle.formality}
+- Verbosity: ${randomUser.writingStyle.verbosity}
+- Humor: ${randomUser.writingStyle.humor}
+- Emoji usage: ${randomUser.writingStyle.emojiUsage}
+- Punctuation: ${randomUser.writingStyle.punctuation}
+- Language fluency: ${randomUser.languageSkills.fluency}
+- Languages: ${randomUser.languageSkills.languages.join(', ')}
+${randomUser.languageSkills.accent ? `- Accent: ${randomUser.languageSkills.accent}` : ''}
 `;
 
   const response = await withRateLimitAndRetries(() => 
@@ -61,6 +71,8 @@ export const generateReactionToMessage = async (channel: Channel, userMessage: M
     const usersInChannel = channel.users.filter(u => u.nickname !== currentUserNickname);
     if (usersInChannel.length === 0) return '';
 
+    const randomUser = usersInChannel[Math.floor(Math.random() * usersInChannel.length)];
+    
     const prompt = `
 In IRC channel ${channel.name}, the user "${userMessage.nickname}" just said: "${userMessage.content}".
 The topic is: "${channel.topic}".
@@ -69,8 +81,18 @@ Their personalities are: ${usersInChannel.map(u => `${u.nickname} is ${u.persona
 The last 15 messages were:
 ${formatMessageHistory(channel.messages)}
 
-Generate a realistic and in-character reaction from one of the other users.
+Generate a realistic and in-character reaction from ${randomUser.nickname}.
 The reaction must be a single line in the format: "nickname: message"
+
+Consider ${randomUser.nickname}'s writing style:
+- Formality: ${randomUser.writingStyle.formality}
+- Verbosity: ${randomUser.writingStyle.verbosity}
+- Humor: ${randomUser.writingStyle.humor}
+- Emoji usage: ${randomUser.writingStyle.emojiUsage}
+- Punctuation: ${randomUser.writingStyle.punctuation}
+- Language fluency: ${randomUser.languageSkills.fluency}
+- Languages: ${randomUser.languageSkills.languages.join(', ')}
+${randomUser.languageSkills.accent ? `- Accent: ${randomUser.languageSkills.accent}` : ''}
 `;
     const response = await withRateLimitAndRetries(() => 
         ai.models.generateContent({
@@ -98,6 +120,16 @@ ${formatMessageHistory(conversation.messages)}
 
 '${currentUserNickname}' just sent you this message: "${userMessage.content}"
 
+Your writing style:
+- Formality: ${aiUser.writingStyle.formality}
+- Verbosity: ${aiUser.writingStyle.verbosity}
+- Humor: ${aiUser.writingStyle.humor}
+- Emoji usage: ${aiUser.writingStyle.emojiUsage}
+- Punctuation: ${aiUser.writingStyle.punctuation}
+- Language fluency: ${aiUser.languageSkills.fluency}
+- Languages: ${aiUser.languageSkills.languages.join(', ')}
+${aiUser.languageSkills.accent ? `- Accent: ${aiUser.languageSkills.accent}` : ''}
+
 Generate a natural, in-character response.
 The response must be a single line in the format: "${aiUser.nickname}: message"
 `;
@@ -122,6 +154,11 @@ export const generateRandomWorldConfiguration = async (): Promise<RandomWorldCon
     const prompt = `
 Generate a creative and interesting configuration for a simulated IRC world.
 Create a list of 8 unique virtual users with distinct, concise, and interesting personalities. Nicknames should be lowercase and simple.
+
+For each user, also generate:
+- Language skills: fluency level (beginner/intermediate/advanced/native), languages they speak, and optional accent/dialect
+- Writing style: formality (casual/formal/mixed), verbosity (concise/moderate/verbose), humor level (none/light/heavy), emoji usage (none/minimal/frequent), and punctuation style (minimal/standard/excessive)
+
 Create a list of 4 unique and thematic IRC channels with creative topics. Channel names must start with #.
 
 Provide the output in JSON format.
@@ -152,9 +189,60 @@ Provide the output in JSON format.
                                     personality: {
                                         type: Type.STRING,
                                         description: "A brief, interesting personality description."
+                                    },
+                                    languageSkills: {
+                                        type: Type.OBJECT,
+                                        properties: {
+                                            fluency: {
+                                                type: Type.STRING,
+                                                enum: ['beginner', 'intermediate', 'advanced', 'native'],
+                                                description: "Language fluency level."
+                                            },
+                                            languages: {
+                                                type: Type.ARRAY,
+                                                items: { type: Type.STRING },
+                                                description: "List of languages the user speaks."
+                                            },
+                                            accent: {
+                                                type: Type.STRING,
+                                                description: "Optional accent or dialect description."
+                                            }
+                                        },
+                                        required: ['fluency', 'languages']
+                                    },
+                                    writingStyle: {
+                                        type: Type.OBJECT,
+                                        properties: {
+                                            formality: {
+                                                type: Type.STRING,
+                                                enum: ['casual', 'formal', 'mixed'],
+                                                description: "Writing formality level."
+                                            },
+                                            verbosity: {
+                                                type: Type.STRING,
+                                                enum: ['concise', 'moderate', 'verbose'],
+                                                description: "Writing verbosity level."
+                                            },
+                                            humor: {
+                                                type: Type.STRING,
+                                                enum: ['none', 'light', 'heavy'],
+                                                description: "Humor level in writing."
+                                            },
+                                            emojiUsage: {
+                                                type: Type.STRING,
+                                                enum: ['none', 'minimal', 'frequent'],
+                                                description: "Emoji usage frequency."
+                                            },
+                                            punctuation: {
+                                                type: Type.STRING,
+                                                enum: ['minimal', 'standard', 'excessive'],
+                                                description: "Punctuation style."
+                                            }
+                                        },
+                                        required: ['formality', 'verbosity', 'humor', 'emojiUsage', 'punctuation']
                                     }
                                 },
-                                required: ['nickname', 'personality']
+                                required: ['nickname', 'personality', 'languageSkills', 'writingStyle']
                             }
                         },
                         channels: {

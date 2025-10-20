@@ -1,0 +1,9 @@
+Station V — Virtual IRC Simulator
+---------------------------------
+
+A resurrection project for my old irc simulator. Now with a fancy text based web interface, it feels both retro and modern at the same time.
+But the underlying tech is from another world: It's full blown AI powered, using the Google Gemini API for creating all communication in the
+virtual IRC world.
+
+I have been thinking about connecting it to real IRC but not yet sure how to do it. The other way around might be possible. Like let other users
+connect to your irc simulation session. That way you can have multiple real users chatting with the AI users. 

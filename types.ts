@@ -1,7 +1,19 @@
 export interface User {
   nickname: string;
   status: 'online' | 'away';
-  personality?: string;
+  personality: string;
+  languageSkills: {
+    fluency: 'beginner' | 'intermediate' | 'advanced' | 'native';
+    languages: string[];
+    accent?: string;
+  };
+  writingStyle: {
+    formality: 'casual' | 'formal' | 'mixed';
+    verbosity: 'concise' | 'moderate' | 'verbose';
+    humor: 'none' | 'light' | 'heavy';
+    emojiUsage: 'none' | 'minimal' | 'frequent';
+    punctuation: 'minimal' | 'standard' | 'excessive';
+  };
 }
 
 export type MessageType = 'system' | 'user' | 'ai' | 'pm';
@@ -46,6 +58,6 @@ export interface AppConfig {
  * Defines the structure for the AI-generated random world configuration.
  */
 export interface RandomWorldConfig {
-  users: { nickname: string; personality: string; }[];
+  users: User[];
   channels: { name: string; topic: string; }[];
 }

@@ -1,10 +1,6 @@
 import React, { useState } from 'react';
 import { AddUserModal } from './AddUserModal';
-
-interface User {
-  nickname: string;
-  personality: string;
-}
+import { User } from '../types';
 
 interface UserManagementProps {
   users: User[];
@@ -15,16 +11,13 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onUsersCh
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
 
-  const handleAddUser = (nickname: string, personality: string) => {
-    const newUser: User = { nickname, personality };
-    onUsersChange([...users, newUser]);
+  const handleAddUser = (user: User) => {
+    onUsersChange([...users, user]);
   };
 
-  const handleUpdateUser = (oldNickname: string, newNickname: string, personality: string) => {
+  const handleUpdateUser = (oldNickname: string, newUser: User) => {
     const updatedUsers = users.map(user => 
-      user.nickname === oldNickname 
-        ? { nickname: newNickname, personality }
-        : user
+      user.nickname === oldNickname ? newUser : user
     );
     onUsersChange(updatedUsers);
     setEditingUser(null);
@@ -103,8 +96,33 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onUsersCh
                     <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-900 text-green-200">
                       AI User
                     </span>
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-900 text-blue-200">
+                      {user.languageSkills.fluency}
+                    </span>
                   </div>
-                  <p className="text-gray-300 text-sm leading-relaxed">{user.personality}</p>
+                  
+                  <p className="text-gray-300 text-sm leading-relaxed mb-3">{user.personality}</p>
+                  
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <span className="text-gray-400 font-medium">Languages:</span>
+                      <p className="text-gray-300">{user.languageSkills.languages.join(', ')}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-400 font-medium">Style:</span>
+                      <p className="text-gray-300 capitalize">{user.writingStyle.formality} • {user.writingStyle.verbosity}</p>
+                    </div>
+                    {user.languageSkills.accent && (
+                      <div>
+                        <span className="text-gray-400 font-medium">Accent:</span>
+                        <p className="text-gray-300">{user.languageSkills.accent}</p>
+                      </div>
+                    )}
+                    <div>
+                      <span className="text-gray-400 font-medium">Humor:</span>
+                      <p className="text-gray-300 capitalize">{user.writingStyle.humor}</p>
+                    </div>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2 ml-4">
                   <button

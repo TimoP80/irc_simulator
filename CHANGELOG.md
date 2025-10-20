@@ -1,6 +1,37 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+All notable changes to Station V - Virtual IRC Simulator will be documented in this file.
+
+*Note: This project was previously known as "Gemini IRC Simulator" and was renamed to "Station V - Virtual IRC Simulator" as of v1.5.1.*
+
+## 1.6.0 - 2025-10-20
+
+### Added
+- **Advanced User Customization Interface**: Complete overhaul of user management with detailed personality and writing style controls
+  - **Language Skills Configuration**: 
+    - Fluency levels (Beginner, Intermediate, Advanced, Native)
+    - Multiple language support with add/remove functionality
+    - Optional accent/dialect descriptions
+  - **Writing Style Controls**:
+    - Formality levels (Casual, Formal, Mixed)
+    - Verbosity settings (Concise, Moderate, Verbose)
+    - Humor levels (None, Light, Heavy)
+    - Emoji usage frequency (None, Minimal, Frequent)
+    - Punctuation styles (Minimal, Standard, Excessive)
+  - **Enhanced User Display**: User cards now show fluency badges and detailed attribute information
+  - **Dynamic Language Management**: Add and remove multiple languages for each user
+  - **Comprehensive Form Validation**: Real-time validation for all new user attributes
+
+### Enhanced
+- **AI Message Generation**: All AI functions now consider user's writing style and language skills for more realistic responses
+- **Character Consistency**: AI users now maintain consistent writing styles across all interactions
+- **User Interface**: Larger, more organized modals with better visual hierarchy and scrollable content
+- **Random World Generation**: AI now generates users with varied language skills and writing styles
+
+### Changed
+- **User Type Structure**: Updated User interface to include languageSkills and writingStyle objects
+- **Default Users**: All default virtual users now have defined language skills and writing styles
+- **AI Prompting**: Enhanced prompts to include detailed user characteristics for better response generation
 
 ## 1.5.0 - 2025-10-20
 
@@ -122,7 +153,7 @@ All notable changes to this project will be documented in this file.
 
 ### Initial Release
 
-This is the first public release of the Gemini IRC Simulator, a fully AI-driven chat environment.
+This is the first public release of Station V - Virtual IRC Simulator, a fully AI-driven chat environment.
 
 ### Features
 

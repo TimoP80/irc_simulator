@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { AppConfig } from '../types';
+import type { AppConfig, User } from '../types';
 import { loadConfig } from '../utils/config';
 import { DEFAULT_NICKNAME } from '../constants';
 import { generateRandomWorldConfiguration } from '../services/geminiService';
@@ -23,19 +23,32 @@ const DEFAULT_CHANNELS_TEXT = `#general, General chit-chat about anything and ev
 #help, Ask for help with the simulator here.`;
 
 // Helper functions to convert between text format and user objects
-const parseUsersFromText = (text: string) => {
+const parseUsersFromText = (text: string): User[] => {
   return text.split('\n')
     .filter(line => line.trim())
     .map(line => {
       const [nickname, ...personalityParts] = line.split(',');
       return {
         nickname: nickname.trim(),
-        personality: personalityParts.join(',').trim()
+        status: 'online' as const,
+        personality: personalityParts.join(',').trim(),
+        languageSkills: {
+          fluency: 'native' as const,
+          languages: ['English'],
+          accent: ''
+        },
+        writingStyle: {
+          formality: 'casual' as const,
+          verbosity: 'moderate' as const,
+          humor: 'light' as const,
+          emojiUsage: 'minimal' as const,
+          punctuation: 'standard' as const
+        }
       };
     });
 };
 
-const formatUsersToText = (users: { nickname: string; personality: string }[]) => {
+const formatUsersToText = (users: User[]) => {
   return users.map(user => `${user.nickname}, ${user.personality}`).join('\n');
 };
 
@@ -66,7 +79,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel }
       simulationSpeed: savedConfig?.simulationSpeed || 'normal',
     };
   });
-  const [users, setUsers] = useState(() => parseUsersFromText(config.virtualUsers));
+  const [users, setUsers] = useState<User[]>(() => parseUsersFromText(config.virtualUsers));
   const [channels, setChannels] = useState(() => parseChannelsFromText(config.channels));
   const [isRandomizing, setIsRandomizing] = useState(false);
 
@@ -99,17 +112,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel }
     setIsRandomizing(true);
     try {
       const randomConfig = await generateRandomWorldConfiguration();
-      const randomUsers = randomConfig.users.map(u => ({
-        nickname: u.nickname,
-        personality: u.personality
-      }));
-      const randomChannels = randomConfig.channels.map(c => ({
-        name: c.name,
-        topic: c.topic
-      }));
-      
-      setUsers(randomUsers);
-      setChannels(randomChannels);
+      setUsers(randomConfig.users);
+      setChannels(randomConfig.channels);
     } catch (error) {
       console.error("An error occurred during randomization:", error);
       // TODO: Consider showing a user-facing error message here.
