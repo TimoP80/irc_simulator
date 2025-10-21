@@ -63,11 +63,37 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
             accent: editingUser.languageSkills.accent || ''
           }]);
         } else {
-          setLanguageSkills([{
-            language: 'English',
-            fluency: 'native',
-            accent: ''
-          }]);
+          // Handle malformed data - try to extract what we can
+          const languages = (editingUser.languageSkills as any)?.languages;
+          if (Array.isArray(languages) && languages.length > 0) {
+            if (typeof languages[0] === 'string') {
+              // Array of strings
+              setLanguageSkills(languages.map((lang: string) => ({
+                language: lang,
+                fluency: 'native' as const,
+                accent: ''
+              })));
+            } else if (typeof languages[0] === 'object' && languages[0] !== null) {
+              // Array of objects
+              setLanguageSkills(languages.map((lang: any) => ({
+                language: lang.language || 'English',
+                fluency: (lang.fluency || 'native').toLowerCase(),
+                accent: lang.accent || ''
+              })));
+            } else {
+              setLanguageSkills([{
+                language: 'English',
+                fluency: 'native',
+                accent: ''
+              }]);
+            }
+          } else {
+            setLanguageSkills([{
+              language: 'English',
+              fluency: 'native',
+              accent: ''
+            }]);
+          }
         }
         setWritingStyle({
           formality: editingUser.writingStyle?.formality || 'neutral',
@@ -371,13 +397,13 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
             </h4>
             
             <div className="space-y-4">
-              {languageSkills.map((lang, index) => (
+              {(Array.isArray(languageSkills) ? languageSkills : []).map((lang, index) => (
                 <div key={index} className="bg-gray-800 p-4 rounded-lg border border-gray-600">
                   <div className="flex justify-between items-center mb-3">
                     <h5 className="text-sm font-medium text-gray-300">
                       Language {index + 1}
                     </h5>
-                    {languageSkills.length > 1 && (
+                    {(Array.isArray(languageSkills) ? languageSkills : []).length > 1 && (
                       <button
                         type="button"
                         onClick={() => removeLanguage(index)}

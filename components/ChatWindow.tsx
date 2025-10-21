@@ -11,9 +11,10 @@ interface ChatWindowProps {
   isLoading: boolean;
   currentUserNickname: string;
   typingUsers: string[];
+  channel?: { operators: string[] };
 }
 
-export const ChatWindow: React.FC<ChatWindowProps> = ({ title, messages, onSendMessage, isLoading, currentUserNickname, typingUsers }) => {
+export const ChatWindow: React.FC<ChatWindowProps> = ({ title, messages, onSendMessage, isLoading, currentUserNickname, typingUsers, channel }) => {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -36,7 +37,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ title, messages, onSendM
   return (
     <div className="flex-1 flex flex-col bg-gray-800 h-full">
       <header className="px-6 py-3 border-b border-gray-700 bg-gray-900">
-        <h1 className="text-lg font-semibold text-white">{title}</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-lg font-semibold text-white">{title}</h1>
+          {channel && (channel.operators || []).length > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400">Ops:</span>
+              <div className="flex gap-1">
+                {(channel.operators || []).map(op => (
+                  <span key={op} className="text-xs bg-yellow-600 text-yellow-100 px-2 py-1 rounded">
+                    @{op}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </header>
 
       <div className="flex-1 p-4 overflow-y-auto">

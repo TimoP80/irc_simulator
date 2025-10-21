@@ -8,8 +8,44 @@ import type { Channel, Message, User, ActiveContext, PrivateMessageConversation,
 import { addChannelOperator, removeChannelOperator, isChannelOperator, canUserPerformAction } from './types';
 import { generateChannelActivity, generateReactionToMessage, generatePrivateMessageResponse } from './services/geminiService';
 import { loadConfig, saveConfig, initializeStateFromConfig, saveChannelLogs, loadChannelLogs, clearChannelLogs, simulateTypingDelay } from './utils/config';
+
+// Operator persistence functions
+const saveOperatorAssignments = (channels: Channel[]) => {
+  const operatorData = channels.map(channel => ({
+    name: channel.name,
+    operators: channel.operators || []
+  }));
+  localStorage.setItem('irc_simulator_operators', JSON.stringify(operatorData));
+};
+
+const loadOperatorAssignments = (channels: Channel[]): Channel[] => {
+  try {
+    const saved = localStorage.getItem('irc_simulator_operators');
+    if (saved) {
+      const operatorData = JSON.parse(saved);
+      return channels.map(channel => {
+        const savedChannel = operatorData.find((c: any) => c.name === channel.name);
+        return {
+          ...channel,
+          operators: savedChannel?.operators || []
+        };
+      });
+    }
+  } catch (error) {
+    console.warn('Failed to load operator assignments:', error);
+  }
+  return channels;
+};
 import { aiLogger, simulationLogger, configLogger } from './utils/debugLogger';
 import { parseIRCCommand, createCommandMessage, getIRCCommandsHelp } from './utils/ircCommands';
+
+// Migration function to ensure all channels have operators property
+const migrateChannels = (channels: Channel[]): Channel[] => {
+  return channels.map(channel => ({
+    ...channel,
+    operators: channel.operators || []
+  }));
+};
 
 const App: React.FC = () => {
   const [currentUserNickname, setCurrentUserNickname] = useState<string>(DEFAULT_NICKNAME);
@@ -88,11 +124,11 @@ const App: React.FC = () => {
         
         
         configLogger.debug('Merged channels message counts:', mergedChannels.map(c => ({ name: c.name, messageCount: c.messages?.length || 0 })));
-        setChannels(mergedChannels);
+        setChannels(loadOperatorAssignments(migrateChannels(mergedChannels)));
       } else {
         configLogger.debug('No saved logs, using configured channels');
         configLogger.debug('Configured channels message counts:', channels.map(c => ({ name: c.name, messageCount: c.messages?.length || 0 })));
-        setChannels(channels);
+        setChannels(loadOperatorAssignments(migrateChannels(channels)));
       }
     } else {
       // If no config, open settings for the user to configure the app
@@ -100,7 +136,7 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // Save channel logs whenever channels change
+  // Save channel logs and operator assignments whenever channels change
   useEffect(() => {
     if (channels.length > 0) {
       configLogger.debug('Saving channel logs:', channels.map(c => ({ 
@@ -108,21 +144,37 @@ const App: React.FC = () => {
         messageCount: c.messages?.length || 0 
       })));
       saveChannelLogs(channels);
+      saveOperatorAssignments(channels);
     }
   }, [channels]);
 
   const handleSaveSettings = (config: AppConfig) => {
-    saveConfig(config);
-    const { nickname, virtualUsers, channels, simulationSpeed, aiModel: savedAiModel, typingDelay } = initializeStateFromConfig(config);
+    // Update config with current channel names and topics (but not operators)
+    const updatedConfig = {
+      ...config,
+      channels: channels.map(channel => `${channel.name}, ${channel.topic}`).join('\n')
+    };
+    saveConfig(updatedConfig);
+    
+    // Only update non-channel settings from config, preserve current channels with operators
+    const { nickname, virtualUsers, simulationSpeed, aiModel: savedAiModel, typingDelay } = initializeStateFromConfig(updatedConfig);
     setCurrentUserNickname(nickname);
     setVirtualUsers(virtualUsers);
-    setChannels(channels);
+    // Keep current channels (with operator assignments) - don't reload from config
+    setChannels(migrateChannels(channels));
     setSimulationSpeed(simulationSpeed);
     setAiModel(savedAiModel || DEFAULT_AI_MODEL);
     setTypingDelayConfig(typingDelay || DEFAULT_TYPING_DELAY);
     setPrivateMessages({});
-    // Don't automatically join any channel - user needs to join manually
-    setActiveContext(null);
+    // Preserve active context if it's a channel that still exists
+    if (activeContext?.type === 'channel') {
+      const channelStillExists = migrateChannels(channels).some(c => c.name === activeContext.name);
+      if (!channelStillExists) {
+        setActiveContext(null);
+      }
+    } else {
+      setActiveContext(null);
+    }
     setIsSettingsOpen(false);
   };
 
@@ -895,7 +947,7 @@ The response must be a single line in the format: "nickname: greeting message"
 
   return (
     <div className="flex h-screen w-screen bg-gray-800 font-mono">
-      {isSettingsOpen && <SettingsModal onSave={handleSaveSettings} onCancel={handleCloseSettings} currentChannels={channels} />}
+      {isSettingsOpen && <SettingsModal onSave={handleSaveSettings} onCancel={handleCloseSettings} currentChannels={channels} onChannelsChange={setChannels} />}
       <ChannelList 
         channels={channels}
         privateMessageUsers={allPMUsers}
@@ -911,6 +963,7 @@ The response must be a single line in the format: "nickname: greeting message"
           isLoading={isLoading}
           currentUserNickname={currentUserNickname}
           typingUsers={Array.from(typingUsers)}
+          channel={activeChannel}
         />
       </main>
       <UserList 

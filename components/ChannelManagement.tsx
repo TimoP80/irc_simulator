@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
 import { AddChannelModal } from './AddChannelModal';
 import { ChannelImportExportModal } from './ChannelImportExportModal';
-import { Channel } from '../types';
+import { Channel, User, addChannelOperator, removeChannelOperator, isChannelOperator } from '../types';
 import { clearChannelLogs } from '../utils/config';
 
 interface ChannelManagementProps {
   channels: Channel[];
   onChannelsChange: (channels: Channel[]) => void;
+  allUsers?: User[];
 }
 
-export const ChannelManagement: React.FC<ChannelManagementProps> = ({ channels, onChannelsChange }) => {
+export const ChannelManagement: React.FC<ChannelManagementProps> = ({ channels, onChannelsChange, allUsers = [] }) => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isImportExportModalOpen, setIsImportExportModalOpen] = useState(false);
   const [editingChannel, setEditingChannel] = useState<Channel | null>(null);
@@ -19,7 +20,8 @@ export const ChannelManagement: React.FC<ChannelManagementProps> = ({ channels, 
       name, 
       topic, 
       users: [], 
-      messages: [] 
+      messages: [],
+      operators: []
     };
     onChannelsChange([...channels, newChannel]);
   };
@@ -52,6 +54,20 @@ export const ChannelManagement: React.FC<ChannelManagementProps> = ({ channels, 
 
   const handleCloseImportExportModal = () => {
     setIsImportExportModalOpen(false);
+  };
+
+  const handleToggleOperator = (channelName: string, nickname: string) => {
+    const updatedChannels = channels.map(channel => {
+      if (channel.name === channelName) {
+        if (isChannelOperator(channel, nickname)) {
+          return removeChannelOperator(channel, nickname);
+        } else {
+          return addChannelOperator(channel, nickname);
+        }
+      }
+      return channel;
+    });
+    onChannelsChange(updatedChannels);
   };
 
   const handleImportChannels = (importedChannels: Channel[]) => {
@@ -160,7 +176,54 @@ export const ChannelManagement: React.FC<ChannelManagementProps> = ({ channels, 
                       </span>
                     )}
                   </div>
-                  <p className="text-gray-300 text-sm leading-relaxed">{channel.topic}</p>
+                  <p className="text-gray-300 text-sm leading-relaxed mb-3">{channel.topic}</p>
+                  
+                  {/* Operator Management */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-gray-400">Channel Operators ({(channel.operators || []).length})</span>
+                    </div>
+                    
+                    {(channel.operators || []).length > 0 && (
+                      <div className="flex flex-wrap gap-1 mb-2">
+                        {(channel.operators || []).map(operator => (
+                          <span key={operator} className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-yellow-600 text-yellow-100">
+                            @{operator}
+                            <button
+                              onClick={() => handleToggleOperator(channel.name, operator)}
+                              className="text-yellow-200 hover:text-yellow-100"
+                              title="Remove operator"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {/* Add Operator Dropdown */}
+                    <div className="flex items-center gap-2">
+                      <select
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            handleToggleOperator(channel.name, e.target.value);
+                            e.target.value = '';
+                          }
+                        }}
+                        className="bg-gray-600 text-white text-xs rounded px-2 py-1 border border-gray-500"
+                        defaultValue=""
+                      >
+                        <option value="">Add operator...</option>
+                        {allUsers
+                          .filter(user => !isChannelOperator(channel, user.nickname))
+                          .map(user => (
+                            <option key={user.nickname} value={user.nickname}>
+                              {user.nickname}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2 ml-4">
                   <button
