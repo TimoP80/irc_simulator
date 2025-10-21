@@ -100,7 +100,30 @@ Return only the usernames, one per line, no additional text or formatting.
     );
 
     console.log(`[AI Debug] Successfully received response from Gemini for username generation`);
-    const usernames = response.text
+    
+    // Helper function to extract text from AI response
+    const extractTextFromResponse = (response: any): string => {
+      if (!response) {
+        throw new Error("No response received from AI service");
+      }
+      
+      if (response.text) {
+        // Old format
+        return response.text.trim();
+      } else if (response.candidates && response.candidates.length > 0 && 
+                 response.candidates[0].content && 
+                 response.candidates[0].content.parts && 
+                 response.candidates[0].content.parts.length > 0) {
+        // New format - extract from candidates
+        return response.candidates[0].content.parts[0].text?.trim() || '';
+      } else {
+        console.error("Invalid response structure:", response);
+        throw new Error("Invalid response from AI service: unable to extract text content");
+      }
+    };
+    
+    const responseText = extractTextFromResponse(response);
+    const usernames = responseText
       .trim()
       .split('\n')
       .map(name => name.trim())

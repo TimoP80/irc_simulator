@@ -40,6 +40,27 @@ const formatMessageHistory = (messages: Message[]): string => {
     .join('\n');
 };
 
+// Helper function to extract text from AI response
+const extractTextFromResponse = (response: any): string => {
+  if (!response) {
+    throw new Error("No response received from AI service");
+  }
+  
+  if (response.text) {
+    // Old format
+    return response.text.trim();
+  } else if (response.candidates && response.candidates.length > 0 && 
+             response.candidates[0].content && 
+             response.candidates[0].content.parts && 
+             response.candidates[0].content.parts.length > 0) {
+    // New format - extract from candidates
+    return response.candidates[0].content.parts[0].text?.trim() || '';
+  } else {
+    console.error("Invalid response structure:", response);
+    throw new Error("Invalid response from AI service: unable to extract text content");
+  }
+};
+
 const getBaseSystemInstruction = (currentUserNickname: string) => `You are an advanced AI simulating an Internet Relay Chat (IRC) environment. 
 Your goal is to generate realistic, brief, and in-character chat messages for various virtual users.
 Adhere strictly to the format 'nickname: message'. 
@@ -103,7 +124,7 @@ ${isChannelOperator(channel, randomUser.nickname) ? `- Role: Channel operator (c
       })
     );
     
-    const result = response.text.trim();
+    const result = extractTextFromResponse(response);
     console.log(`[AI Debug] Successfully generated channel activity: "${result}"`);
     return result;
   } catch (error) {
@@ -180,7 +201,7 @@ ${isChannelOperator(channel, randomUser.nickname) ? `- Role: Channel operator (c
             })
         );
         
-        const result = response.text.trim();
+        const result = extractTextFromResponse(response);
         console.log(`[AI Debug] Successfully generated reaction: "${result}"`);
         return result;
     } catch (error) {
@@ -242,7 +263,7 @@ The response must be a single line in the format: "${aiUser.nickname}: message"
             })
         );
         
-        const result = response.text.trim();
+        const result = extractTextFromResponse(response);
         console.log(`[AI Debug] Successfully generated private message response: "${result}"`);
         return result;
     } catch (error) {
@@ -368,7 +389,9 @@ Provide the output in JSON format.
     );
 
     console.log(`[AI Debug] Successfully received response from Gemini for batch user generation`);
-    const result = JSON.parse(response.text);
+    
+    const jsonString = extractTextFromResponse(response);
+    const result = JSON.parse(jsonString);
     const users = result.users.map((user: any) => ({
       ...user,
       status: 'online' as const
@@ -410,7 +433,7 @@ Provide the output in JSON format.
             config: {
                 systemInstruction: "You are a creative world-builder for a simulated IRC environment. Generate a valid JSON response based on the provided schema.",
                 temperature: 1.0,
-                maxOutputTokens: 1000,
+                maxOutputTokens: 4000,
                 responseMimeType: "application/json",
                 responseSchema: {
                     type: Type.OBJECT,
@@ -509,14 +532,307 @@ Provide the output in JSON format.
         })
     );
 
-    const jsonString = response.text.trim();
-    const parsedConfig: RandomWorldConfig = JSON.parse(jsonString);
+    const jsonString = extractTextFromResponse(response);
+    
+    // Log the raw response for debugging
+    console.log(`[AI Debug] Raw response from AI:`, jsonString);
+    console.log(`[AI Debug] Response length:`, jsonString.length);
+    console.log(`[AI Debug] First 200 characters:`, jsonString.substring(0, 200));
+    
+    // Try to find JSON content if the response contains extra text
+    let jsonContent = jsonString;
+    
+    // Look for JSON object boundaries
+    const jsonStart = jsonString.indexOf('{');
+    const jsonEnd = jsonString.lastIndexOf('}');
+    
+    if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+        jsonContent = jsonString.substring(jsonStart, jsonEnd + 1);
+        console.log(`[AI Debug] Extracted JSON content:`, jsonContent);
+    } else {
+        console.warn(`[AI Debug] No JSON object boundaries found in response`);
+    }
+    
+    let parsedConfig: RandomWorldConfig;
+    try {
+        parsedConfig = JSON.parse(jsonContent);
+    } catch (parseError) {
+        console.error(`[AI Debug] JSON parse error:`, parseError);
+        console.error(`[AI Debug] Attempted to parse:`, jsonContent);
+        
+        // Try to repair truncated JSON
+        console.log(`[AI Debug] Attempting to repair truncated JSON...`);
+        let repairedJson = jsonContent;
+        
+        // If the JSON is truncated, try to close it properly
+        if (jsonContent.includes('"channels"') && !jsonContent.endsWith('}')) {
+            // Find the last complete channel entry
+            const lastChannelMatch = jsonContent.match(/"channels":\s*\[(.*?)(?:\]|$)/s);
+            if (lastChannelMatch) {
+                const channelsContent = lastChannelMatch[1];
+                const channelEntries = channelsContent.match(/\{[^}]*\}/g);
+                if (channelEntries && channelEntries.length > 0) {
+                    // Close the channels array and the main object
+                    repairedJson = jsonContent.replace(/"channels":\s*\[.*$/, `"channels": [${channelEntries.join(', ')}]}`);
+                    console.log(`[AI Debug] Repaired JSON:`, repairedJson);
+                }
+            }
+        }
+        
+        // Try parsing the repaired JSON
+        try {
+            parsedConfig = JSON.parse(repairedJson);
+            console.log(`[AI Debug] Successfully parsed repaired JSON`);
+        } catch (repairError) {
+            console.error(`[AI Debug] JSON repair failed:`, repairError);
+            
+            // Try to provide a fallback configuration if JSON parsing fails
+            console.log(`[AI Debug] Attempting to create fallback configuration...`);
+            const fallbackConfig: RandomWorldConfig = {
+            users: [
+                {
+                    nickname: 'nova',
+                    personality: 'A curious tech-savvy individual who loves gadgets.',
+                    languageSkills: {
+                        fluency: 'native',
+                        languages: ['English'],
+                        accent: ''
+                    },
+                    writingStyle: {
+                        formality: 'casual',
+                        verbosity: 'moderate',
+                        humor: 'light',
+                        emojiUsage: 'minimal',
+                        punctuation: 'standard'
+                    }
+                },
+                {
+                    nickname: 'seraph',
+                    personality: 'Calm, wise, and often speaks in poetic terms.',
+                    languageSkills: {
+                        fluency: 'native',
+                        languages: ['English'],
+                        accent: ''
+                    },
+                    writingStyle: {
+                        formality: 'formal',
+                        verbosity: 'moderate',
+                        humor: 'none',
+                        emojiUsage: 'none',
+                        punctuation: 'standard'
+                    }
+                },
+                {
+                    nickname: 'jinx',
+                    personality: 'A chaotic, funny, and unpredictable prankster.',
+                    languageSkills: {
+                        fluency: 'native',
+                        languages: ['English'],
+                        accent: ''
+                    },
+                    writingStyle: {
+                        formality: 'casual',
+                        verbosity: 'moderate',
+                        humor: 'heavy',
+                        emojiUsage: 'frequent',
+                        punctuation: 'excessive'
+                    }
+                },
+                {
+                    nickname: 'rex',
+                    personality: 'Gruff but helpful, an expert in system administration.',
+                    languageSkills: {
+                        fluency: 'native',
+                        languages: ['English'],
+                        accent: ''
+                    },
+                    writingStyle: {
+                        formality: 'casual',
+                        verbosity: 'concise',
+                        humor: 'light',
+                        emojiUsage: 'none',
+                        punctuation: 'minimal'
+                    }
+                },
+                {
+                    nickname: 'luna',
+                    personality: 'An artist who is dreamy, creative, and talks about music.',
+                    languageSkills: {
+                        fluency: 'native',
+                        languages: ['English'],
+                        accent: ''
+                    },
+                    writingStyle: {
+                        formality: 'casual',
+                        verbosity: 'verbose',
+                        humor: 'light',
+                        emojiUsage: 'frequent',
+                        punctuation: 'standard'
+                    }
+                }
+            ],
+            channels: [
+                { 
+                    name: '#general', 
+                    topic: 'General chit-chat about anything and everything.',
+                    users: [
+                        { 
+                            nickname: 'nova',
+                            status: 'online' as const,
+                            personality: 'A curious tech-savvy individual who loves gadgets.',
+                            languageSkills: {
+                                fluency: 'native' as const,
+                                languages: ['English'],
+                                accent: ''
+                            },
+                            writingStyle: {
+                                formality: 'casual' as const,
+                                verbosity: 'moderate' as const,
+                                humor: 'light' as const,
+                                emojiUsage: 'minimal' as const,
+                                punctuation: 'standard' as const
+                            }
+                        },
+                        { 
+                            nickname: 'seraph',
+                            status: 'online' as const,
+                            personality: 'Calm, wise, and often speaks in poetic terms.',
+                            languageSkills: {
+                                fluency: 'native' as const,
+                                languages: ['English'],
+                                accent: ''
+                            },
+                            writingStyle: {
+                                formality: 'formal' as const,
+                                verbosity: 'moderate' as const,
+                                humor: 'none' as const,
+                                emojiUsage: 'none' as const,
+                                punctuation: 'standard' as const
+                            }
+                        },
+                        { 
+                            nickname: 'jinx',
+                            status: 'online' as const,
+                            personality: 'A chaotic, funny, and unpredictable prankster.',
+                            languageSkills: {
+                                fluency: 'native' as const,
+                                languages: ['English'],
+                                accent: ''
+                            },
+                            writingStyle: {
+                                formality: 'casual' as const,
+                                verbosity: 'moderate' as const,
+                                humor: 'heavy' as const,
+                                emojiUsage: 'frequent' as const,
+                                punctuation: 'excessive' as const
+                            }
+                        },
+                        { 
+                            nickname: 'rex',
+                            status: 'online' as const,
+                            personality: 'Gruff but helpful, an expert in system administration.',
+                            languageSkills: {
+                                fluency: 'native' as const,
+                                languages: ['English'],
+                                accent: ''
+                            },
+                            writingStyle: {
+                                formality: 'casual' as const,
+                                verbosity: 'concise' as const,
+                                humor: 'light' as const,
+                                emojiUsage: 'none' as const,
+                                punctuation: 'minimal' as const
+                            }
+                        },
+                        { 
+                            nickname: 'luna',
+                            status: 'online' as const,
+                            personality: 'An artist who is dreamy, creative, and talks about music.',
+                            languageSkills: {
+                                fluency: 'native' as const,
+                                languages: ['English'],
+                                accent: ''
+                            },
+                            writingStyle: {
+                                formality: 'casual' as const,
+                                verbosity: 'verbose' as const,
+                                humor: 'light' as const,
+                                emojiUsage: 'frequent' as const,
+                                punctuation: 'standard' as const
+                            }
+                        }
+                    ],
+                    messages: [
+                        { id: Date.now(), nickname: 'system', content: 'You have joined #general', timestamp: new Date(), type: 'system' as const }
+                    ],
+                    operators: []
+                },
+                { 
+                    name: '#tech-talk', 
+                    topic: 'Discussing the latest in technology and software.',
+                    users: [],
+                    messages: [
+                        { id: Date.now() + 1, nickname: 'system', content: 'You have joined #tech-talk', timestamp: new Date(), type: 'system' as const }
+                    ],
+                    operators: []
+                },
+                { 
+                    name: '#random', 
+                    topic: 'For off-topic conversations and random thoughts.',
+                    users: [],
+                    messages: [
+                        { id: Date.now() + 2, nickname: 'system', content: 'You have joined #random', timestamp: new Date(), type: 'system' as const }
+                    ],
+                    operators: []
+                },
+                { 
+                    name: '#help', 
+                    topic: 'Ask for help with the simulator here.',
+                    users: [],
+                    messages: [
+                        { id: Date.now() + 3, nickname: 'system', content: 'You have joined #help', timestamp: new Date(), type: 'system' as const }
+                    ],
+                    operators: []
+                }
+            ]
+        };
+        
+            console.log(`[AI Debug] Using fallback configuration due to JSON parse error`);
+            return fallbackConfig;
+        }
+    }
 
     if (!parsedConfig.users || !parsedConfig.channels || parsedConfig.users.length === 0 || parsedConfig.channels.length === 0) {
         throw new Error("Invalid config structure received from AI.");
     }
 
-    return parsedConfig;
+    // Properly initialize channels with required properties
+    const initializedChannels = parsedConfig.channels.map((channel, index) => ({
+        name: channel.name,
+        topic: channel.topic,
+        users: parsedConfig.users.map(user => ({
+            ...user,
+            status: 'online' as const
+        })),
+        messages: [
+            { 
+                id: Date.now() + index, 
+                nickname: 'system', 
+                content: `You have joined ${channel.name}`, 
+                timestamp: new Date(), 
+                type: 'system' as const 
+            }
+        ],
+        operators: []
+    }));
+
+    return {
+        users: parsedConfig.users.map(user => ({
+            ...user,
+            status: 'online' as const
+        })),
+        channels: initializedChannels
+    };
 };
 
 /**

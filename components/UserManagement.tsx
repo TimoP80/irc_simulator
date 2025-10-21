@@ -108,7 +108,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onUsersCh
   // Get channels where a user is assigned
   const getUserChannels = (user: User): Channel[] => {
     return channels.filter(channel => 
-      channel.users.some(channelUser => channelUser.nickname === user.nickname)
+      channel.users && channel.users.some(channelUser => channelUser.nickname === user.nickname)
     );
   };
 
@@ -119,11 +119,11 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onUsersCh
     const updatedChannels = channels.map(channel => {
       if (channel.name === channelName) {
         // Check if user is already in this channel
-        const isAlreadyInChannel = channel.users.some(u => u.nickname === user.nickname);
+        const isAlreadyInChannel = channel.users && channel.users.some(u => u.nickname === user.nickname);
         if (!isAlreadyInChannel) {
           return {
             ...channel,
-            users: [...channel.users, user]
+            users: [...(channel.users || []), user]
           };
         }
       }
@@ -141,7 +141,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onUsersCh
       if (channel.name === channelName) {
         return {
           ...channel,
-          users: channel.users.filter(u => u.nickname !== user.nickname)
+          users: (channel.users || []).filter(u => u.nickname !== user.nickname)
         };
       }
       return channel;
@@ -283,7 +283,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onUsersCh
                         >
                           <option value="">Add to channel...</option>
                           {channels
-                            .filter(channel => !channel.users.some(u => u.nickname === user.nickname))
+                            .filter(channel => !channel.users || !channel.users.some(u => u.nickname === user.nickname))
                             .map(channel => (
                               <option key={channel.name} value={channel.name}>
                                 {channel.name}
