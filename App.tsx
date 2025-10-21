@@ -149,26 +149,25 @@ const App: React.FC = () => {
   }, [channels]);
 
   const handleSaveSettings = (config: AppConfig) => {
-    // Update config with current channel names and topics (but not operators)
-    const updatedConfig = {
-      ...config,
-      channels: channels.map(channel => `${channel.name}, ${channel.topic}`).join('\n')
-    };
-    saveConfig(updatedConfig);
+    saveConfig(config);
     
-    // Only update non-channel settings from config, preserve current channels with operators
-    const { nickname, virtualUsers, simulationSpeed, aiModel: savedAiModel, typingDelay } = initializeStateFromConfig(updatedConfig);
+    // Initialize state from the new config
+    const { nickname, virtualUsers, channels: newChannels, simulationSpeed, aiModel: savedAiModel, typingDelay } = initializeStateFromConfig(config);
     setCurrentUserNickname(nickname);
     setVirtualUsers(virtualUsers);
-    // Keep current channels (with operator assignments) - don't reload from config
-    setChannels(migrateChannels(channels));
+    
+    // Use the new channels from config, but preserve operator assignments where possible
+    const migratedChannels = migrateChannels(newChannels);
+    setChannels(migratedChannels);
+    
     setSimulationSpeed(simulationSpeed);
     setAiModel(savedAiModel || DEFAULT_AI_MODEL);
     setTypingDelayConfig(typingDelay || DEFAULT_TYPING_DELAY);
     setPrivateMessages({});
+    
     // Preserve active context if it's a channel that still exists
     if (activeContext?.type === 'channel') {
-      const channelStillExists = migrateChannels(channels).some(c => c.name === activeContext.name);
+      const channelStillExists = migratedChannels.some(c => c.name === activeContext.name);
       if (!channelStillExists) {
         setActiveContext(null);
       }

@@ -4,6 +4,24 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 
 *Note: This project was previously known as "Gemini IRC Simulator" and was renamed to "Station V - Virtual IRC Simulator" as of v1.5.1.*
 
+## 1.13.8 - 2025-01-21
+
+### Fixed
+- **Production Build Randomization Issues**: Fixed multiple critical issues with "Randomize World" functionality in production builds
+  - **Response Structure Parsing**: Fixed parsing of new Gemini API response format (candidates[0].content.parts[0].text)
+  - **JSON Truncation Handling**: Increased token limits from 1000 to 4000 and added JSON repair logic for truncated responses
+  - **Channel List Refresh**: Fixed channel list not updating after randomization due to state synchronization issues
+  - **Undefined Property Errors**: Added null checks for channel.users property access in UserManagement component
+  - **Channel Initialization**: Properly initialize randomized channels with required users, messages, and operators properties
+  - **Fallback Configuration**: Enhanced fallback system to provide working configuration when AI service fails
+  - **Error Handling**: Added comprehensive error handling and debugging logs for production troubleshooting
+
+### Technical Improvements
+- **API Compatibility**: Updated to handle both old and new Google GenAI response formats
+- **Data Structure Validation**: Ensured all randomized data structures match application expectations
+- **State Management**: Fixed component state synchronization between SettingsModal and main application
+- **Debug Logging**: Added detailed logging for production debugging and error diagnosis
+
 ## 1.13.7 - 2025-01-20
 
 ### Fixed

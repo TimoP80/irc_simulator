@@ -162,6 +162,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel, 
       virtualUsers: formatUsersToText(users),
       channels: formatChannelsToText(channels)
     };
+    
+    // Notify parent component about channel changes
+    onChannelsChange?.(channels);
+    
     onSave(configToSave);
   };
   
@@ -183,9 +187,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel, 
       const randomConfig = await generateRandomWorldConfiguration();
       setUsers(randomConfig.users);
       setChannels(randomConfig.channels);
+      
+      // Notify parent component about channel changes immediately
+      onChannelsChange?.(randomConfig.channels);
     } catch (error) {
       console.error("An error occurred during randomization:", error);
-      // TODO: Consider showing a user-facing error message here.
+      // Show user-friendly error message
+      alert(`Failed to generate random world configuration: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsRandomizing(false);
     }
