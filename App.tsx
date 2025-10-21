@@ -64,6 +64,7 @@ const App: React.FC = () => {
   const lastSimErrorTimestampRef = useRef<number>(0);
   const lastUserMessageTimeRef = useRef<number>(0);
   const burstModeRef = useRef<boolean>(false);
+  const lastConversationResetRef = useRef<Record<string, number>>({});
 
   // Load configuration and channel logs from localStorage on initial render
   useEffect(() => {
@@ -733,6 +734,54 @@ The response must be a single line in the format: "nickname: greeting message"
     }
   };
 
+  // Function to adjust simulation frequency based on time of day
+  const getTimeAdjustedInterval = useCallback((baseInterval: number): number => {
+    const now = new Date();
+    const hour = now.getHours();
+    const dayOfWeek = now.getDay();
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+    
+    let multiplier = 1.0;
+    
+    if (hour >= 6 && hour < 12) {
+      // Morning: More active (faster simulation)
+      multiplier = isWeekend ? 0.8 : 0.7; // Even more active on weekends
+    } else if (hour >= 12 && hour < 17) {
+      // Afternoon: Normal activity
+      multiplier = isWeekend ? 0.9 : 1.0;
+    } else if (hour >= 17 && hour < 21) {
+      // Evening: Peak social time
+      multiplier = 0.6; // Much more active
+    } else if (hour >= 21 && hour < 24) {
+      // Late evening: Winding down
+      multiplier = isWeekend ? 0.8 : 1.2;
+    } else {
+      // Late night/early morning: Very quiet
+      multiplier = 2.0; // Much slower
+    }
+    
+    const adjustedInterval = Math.round(baseInterval * multiplier);
+    console.log(`[Time Sync] Hour: ${hour}, Weekend: ${isWeekend}, Multiplier: ${multiplier.toFixed(2)}, Adjusted interval: ${adjustedInterval}ms`);
+    
+    return adjustedInterval;
+  }, []);
+
+  // Function to occasionally reset conversations to prevent staleness
+  const shouldResetConversation = useCallback((channelName: string) => {
+    const now = Date.now();
+    const lastReset = lastConversationResetRef.current[channelName] || 0;
+    const timeSinceReset = now - lastReset;
+    
+    // Reset conversation every 10-15 minutes (600000-900000ms)
+    const resetInterval = 600000 + Math.random() * 300000;
+    
+    if (timeSinceReset > resetInterval) {
+      lastConversationResetRef.current[channelName] = now;
+      return true;
+    }
+    return false;
+  }, []);
+
   const runSimulation = useCallback(async () => {
     // Safety check: Don't run simulation if settings modal is open
     if (isSettingsOpen) {
@@ -768,6 +817,18 @@ The response must be a single line in the format: "nickname: greeting message"
       const randomChannelIndex = Math.floor(Math.random() * channels.length);
       targetChannel = channels[randomChannelIndex];
       simulationLogger.debug(`No active context, using random channel: ${targetChannel.name}`);
+    }
+
+    // Check if we should reset the conversation for this channel
+    if (shouldResetConversation(targetChannel.name)) {
+      simulationLogger.debug(`Resetting conversation for ${targetChannel.name} to prevent staleness`);
+      // Keep only the last 3 messages to maintain some context but clear the rest
+      const updatedChannels = channels.map(channel => 
+        channel.name === targetChannel.name 
+          ? { ...channel, messages: channel.messages.slice(-3) }
+          : channel
+      );
+      setChannels(updatedChannels);
     }
 
     try {
@@ -897,9 +958,12 @@ The response must be a single line in the format: "nickname: greeting message"
         simulationLogger.debug(`Not starting simulation - speed: ${simulationSpeed}, hidden: ${document.hidden}, settingsOpen: ${isSettingsOpen}`);
         return;
       }
-      const interval = SIMULATION_INTERVALS[simulationSpeed];
-      simulationLogger.debug(`Starting simulation with interval: ${interval}ms (${simulationSpeed})`);
-      simulationIntervalRef.current = window.setInterval(runSimulation, interval);
+      // Adjust simulation frequency based on time of day
+      const baseInterval = SIMULATION_INTERVALS[simulationSpeed];
+      const timeAdjustedInterval = getTimeAdjustedInterval(baseInterval);
+      
+      simulationLogger.debug(`Starting simulation with interval: ${timeAdjustedInterval}ms (${simulationSpeed}, time-adjusted)`);
+      simulationIntervalRef.current = window.setInterval(runSimulation, timeAdjustedInterval);
     };
     
     const handleVisibilityChange = () => {

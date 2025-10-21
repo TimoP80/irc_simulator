@@ -61,6 +61,54 @@ const extractTextFromResponse = (response: any): string => {
   }
 };
 
+// Time-of-day context generation
+const getTimeOfDayContext = (): string => {
+  const now = new Date();
+  const hour = now.getHours();
+  const dayOfWeek = now.getDay(); // 0 = Sunday, 6 = Saturday
+  
+  // Determine time of day
+  let timePeriod = '';
+  let energyLevel = '';
+  let commonTopics = '';
+  let socialContext = '';
+  
+  if (hour >= 6 && hour < 12) {
+    timePeriod = 'morning';
+    energyLevel = 'fresh and energetic';
+    commonTopics = 'coffee, breakfast, plans for the day, weather, news';
+    socialContext = 'people are starting their day, checking in, sharing morning routines';
+  } else if (hour >= 12 && hour < 17) {
+    timePeriod = 'afternoon';
+    energyLevel = 'productive and focused';
+    commonTopics = 'work, lunch, projects, afternoon activities, current events';
+    socialContext = 'people are in work mode, taking breaks, discussing ongoing projects';
+  } else if (hour >= 17 && hour < 21) {
+    timePeriod = 'evening';
+    energyLevel = 'relaxed and social';
+    commonTopics = 'dinner plans, evening activities, relaxation, social events, hobbies';
+    socialContext = 'people are winding down from work, planning evening activities, being more social';
+  } else if (hour >= 21 && hour < 24) {
+    timePeriod = 'late evening';
+    energyLevel = 'calm and reflective';
+    commonTopics = 'reflection on the day, late-night thoughts, quiet activities, tomorrow\'s plans';
+    socialContext = 'people are winding down, being more introspective, preparing for sleep';
+  } else {
+    timePeriod = 'late night/early morning';
+    energyLevel = 'tired but sometimes energetic';
+    commonTopics = 'insomnia, late-night activities, deep thoughts, quiet conversations';
+    socialContext = 'very few people online, those who are might be night owls or in different time zones';
+  }
+  
+  // Weekend vs weekday context
+  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+  const dayContext = isWeekend ? 'weekend' : 'weekday';
+  
+  return `Current time context: It's ${timePeriod} (${hour}:${now.getMinutes().toString().padStart(2, '0')}) on a ${dayContext}. 
+People are generally ${energyLevel}. Common topics include: ${commonTopics}. 
+Social context: ${socialContext}.`;
+};
+
 const getBaseSystemInstruction = (currentUserNickname: string) => `You are an advanced AI simulating an Internet Relay Chat (IRC) environment. 
 Your goal is to generate realistic, brief, and in-character chat messages for various virtual users.
 Adhere strictly to the format 'nickname: message'. 
@@ -108,7 +156,57 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
   });
   
   // If we have users matching the dominant language, use them; otherwise use any user
-  const candidateUsers = usersMatchingLanguage.length > 0 ? usersMatchingLanguage : usersInChannel;
+  let candidateUsers = usersMatchingLanguage.length > 0 ? usersMatchingLanguage : usersInChannel;
+  
+  // Add user rotation to prevent the same users from always being selected
+  // Shuffle the array to add more variety
+  const shuffledUsers = [...candidateUsers].sort(() => Math.random() - 0.5);
+  
+  // Sometimes prefer users who haven't spoken recently (last 5 messages)
+  const recentSpeakers = channel.messages.slice(-5).map(msg => msg.nickname);
+  const lessActiveUsers = shuffledUsers.filter(user => !recentSpeakers.includes(user.nickname));
+  
+  // Time-based user activity patterns
+  const now = new Date();
+  const hour = now.getHours();
+  const dayOfWeek = now.getDay();
+  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+  
+  // Adjust user selection based on time of day
+  let timeBasedUsers = shuffledUsers;
+  
+  if (hour >= 6 && hour < 12) {
+    // Morning: Prefer users with energetic personalities
+    timeBasedUsers = shuffledUsers.filter(user => 
+      user.personality.toLowerCase().includes('energetic') ||
+      user.personality.toLowerCase().includes('optimistic') ||
+      user.personality.toLowerCase().includes('morning') ||
+      user.writingStyle.verbosity === 'verbose' ||
+      user.writingStyle.verbosity === 'very_verbose'
+    );
+  } else if (hour >= 21 || hour < 6) {
+    // Late night/early morning: Prefer users with introspective personalities
+    timeBasedUsers = shuffledUsers.filter(user => 
+      user.personality.toLowerCase().includes('quiet') ||
+      user.personality.toLowerCase().includes('introspective') ||
+      user.personality.toLowerCase().includes('night') ||
+      user.writingStyle.verbosity === 'terse' ||
+      user.writingStyle.verbosity === 'very_terse'
+    );
+  }
+  
+  // If no time-based users found, use original shuffled users
+  if (timeBasedUsers.length === 0) {
+    timeBasedUsers = shuffledUsers;
+  }
+  
+  // 30% chance to prefer less active users, 70% chance to use time-based selection
+  if (lessActiveUsers.length > 0 && Math.random() < 0.3) {
+    candidateUsers = lessActiveUsers;
+  } else {
+    candidateUsers = timeBasedUsers;
+  }
+  
   const randomUser = candidateUsers[Math.floor(Math.random() * candidateUsers.length)];
   
   console.log(`[AI Debug] Selected user: ${randomUser.nickname} for channel activity (language: ${getAllLanguages(randomUser.languageSkills)[0]})`);
@@ -131,7 +229,34 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
   const tokenLimit = getTokenLimit(randomUser.writingStyle.verbosity);
   console.log(`[AI Debug] Token limit for ${randomUser.nickname} (${randomUser.writingStyle.verbosity}): ${tokenLimit}`);
 
+  // Add conversation diversity by introducing variety in prompts
+  const conversationVariety = Math.random();
+  let diversityPrompt = '';
+  
+  if (conversationVariety < 0.1) {
+    // 10% chance: Introduce a new subtopic or tangent
+    diversityPrompt = 'IMPORTANT: Introduce a new subtopic or interesting tangent related to the channel topic. Be creative and unexpected.';
+  } else if (conversationVariety < 0.2) {
+    // 10% chance: Ask a question to engage others
+    diversityPrompt = 'IMPORTANT: Ask an engaging question to other users in the channel to spark discussion.';
+  } else if (conversationVariety < 0.3) {
+    // 10% chance: Share a personal experience or story
+    diversityPrompt = 'IMPORTANT: Share a brief personal experience or story related to the topic.';
+  } else if (conversationVariety < 0.4) {
+    // 10% chance: Make an observation about the current conversation
+    diversityPrompt = 'IMPORTANT: Make an observation about the current conversation or comment on what others have been discussing.';
+  } else if (conversationVariety < 0.5) {
+    // 10% chance: Change the mood or tone
+    diversityPrompt = 'IMPORTANT: Change the mood or tone of the conversation - be more lighthearted, serious, or different from recent messages.';
+  }
+
+  // Get time-of-day context
+  const timeContext = getTimeOfDayContext();
+  console.log(`[AI Debug] Time context: ${timeContext}`);
+
   const prompt = `
+${timeContext}
+
 The topic of channel ${channel.name} is: "${channel.topic}".
 The users in the channel are: ${channel.users.map(u => u.nickname).join(', ')}.
 Their personalities are: ${channel.users.map(u => `${u.nickname} is ${u.personality}`).join('. ')}.
@@ -140,7 +265,10 @@ The last 15 messages were:
 ${formatMessageHistory(channel.messages)}
 
 Generate a new, single, in-character message from ${randomUser.nickname} that is relevant to the topic or the recent conversation.
+The message should feel natural for the current time of day and social context.
 The message must be a single line in the format: "nickname: message"
+${diversityPrompt}
+
 ${randomUser.writingStyle.verbosity === 'very_verbose' ? 'IMPORTANT: This user is very verbose - write a long, detailed message with multiple sentences and thorough explanations. Do not cut off the message.' : randomUser.writingStyle.verbosity === 'verbose' ? 'IMPORTANT: This user is verbose - write a moderately detailed message with several sentences.' : ''}
 
 CRITICAL: Respond ONLY in ${primaryLanguage}. Do not use any other language.
@@ -162,13 +290,20 @@ ${isChannelOperator(channel, randomUser.nickname) ? `- Role: Channel operator (c
   try {
     console.log(`[AI Debug] Sending request to Gemini for channel activity in ${channel.name}`);
     console.log(`[AI Debug] Using model ID: "${validatedModel}" for API call`);
+    // Add temperature variation for more diverse responses
+    const baseTemperature = 0.9;
+    const temperatureVariation = Math.random() * 0.3; // Add 0-0.3 variation
+    const finalTemperature = Math.min(1.0, baseTemperature + temperatureVariation);
+    
+    console.log(`[AI Debug] Using temperature: ${finalTemperature.toFixed(2)} for ${randomUser.nickname}`);
+    
     const response = await withRateLimitAndRetries(() => 
       ai.models.generateContent({
           model: validatedModel,
           contents: prompt,
           config: {
               systemInstruction: getBaseSystemInstruction(currentUserNickname),
-              temperature: 0.9,
+              temperature: finalTemperature,
               maxOutputTokens: tokenLimit,
               thinkingConfig: { thinkingBudget: 0 },
           },
@@ -224,7 +359,22 @@ export const generateReactionToMessage = async (channel: Channel, userMessage: M
     });
     
     // If we have users matching the dominant language, use them; otherwise use any user
-    const candidateUsers = usersMatchingLanguage.length > 0 ? usersMatchingLanguage : usersInChannel;
+    let candidateUsers = usersMatchingLanguage.length > 0 ? usersMatchingLanguage : usersInChannel;
+    
+    // Add user rotation for reactions too
+    const shuffledUsers = [...candidateUsers].sort(() => Math.random() - 0.5);
+    
+    // Sometimes prefer users who haven't reacted recently
+    const recentSpeakers = channel.messages.slice(-3).map(msg => msg.nickname);
+    const lessActiveUsers = shuffledUsers.filter(user => !recentSpeakers.includes(user.nickname));
+    
+    // 40% chance to prefer less active users for reactions
+    if (lessActiveUsers.length > 0 && Math.random() < 0.4) {
+      candidateUsers = lessActiveUsers;
+    } else {
+      candidateUsers = shuffledUsers;
+    }
+    
     const randomUser = candidateUsers[Math.floor(Math.random() * candidateUsers.length)];
     
     console.log(`[AI Debug] Selected user: ${randomUser.nickname} to react to ${userMessage.nickname}'s message (language: ${getAllLanguages(randomUser.languageSkills)[0]})`);
@@ -255,7 +405,13 @@ export const generateReactionToMessage = async (channel: Channel, userMessage: M
     const tokenLimit = getTokenLimit(randomUser.writingStyle.verbosity);
     console.log(`[AI Debug] Token limit for reaction from ${randomUser.nickname} (${randomUser.writingStyle.verbosity}): ${tokenLimit}`);
     
+    // Get time-of-day context for reactions too
+    const timeContext = getTimeOfDayContext();
+    console.log(`[AI Debug] Time context for reaction: ${timeContext}`);
+
     const prompt = `
+${timeContext}
+
 In IRC channel ${channel.name}, the user "${userMessage.nickname}" just ${messageDescription}.
 The topic is: "${channel.topic}".
 The other users in the channel are: ${usersInChannel.map(u => u.nickname).join(', ')}.
@@ -265,6 +421,7 @@ The last 15 messages were:
 ${formatMessageHistory(channel.messages)}
 
 Generate a realistic and in-character reaction from ${randomUser.nickname}.
+The reaction should feel natural for the current time of day and social context.
 The reaction must be a single line in the format: "nickname: message"
 ${randomUser.writingStyle.verbosity === 'very_verbose' ? 'IMPORTANT: This user is very verbose - write a long, detailed reaction with multiple sentences and thorough explanations. Do not cut off the message.' : randomUser.writingStyle.verbosity === 'verbose' ? 'IMPORTANT: This user is verbose - write a moderately detailed reaction with several sentences.' : ''}
 
@@ -285,13 +442,21 @@ ${isChannelOperator(channel, randomUser.nickname) ? `- Role: Channel operator (c
     
     try {
         console.log(`[AI Debug] Sending request to Gemini for reaction in ${channel.name}`);
+        
+        // Add temperature variation for reactions too
+        const baseTemperature = 0.8;
+        const temperatureVariation = Math.random() * 0.3;
+        const finalTemperature = Math.min(1.0, baseTemperature + temperatureVariation);
+        
+        console.log(`[AI Debug] Using temperature: ${finalTemperature.toFixed(2)} for reaction from ${randomUser.nickname}`);
+        
         const response = await withRateLimitAndRetries(() => 
             ai.models.generateContent({
                 model: validatedModel,
                 contents: prompt,
                 config: {
                     systemInstruction: getBaseSystemInstruction(currentUserNickname),
-                    temperature: 0.8,
+                    temperature: finalTemperature,
                     maxOutputTokens: tokenLimit,
                     thinkingConfig: { thinkingBudget: 0 },
                 },
@@ -340,7 +505,13 @@ export const generatePrivateMessageResponse = async (conversation: PrivateMessag
     const tokenLimit = getTokenLimit(aiUser.writingStyle.verbosity);
     console.log(`[AI Debug] Token limit for private message from ${aiUser.nickname} (${aiUser.writingStyle.verbosity}): ${tokenLimit}`);
     
+    // Get time-of-day context for private messages too
+    const timeContext = getTimeOfDayContext();
+    console.log(`[AI Debug] Time context for private message: ${timeContext}`);
+
     const prompt = `
+${timeContext}
+
 You are roleplaying as an IRC user named '${aiUser.nickname}'. 
 Your personality is: ${aiUser.personality}.
 You are in a private message conversation with '${currentUserNickname}'.
@@ -362,7 +533,7 @@ Your writing style:
 - Languages: ${userLanguages.join(', ')}
 ${getLanguageAccent(aiUser.languageSkills) ? `- Accent: ${getLanguageAccent(aiUser.languageSkills)}` : ''}
 
-Generate a natural, in-character response.
+Generate a natural, in-character response that feels appropriate for the current time of day.
 The response must be a single line in the format: "${aiUser.nickname}: message"
 ${aiUser.writingStyle.verbosity === 'very_verbose' ? 'IMPORTANT: This user is very verbose - write a long, detailed response with multiple sentences and thorough explanations. Do not cut off the message.' : aiUser.writingStyle.verbosity === 'verbose' ? 'IMPORTANT: This user is verbose - write a moderately detailed response with several sentences.' : ''}
 `;
