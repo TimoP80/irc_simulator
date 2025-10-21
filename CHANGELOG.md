@@ -4,6 +4,37 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 
 *Note: This project was previously known as "Gemini IRC Simulator" and was renamed to "Station V - Virtual IRC Simulator" as of v1.5.1.*
 
+## 1.13.10 - 2025-01-21
+
+### Fixed
+- **User Language Editing Persistence**: Fixed hand-edited user language changes not being saved
+  - **Configuration System**: Added userObjects field to AppConfig for full user data persistence
+  - **Settings Modal**: Enhanced to save both text format and full user objects
+  - **Backward Compatibility**: Maintained support for existing text-based configurations
+  - **Language Skills**: All user language skills, fluency levels, and accents now persist properly
+  - **Writing Styles**: User writing style preferences are preserved across sessions
+
+### Added
+- **Channel Dominant Language Setting**: Added ability to set explicit dominant language for channels
+  - **UI Controls**: Added dominant language dropdown to channel management interface
+  - **Channel Creation**: Added dominant language field to channel creation modal
+  - **Language Override**: Channels can override automatic language detection with explicit settings
+  - **Configuration Persistence**: Channel dominant language settings persist across page reloads
+
+- **Language Selector Dropdown**: Enhanced user editor with comprehensive language selection
+  - **25+ Languages**: Added dropdown with Finnish, English, Spanish, French, German, and many more
+  - **User-Friendly Interface**: Replaced text input with easy-to-use dropdown selector
+  - **Custom Languages**: Added "Other" option for languages not in the list
+  - **Smart Placeholders**: Dynamic placeholder text based on language selection
+  - **Default Values**: New languages default to English for better user experience
+
+### Technical Improvements
+- **AI Language Compliance**: Enhanced AI service to respect explicit channel language settings
+- **Language-Aware User Selection**: AI prioritizes users whose primary language matches channel's dominant language
+- **Enhanced Prompts**: Added explicit language instructions to all AI generation functions
+- **Configuration Format**: Extended text format to support dominant language: `"#channel, topic | language"`
+- **Data Persistence**: Full user objects stored alongside text format for complete data preservation
+
 ## 1.13.9 - 2025-01-21
 
 ### Fixed

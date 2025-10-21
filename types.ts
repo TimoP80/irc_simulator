@@ -41,6 +41,7 @@ export interface Channel {
   users: User[];
   messages: Message[];
   operators: string[]; // Array of user nicknames who are channel operators
+  dominantLanguage?: string; // Optional explicit dominant language for the channel
 }
 
 export interface PrivateMessageConversation {
@@ -68,6 +69,8 @@ export interface AppConfig {
     baseDelay: number; // Base delay in milliseconds
     maxDelay: number; // Maximum delay in milliseconds
   };
+  // Store full user objects for proper persistence of language skills and writing styles
+  userObjects?: User[];
 }
 
 export interface GeminiModel {

@@ -261,7 +261,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
 
   const addLanguage = () => {
     setLanguageSkills(prev => [...(prev || []), {
-      language: '',
+      language: 'English',
       fluency: 'native',
       accent: ''
     }]);
@@ -419,13 +419,42 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
                       <label className="block text-sm font-medium text-gray-300 mb-2">
                         Language
                       </label>
-                      <input
-                        type="text"
+                      <select
                         value={lang.language}
                         onChange={(e) => updateLanguage(index, 'language', e.target.value)}
                         className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        placeholder="e.g., English, Spanish, French"
-                      />
+                      >
+                        <option value="">Select a language...</option>
+                        <option value="English">English</option>
+                        <option value="Finnish">Finnish</option>
+                        <option value="Spanish">Spanish</option>
+                        <option value="French">French</option>
+                        <option value="German">German</option>
+                        <option value="Italian">Italian</option>
+                        <option value="Portuguese">Portuguese</option>
+                        <option value="Russian">Russian</option>
+                        <option value="Chinese">Chinese</option>
+                        <option value="Japanese">Japanese</option>
+                        <option value="Korean">Korean</option>
+                        <option value="Arabic">Arabic</option>
+                        <option value="Dutch">Dutch</option>
+                        <option value="Swedish">Swedish</option>
+                        <option value="Norwegian">Norwegian</option>
+                        <option value="Danish">Danish</option>
+                        <option value="Polish">Polish</option>
+                        <option value="Czech">Czech</option>
+                        <option value="Hungarian">Hungarian</option>
+                        <option value="Greek">Greek</option>
+                        <option value="Turkish">Turkish</option>
+                        <option value="Hebrew">Hebrew</option>
+                        <option value="Hindi">Hindi</option>
+                        <option value="Thai">Thai</option>
+                        <option value="Vietnamese">Vietnamese</option>
+                        <option value="Indonesian">Indonesian</option>
+                        <option value="Malay">Malay</option>
+                        <option value="Tagalog">Tagalog</option>
+                        <option value="Other">Other (specify in accent field)</option>
+                      </select>
                     </div>
                     
                     <div>
@@ -453,7 +482,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
                         value={lang.accent}
                         onChange={(e) => updateLanguage(index, 'accent', e.target.value)}
                         className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        placeholder="e.g., British, Southern, Australian"
+                        placeholder={lang.language === 'Other' ? 'Specify the language name here' : 'e.g., British, Southern, Australian'}
                       />
                     </div>
                   </div>

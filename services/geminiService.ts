@@ -86,18 +86,36 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
     return '';
   }
   
-  const randomUser = usersInChannel[Math.floor(Math.random() * usersInChannel.length)];
-  console.log(`[AI Debug] Selected user: ${randomUser.nickname} for channel activity`);
+  // Get language context for the channel first
+  let dominantLanguage: string;
+  if (channel.dominantLanguage) {
+    // Use explicitly set dominant language
+    dominantLanguage = channel.dominantLanguage;
+    console.log(`[AI Debug] Channel ${channel.name} explicit dominant language: ${dominantLanguage}`);
+  } else {
+    // Calculate dominant language from users
+    const channelLanguages = channel.users.map(u => getAllLanguages(u.languageSkills)[0]).filter(Boolean);
+    dominantLanguage = channelLanguages.length > 0 ? 
+      channelLanguages.reduce((a, b, i, arr) => arr.filter(v => v === a).length >= arr.filter(v => v === b).length ? a : b) : 
+      'English';
+    console.log(`[AI Debug] Channel ${channel.name} calculated dominant language: ${dominantLanguage}`);
+  }
+  
+  // Prioritize users whose primary language matches the channel's dominant language
+  const usersMatchingLanguage = usersInChannel.filter(user => {
+    const userLanguages = getAllLanguages(user.languageSkills);
+    return userLanguages[0] === dominantLanguage;
+  });
+  
+  // If we have users matching the dominant language, use them; otherwise use any user
+  const candidateUsers = usersMatchingLanguage.length > 0 ? usersMatchingLanguage : usersInChannel;
+  const randomUser = candidateUsers[Math.floor(Math.random() * candidateUsers.length)];
+  
+  console.log(`[AI Debug] Selected user: ${randomUser.nickname} for channel activity (language: ${getAllLanguages(randomUser.languageSkills)[0]})`);
 
   const userLanguages = getAllLanguages(randomUser.languageSkills);
   const primaryLanguage = userLanguages[0] || 'English';
-  
-  // Get language context for the channel
-  const channelLanguages = channel.users.map(u => getAllLanguages(u.languageSkills)[0]).filter(Boolean);
-  const dominantLanguage = channelLanguages.length > 0 ? 
-    channelLanguages.reduce((a, b, i, arr) => arr.filter(v => v === a).length >= arr.filter(v => v === b).length ? a : b) : 
-    primaryLanguage;
-  
+
   const prompt = `
 The topic of channel ${channel.name} is: "${channel.topic}".
 The users in the channel are: ${channel.users.map(u => u.nickname).join(', ')}.
@@ -168,8 +186,32 @@ export const generateReactionToMessage = async (channel: Channel, userMessage: M
         return '';
     }
 
-    const randomUser = usersInChannel[Math.floor(Math.random() * usersInChannel.length)];
-    console.log(`[AI Debug] Selected user: ${randomUser.nickname} to react to ${userMessage.nickname}'s message`);
+    // Get language context for the channel first
+    let dominantLanguage: string;
+    if (channel.dominantLanguage) {
+      // Use explicitly set dominant language
+      dominantLanguage = channel.dominantLanguage;
+      console.log(`[AI Debug] Channel ${channel.name} explicit dominant language: ${dominantLanguage}`);
+    } else {
+      // Calculate dominant language from users
+      const channelLanguages = channel.users.map(u => getAllLanguages(u.languageSkills)[0]).filter(Boolean);
+      dominantLanguage = channelLanguages.length > 0 ? 
+        channelLanguages.reduce((a, b, i, arr) => arr.filter(v => v === a).length >= arr.filter(v => v === b).length ? a : b) : 
+        'English';
+      console.log(`[AI Debug] Channel ${channel.name} calculated dominant language: ${dominantLanguage}`);
+    }
+    
+    // Prioritize users whose primary language matches the channel's dominant language
+    const usersMatchingLanguage = usersInChannel.filter(user => {
+      const userLanguages = getAllLanguages(user.languageSkills);
+      return userLanguages[0] === dominantLanguage;
+    });
+    
+    // If we have users matching the dominant language, use them; otherwise use any user
+    const candidateUsers = usersMatchingLanguage.length > 0 ? usersMatchingLanguage : usersInChannel;
+    const randomUser = candidateUsers[Math.floor(Math.random() * candidateUsers.length)];
+    
+    console.log(`[AI Debug] Selected user: ${randomUser.nickname} to react to ${userMessage.nickname}'s message (language: ${getAllLanguages(randomUser.languageSkills)[0]})`);
     
     // Handle different message types
     let messageDescription = '';
@@ -323,6 +365,10 @@ Each user should have:
 - Language skills with fluency level, languages spoken, and optional accent
 - Writing style preferences for formality, verbosity, humor, emoji usage, and punctuation
 
+IMPORTANT: Create a diverse mix of languages including English, Finnish, Spanish, French, German, Japanese, etc.
+Include users who speak only one language (e.g., only Finnish) and users who speak multiple languages.
+Make the language distribution realistic and varied.
+
 Make each user distinct and interesting for an IRC chat environment.
 Provide the output in JSON format.
 `;
@@ -334,7 +380,7 @@ Provide the output in JSON format.
         model: validatedModel,
         contents: prompt,
         config: {
-          systemInstruction: "You are a creative character generator for an IRC simulation. Generate diverse, interesting users with unique personalities and communication styles. Provide a valid JSON response.",
+          systemInstruction: "You are a creative character generator for an IRC simulation. Generate diverse, interesting users with unique personalities and communication styles. Create a realistic mix of languages including English, Finnish, Spanish, French, German, Japanese, and others. Include both monolingual and multilingual users. Provide a valid JSON response.",
           temperature: 1.0,
           maxOutputTokens: 2000,
           responseMimeType: "application/json",
@@ -358,22 +404,31 @@ Provide the output in JSON format.
                     languageSkills: {
                       type: Type.OBJECT,
                       properties: {
-                        fluency: {
-                          type: Type.STRING,
-                          enum: ['beginner', 'intermediate', 'advanced', 'native'],
-                          description: "Language fluency level."
-                        },
                         languages: {
                           type: Type.ARRAY,
-                          items: { type: Type.STRING },
-                          description: "List of languages the user speaks."
+                          items: {
+                            type: Type.OBJECT,
+                            properties: {
+                              language: {
+                                type: Type.STRING,
+                                description: "The language name (e.g., 'English', 'Finnish', 'Spanish')."
+                              },
+                              fluency: {
+                                type: Type.STRING,
+                                enum: ['beginner', 'intermediate', 'advanced', 'native'],
+                                description: "Fluency level in this specific language."
                         },
                         accent: {
                           type: Type.STRING,
-                          description: "Optional accent or dialect description."
+                                description: "Optional accent or dialect for this language."
+                              }
+                            },
+                            required: ['language', 'fluency']
+                          },
+                          description: "List of languages with individual fluency levels."
                         }
                       },
-                      required: ['fluency', 'languages']
+                      required: ['languages']
                     },
                     writingStyle: {
                       type: Type.OBJECT,
@@ -623,9 +678,11 @@ Provide the output in JSON format.
                     nickname: 'nova',
                     personality: 'A curious tech-savvy individual who loves gadgets.',
                     languageSkills: {
-                        fluency: 'native',
-                        languages: ['English'],
-                        accent: ''
+                        languages: [{
+                            language: 'English',
+                            fluency: 'native',
+                            accent: ''
+                        }]
                     },
                     writingStyle: {
                         formality: 'casual',
@@ -639,9 +696,11 @@ Provide the output in JSON format.
                     nickname: 'seraph',
                     personality: 'Calm, wise, and often speaks in poetic terms.',
                     languageSkills: {
-                        fluency: 'native',
-                        languages: ['English'],
-                        accent: ''
+                        languages: [{
+                            language: 'English',
+                            fluency: 'native',
+                            accent: ''
+                        }]
                     },
                     writingStyle: {
                         formality: 'formal',
@@ -655,9 +714,11 @@ Provide the output in JSON format.
                     nickname: 'jinx',
                     personality: 'A chaotic, funny, and unpredictable prankster.',
                     languageSkills: {
-                        fluency: 'native',
-                        languages: ['English'],
-                        accent: ''
+                        languages: [{
+                            language: 'English',
+                            fluency: 'native',
+                            accent: ''
+                        }]
                     },
                     writingStyle: {
                         formality: 'casual',
@@ -671,9 +732,11 @@ Provide the output in JSON format.
                     nickname: 'rex',
                     personality: 'Gruff but helpful, an expert in system administration.',
                     languageSkills: {
-                        fluency: 'native',
-                        languages: ['English'],
-                        accent: ''
+                        languages: [{
+                            language: 'English',
+                            fluency: 'native',
+                            accent: ''
+                        }]
                     },
                     writingStyle: {
                         formality: 'casual',
@@ -687,9 +750,11 @@ Provide the output in JSON format.
                     nickname: 'luna',
                     personality: 'An artist who is dreamy, creative, and talks about music.',
                     languageSkills: {
-                        fluency: 'native',
-                        languages: ['English'],
-                        accent: ''
+                        languages: [{
+                            language: 'English',
+                            fluency: 'native',
+                            accent: ''
+                        }]
                     },
                     writingStyle: {
                         formality: 'casual',
