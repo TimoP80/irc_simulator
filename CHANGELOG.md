@@ -4,6 +4,24 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 
 *Note: This project was previously known as "Gemini IRC Simulator" and was renamed to "Station V - Virtual IRC Simulator" as of v1.5.1.*
 
+## 1.13.0 - 2025-01-20
+
+### Added
+- **Per-Language Fluency Configuration**: Enhanced language skills system for more realistic user profiles
+  - **Individual Language Fluency**: Each language can now have its own fluency level (beginner, intermediate, advanced, native)
+  - **Per-Language Accents**: Optional accent/dialect settings for each language
+  - **Multi-Language Support**: Users can speak multiple languages with different proficiency levels
+  - **Enhanced User Interface**: Redesigned language skills section with individual language cards
+  - **AI Integration**: AI-generated messages now respect per-language fluency settings
+  - **World Editor Compatibility**: Full support for World Editor's per-language format
+  - **Backward Compatibility**: Automatic conversion from legacy global fluency format
+
+### Enhanced
+- **User Management Interface**: Completely redesigned language skills configuration
+  - **Language Cards**: Each language gets its own configuration card with fluency and accent settings
+  - **Dynamic Language Management**: Add/remove languages with individual settings
+  - **Improved UX**: More intuitive interface for managing complex language profiles
+
 ## 1.12.0 - 2025-01-20
 
 ### Added

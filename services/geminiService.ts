@@ -1,5 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import type { Channel, Message, PrivateMessageConversation, RandomWorldConfig, GeminiModel, ModelsListResponse, User } from '../types';
+import { getLanguageFluency, getAllLanguages, getLanguageAccent } from '../types';
 import { withRateLimitAndRetries } from '../utils/config';
 
 const API_KEY = process.env.GEMINI_API_KEY;
@@ -79,9 +80,9 @@ Consider ${randomUser.nickname}'s writing style:
 - Humor: ${randomUser.writingStyle.humor}
 - Emoji usage: ${randomUser.writingStyle.emojiUsage}
 - Punctuation: ${randomUser.writingStyle.punctuation}
-- Language fluency: ${randomUser.languageSkills.fluency}
-- Languages: ${randomUser.languageSkills.languages.join(', ')}
-${randomUser.languageSkills.accent ? `- Accent: ${randomUser.languageSkills.accent}` : ''}
+- Language fluency: ${getLanguageFluency(randomUser.languageSkills)}
+- Languages: ${getAllLanguages(randomUser.languageSkills).join(', ')}
+${getLanguageAccent(randomUser.languageSkills) ? `- Accent: ${getLanguageAccent(randomUser.languageSkills)}` : ''}
 `;
 
   try {
@@ -155,9 +156,9 @@ Consider ${randomUser.nickname}'s writing style:
 - Humor: ${randomUser.writingStyle.humor}
 - Emoji usage: ${randomUser.writingStyle.emojiUsage}
 - Punctuation: ${randomUser.writingStyle.punctuation}
-- Language fluency: ${randomUser.languageSkills.fluency}
-- Languages: ${randomUser.languageSkills.languages.join(', ')}
-${randomUser.languageSkills.accent ? `- Accent: ${randomUser.languageSkills.accent}` : ''}
+- Language fluency: ${getLanguageFluency(randomUser.languageSkills)}
+- Languages: ${getAllLanguages(randomUser.languageSkills).join(', ')}
+${getLanguageAccent(randomUser.languageSkills) ? `- Accent: ${getLanguageAccent(randomUser.languageSkills)}` : ''}
 `;
     
     try {
@@ -214,9 +215,9 @@ Your writing style:
 - Humor: ${aiUser.writingStyle.humor}
 - Emoji usage: ${aiUser.writingStyle.emojiUsage}
 - Punctuation: ${aiUser.writingStyle.punctuation}
-- Language fluency: ${aiUser.languageSkills.fluency}
-- Languages: ${aiUser.languageSkills.languages.join(', ')}
-${aiUser.languageSkills.accent ? `- Accent: ${aiUser.languageSkills.accent}` : ''}
+- Language fluency: ${getLanguageFluency(aiUser.languageSkills)}
+- Languages: ${getAllLanguages(aiUser.languageSkills).join(', ')}
+${getLanguageAccent(aiUser.languageSkills) ? `- Accent: ${getLanguageAccent(aiUser.languageSkills)}` : ''}
 
 Generate a natural, in-character response.
 The response must be a single line in the format: "${aiUser.nickname}: message"
