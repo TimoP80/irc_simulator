@@ -772,8 +772,8 @@ The response must be a single line in the format: "nickname: greeting message"
     const lastReset = lastConversationResetRef.current[channelName] || 0;
     const timeSinceReset = now - lastReset;
     
-    // Reset conversation every 10-15 minutes (600000-900000ms)
-    const resetInterval = 600000 + Math.random() * 300000;
+    // Reset conversation every 2-3 hours (7200000-10800000ms) - much less frequent
+    const resetInterval = 7200000 + Math.random() * 3600000;
     
     if (timeSinceReset > resetInterval) {
       lastConversationResetRef.current[channelName] = now;
@@ -819,13 +819,13 @@ The response must be a single line in the format: "nickname: greeting message"
       simulationLogger.debug(`No active context, using random channel: ${targetChannel.name}`);
     }
 
-    // Check if we should reset the conversation for this channel
+    // Check if we should reset the conversation for this channel (much less aggressive)
     if (shouldResetConversation(targetChannel.name)) {
       simulationLogger.debug(`Resetting conversation for ${targetChannel.name} to prevent staleness`);
-      // Keep only the last 3 messages to maintain some context but clear the rest
+      // Keep the last 100 messages to maintain conversation history while preventing staleness
       const updatedChannels = channels.map(channel => 
         channel.name === targetChannel.name 
-          ? { ...channel, messages: channel.messages.slice(-3) }
+          ? { ...channel, messages: channel.messages.slice(-100) }
           : channel
       );
       setChannels(updatedChannels);
