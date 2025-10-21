@@ -67,6 +67,10 @@ Adhere strictly to the format 'nickname: message'.
 Do not add any extra text, explanations, or markdown formatting. 
 Keep messages concise and natural for a chat room setting.
 The human user's nickname is '${currentUserNickname}'.
+
+IMPORTANT: Always respond in the user's primary language as specified in their language skills. 
+If a user only speaks Finnish, respond in Finnish. If they only speak English, respond in English.
+Match the language to the user's language configuration exactly.
 `;
 
 export const generateChannelActivity = async (channel: Channel, currentUserNickname: string, model: string = 'gemini-2.5-flash'): Promise<string> => {
@@ -85,6 +89,15 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
   const randomUser = usersInChannel[Math.floor(Math.random() * usersInChannel.length)];
   console.log(`[AI Debug] Selected user: ${randomUser.nickname} for channel activity`);
 
+  const userLanguages = getAllLanguages(randomUser.languageSkills);
+  const primaryLanguage = userLanguages[0] || 'English';
+  
+  // Get language context for the channel
+  const channelLanguages = channel.users.map(u => getAllLanguages(u.languageSkills)[0]).filter(Boolean);
+  const dominantLanguage = channelLanguages.length > 0 ? 
+    channelLanguages.reduce((a, b, i, arr) => arr.filter(v => v === a).length >= arr.filter(v => v === b).length ? a : b) : 
+    primaryLanguage;
+  
   const prompt = `
 The topic of channel ${channel.name} is: "${channel.topic}".
 The users in the channel are: ${channel.users.map(u => u.nickname).join(', ')}.
@@ -96,6 +109,10 @@ ${formatMessageHistory(channel.messages)}
 Generate a new, single, in-character message from ${randomUser.nickname} that is relevant to the topic or the recent conversation.
 The message must be a single line in the format: "nickname: message"
 
+CRITICAL: Respond ONLY in ${primaryLanguage}. Do not use any other language.
+${userLanguages.length > 1 ? `Available languages: ${userLanguages.join(', ')}. Use ${primaryLanguage} only.` : ''}
+${dominantLanguage !== primaryLanguage ? `Note: The channel's dominant language is ${dominantLanguage}, but ${randomUser.nickname} should respond in ${primaryLanguage}.` : ''}
+
 Consider ${randomUser.nickname}'s writing style:
 - Formality: ${randomUser.writingStyle.formality}
 - Verbosity: ${randomUser.writingStyle.verbosity}
@@ -103,7 +120,7 @@ Consider ${randomUser.nickname}'s writing style:
 - Emoji usage: ${randomUser.writingStyle.emojiUsage}
 - Punctuation: ${randomUser.writingStyle.punctuation}
 - Language fluency: ${getLanguageFluency(randomUser.languageSkills)}
-- Languages: ${getAllLanguages(randomUser.languageSkills).join(', ')}
+- Languages: ${userLanguages.join(', ')}
 ${getLanguageAccent(randomUser.languageSkills) ? `- Accent: ${getLanguageAccent(randomUser.languageSkills)}` : ''}
 ${isChannelOperator(channel, randomUser.nickname) ? `- Role: Channel operator (can kick/ban users)` : ''}
 `;
@@ -162,6 +179,9 @@ export const generateReactionToMessage = async (channel: Channel, userMessage: M
       messageDescription = `said: "${userMessage.content}"`;
     }
     
+    const userLanguages = getAllLanguages(randomUser.languageSkills);
+    const primaryLanguage = userLanguages[0] || 'English';
+    
     const prompt = `
 In IRC channel ${channel.name}, the user "${userMessage.nickname}" just ${messageDescription}.
 The topic is: "${channel.topic}".
@@ -174,6 +194,9 @@ ${formatMessageHistory(channel.messages)}
 Generate a realistic and in-character reaction from ${randomUser.nickname}.
 The reaction must be a single line in the format: "nickname: message"
 
+CRITICAL: Respond ONLY in ${primaryLanguage}. Do not use any other language.
+${userLanguages.length > 1 ? `Available languages: ${userLanguages.join(', ')}. Use ${primaryLanguage} only.` : ''}
+
 Consider ${randomUser.nickname}'s writing style:
 - Formality: ${randomUser.writingStyle.formality}
 - Verbosity: ${randomUser.writingStyle.verbosity}
@@ -181,7 +204,7 @@ Consider ${randomUser.nickname}'s writing style:
 - Emoji usage: ${randomUser.writingStyle.emojiUsage}
 - Punctuation: ${randomUser.writingStyle.punctuation}
 - Language fluency: ${getLanguageFluency(randomUser.languageSkills)}
-- Languages: ${getAllLanguages(randomUser.languageSkills).join(', ')}
+- Languages: ${userLanguages.join(', ')}
 ${getLanguageAccent(randomUser.languageSkills) ? `- Accent: ${getLanguageAccent(randomUser.languageSkills)}` : ''}
 ${isChannelOperator(channel, randomUser.nickname) ? `- Role: Channel operator (can kick/ban users)` : ''}
 `;
@@ -225,6 +248,9 @@ export const generatePrivateMessageResponse = async (conversation: PrivateMessag
     console.log(`[AI Debug] Validated model ID for private message: "${validatedModel}"`);
     
     const aiUser = conversation.user;
+    const userLanguages = getAllLanguages(aiUser.languageSkills);
+    const primaryLanguage = userLanguages[0] || 'English';
+    
     const prompt = `
 You are roleplaying as an IRC user named '${aiUser.nickname}'. 
 Your personality is: ${aiUser.personality}.
@@ -234,6 +260,9 @@ ${formatMessageHistory(conversation.messages)}
 
 '${currentUserNickname}' just sent you this message: "${userMessage.content}"
 
+CRITICAL: Respond ONLY in ${primaryLanguage}. Do not use any other language.
+${userLanguages.length > 1 ? `Available languages: ${userLanguages.join(', ')}. Use ${primaryLanguage} only.` : ''}
+
 Your writing style:
 - Formality: ${aiUser.writingStyle.formality}
 - Verbosity: ${aiUser.writingStyle.verbosity}
@@ -241,7 +270,7 @@ Your writing style:
 - Emoji usage: ${aiUser.writingStyle.emojiUsage}
 - Punctuation: ${aiUser.writingStyle.punctuation}
 - Language fluency: ${getLanguageFluency(aiUser.languageSkills)}
-- Languages: ${getAllLanguages(aiUser.languageSkills).join(', ')}
+- Languages: ${userLanguages.join(', ')}
 ${getLanguageAccent(aiUser.languageSkills) ? `- Accent: ${getLanguageAccent(aiUser.languageSkills)}` : ''}
 
 Generate a natural, in-character response.
