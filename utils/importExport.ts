@@ -51,9 +51,7 @@ export const exportUsersToCSV = (users: User[]): string => {
   const headers = [
     'nickname',
     'personality',
-    'fluency',
     'languages',
-    'accent',
     'formality',
     'verbosity',
     'humor',
@@ -63,18 +61,28 @@ export const exportUsersToCSV = (users: User[]): string => {
 
   const csvContent = [
     headers.join(','),
-    ...users.map(user => [
-      `"${user.nickname}"`,
-      `"${user.personality}"`,
-      `"${user.languageSkills.fluency}"`,
-      `"${user.languageSkills.languages.join(';')}"`,
-      `"${user.languageSkills.accent || ''}"`,
-      `"${user.writingStyle.formality}"`,
-      `"${user.writingStyle.verbosity}"`,
-      `"${user.writingStyle.humor}"`,
-      `"${user.writingStyle.emojiUsage}"`,
-      `"${user.writingStyle.punctuation}"`
-    ].join(','))
+    ...users.map(user => {
+      // Handle both legacy and per-language formats
+      let languagesString = '';
+      if (isPerLanguageFormat(user.languageSkills)) {
+        languagesString = user.languageSkills.languages.map(lang => `${lang.language}:${lang.fluency}:${lang.accent || ''}`).join(';');
+      } else if (isLegacyFormat(user.languageSkills)) {
+        languagesString = user.languageSkills.languages.map(lang => `${lang}:${user.languageSkills.fluency}:${user.languageSkills.accent || ''}`).join(';');
+      } else {
+        languagesString = 'English:native:';
+      }
+
+      return [
+        `"${user.nickname}"`,
+        `"${user.personality}"`,
+        `"${languagesString}"`,
+        `"${user.writingStyle.formality}"`,
+        `"${user.writingStyle.verbosity}"`,
+        `"${user.writingStyle.humor}"`,
+        `"${user.writingStyle.emojiUsage}"`,
+        `"${user.writingStyle.punctuation}"`
+      ].join(',');
+    })
   ].join('\n');
 
   return csvContent;
@@ -95,31 +103,40 @@ export const importUsersFromCSV = (csvContent: string): User[] => {
     
     if (values.length < headers.length) continue;
 
+    // Parse languages from the new format: "English:native:accent;Finnish:advanced:"
+    const languagesString = values[2] || 'English:native:';
+    const languageEntries = languagesString.split(';').filter(l => l.trim());
+    
+    const languages = languageEntries.map(langEntry => {
+      const parts = langEntry.split(':');
+      return {
+        language: parts[0] || 'English',
+        fluency: parts[1] || 'native',
+        accent: parts[2] || ''
+      };
+    });
+
     // Validate and set default values for all required properties
     const user: User = {
       nickname: values[0] || `user${i}`,
       status: 'online',
       personality: values[1] || 'Imported user',
       languageSkills: {
-        fluency: (values[2] as any) || 'native',
-        languages: values[3] ? values[3].split(';').filter(l => l.trim()) : ['English'],
-        accent: values[4] || ''
+        languages: languages.length > 0 ? languages : [{ language: 'English', fluency: 'native', accent: '' }]
       },
       writingStyle: {
-        formality: (values[5] as any) || 'neutral',
-        verbosity: (values[6] as any) || 'neutral',
-        humor: (values[7] as any) || 'none',
-        emojiUsage: (values[8] as any) || 'low',
-        punctuation: (values[9] as any) || 'standard'
+        formality: (values[3] as any) || 'neutral',
+        verbosity: (values[4] as any) || 'neutral',
+        humor: (values[5] as any) || 'none',
+        emojiUsage: (values[6] as any) || 'low',
+        punctuation: (values[7] as any) || 'standard'
       }
     };
 
     // Validate that all required properties are properly set
     if (!user.languageSkills) {
       user.languageSkills = {
-        fluency: 'native',
-        languages: ['English'],
-        accent: ''
+        languages: [{ language: 'English', fluency: 'native', accent: '' }]
       };
     }
     
@@ -219,12 +236,22 @@ export const importUsersFromJSON = (jsonContent: string): User[] => {
           };
         }
 
-        // Handle different writingStyle formats from World Editor
+        // Handle different writingStyle formats
         let writingStyle: { formality: string; verbosity: string; humor: string; emojiUsage: string; punctuation: string };
         
         if (user.writingStyle && typeof user.writingStyle === 'object') {
+          // Check if it's already in Station V format (snake_case values)
+          const isStationVFormat = (value: string) => {
+            return ['very_informal', 'informal', 'neutral', 'formal', 'very_formal',
+                   'very_terse', 'terse', 'verbose', 'very_verbose',
+                   'none', 'dry', 'sarcastic', 'witty', 'slapstick',
+                   'low', 'medium', 'high', 'excessive',
+                   'minimal', 'standard', 'creative'].includes(value);
+          };
+
           // Convert World Editor format to Station V format
           const convertFormality = (formality: string) => {
+            if (isStationVFormat(formality)) return formality;
             const mapping: { [key: string]: string } = {
               'Very Informal': 'very_informal',
               'Informal': 'informal',
@@ -236,6 +263,7 @@ export const importUsersFromJSON = (jsonContent: string): User[] => {
           };
 
           const convertVerbosity = (verbosity: string) => {
+            if (isStationVFormat(verbosity)) return verbosity;
             const mapping: { [key: string]: string } = {
               'Very Terse': 'very_terse',
               'Terse': 'terse',
@@ -247,6 +275,7 @@ export const importUsersFromJSON = (jsonContent: string): User[] => {
           };
 
           const convertHumor = (humor: string) => {
+            if (isStationVFormat(humor)) return humor;
             const mapping: { [key: string]: string } = {
               'None': 'none',
               'Dry': 'dry',
@@ -258,6 +287,7 @@ export const importUsersFromJSON = (jsonContent: string): User[] => {
           };
 
           const convertEmojiUsage = (emojiUsage: string) => {
+            if (isStationVFormat(emojiUsage)) return emojiUsage;
             const mapping: { [key: string]: string } = {
               'None': 'none',
               'Low': 'low',
@@ -269,6 +299,7 @@ export const importUsersFromJSON = (jsonContent: string): User[] => {
           };
 
           const convertPunctuation = (punctuation: string) => {
+            if (isStationVFormat(punctuation)) return punctuation;
             const mapping: { [key: string]: string } = {
               'Minimal': 'minimal',
               'Standard': 'standard',
@@ -279,11 +310,11 @@ export const importUsersFromJSON = (jsonContent: string): User[] => {
           };
 
           writingStyle = {
-            formality: convertFormality(user.writingStyle.formality || 'Neutral'),
-            verbosity: convertVerbosity(user.writingStyle.verbosity || 'Neutral'),
-            humor: convertHumor(user.writingStyle.humor || 'None'),
-            emojiUsage: convertEmojiUsage(user.writingStyle.emojiUsage || 'Low'),
-            punctuation: convertPunctuation(user.writingStyle.punctuation || 'Standard')
+            formality: convertFormality(user.writingStyle.formality || 'neutral'),
+            verbosity: convertVerbosity(user.writingStyle.verbosity || 'neutral'),
+            humor: convertHumor(user.writingStyle.humor || 'none'),
+            emojiUsage: convertEmojiUsage(user.writingStyle.emojiUsage || 'low'),
+            punctuation: convertPunctuation(user.writingStyle.punctuation || 'standard')
           };
         } else {
           // Default fallback

@@ -116,6 +116,21 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
   const userLanguages = getAllLanguages(randomUser.languageSkills);
   const primaryLanguage = userLanguages[0] || 'English';
 
+  // Calculate appropriate token limit based on verbosity
+  const getTokenLimit = (verbosity: string): number => {
+    switch (verbosity) {
+      case 'very_terse': return 50;
+      case 'terse': return 75;
+      case 'neutral': return 100;
+      case 'verbose': return 300;
+      case 'very_verbose': return 500;
+      default: return 100;
+    }
+  };
+
+  const tokenLimit = getTokenLimit(randomUser.writingStyle.verbosity);
+  console.log(`[AI Debug] Token limit for ${randomUser.nickname} (${randomUser.writingStyle.verbosity}): ${tokenLimit}`);
+
   const prompt = `
 The topic of channel ${channel.name} is: "${channel.topic}".
 The users in the channel are: ${channel.users.map(u => u.nickname).join(', ')}.
@@ -126,6 +141,7 @@ ${formatMessageHistory(channel.messages)}
 
 Generate a new, single, in-character message from ${randomUser.nickname} that is relevant to the topic or the recent conversation.
 The message must be a single line in the format: "nickname: message"
+${randomUser.writingStyle.verbosity === 'very_verbose' ? 'IMPORTANT: This user is very verbose - write a long, detailed message with multiple sentences and thorough explanations. Do not cut off the message.' : randomUser.writingStyle.verbosity === 'verbose' ? 'IMPORTANT: This user is verbose - write a moderately detailed message with several sentences.' : ''}
 
 CRITICAL: Respond ONLY in ${primaryLanguage}. Do not use any other language.
 ${userLanguages.length > 1 ? `Available languages: ${userLanguages.join(', ')}. Use ${primaryLanguage} only.` : ''}
@@ -133,7 +149,7 @@ ${dominantLanguage !== primaryLanguage ? `Note: The channel's dominant language 
 
 Consider ${randomUser.nickname}'s writing style:
 - Formality: ${randomUser.writingStyle.formality}
-- Verbosity: ${randomUser.writingStyle.verbosity}
+- Verbosity: ${randomUser.writingStyle.verbosity} ${randomUser.writingStyle.verbosity === 'very_verbose' ? '(write very long, detailed messages with multiple sentences and thorough explanations)' : randomUser.writingStyle.verbosity === 'verbose' ? '(write moderately detailed messages with several sentences)' : randomUser.writingStyle.verbosity === 'terse' ? '(write brief, concise messages)' : randomUser.writingStyle.verbosity === 'very_terse' ? '(write very brief messages)' : ''}
 - Humor: ${randomUser.writingStyle.humor}
 - Emoji usage: ${randomUser.writingStyle.emojiUsage}
 - Punctuation: ${randomUser.writingStyle.punctuation}
@@ -153,7 +169,7 @@ ${isChannelOperator(channel, randomUser.nickname) ? `- Role: Channel operator (c
           config: {
               systemInstruction: getBaseSystemInstruction(currentUserNickname),
               temperature: 0.9,
-              maxOutputTokens: 100,
+              maxOutputTokens: tokenLimit,
               thinkingConfig: { thinkingBudget: 0 },
           },
       })
@@ -224,6 +240,21 @@ export const generateReactionToMessage = async (channel: Channel, userMessage: M
     const userLanguages = getAllLanguages(randomUser.languageSkills);
     const primaryLanguage = userLanguages[0] || 'English';
     
+    // Calculate appropriate token limit based on verbosity
+    const getTokenLimit = (verbosity: string): number => {
+      switch (verbosity) {
+        case 'very_terse': return 50;
+        case 'terse': return 75;
+        case 'neutral': return 100;
+        case 'verbose': return 300;
+        case 'very_verbose': return 500;
+        default: return 100;
+      }
+    };
+
+    const tokenLimit = getTokenLimit(randomUser.writingStyle.verbosity);
+    console.log(`[AI Debug] Token limit for reaction from ${randomUser.nickname} (${randomUser.writingStyle.verbosity}): ${tokenLimit}`);
+    
     const prompt = `
 In IRC channel ${channel.name}, the user "${userMessage.nickname}" just ${messageDescription}.
 The topic is: "${channel.topic}".
@@ -235,13 +266,14 @@ ${formatMessageHistory(channel.messages)}
 
 Generate a realistic and in-character reaction from ${randomUser.nickname}.
 The reaction must be a single line in the format: "nickname: message"
+${randomUser.writingStyle.verbosity === 'very_verbose' ? 'IMPORTANT: This user is very verbose - write a long, detailed reaction with multiple sentences and thorough explanations. Do not cut off the message.' : randomUser.writingStyle.verbosity === 'verbose' ? 'IMPORTANT: This user is verbose - write a moderately detailed reaction with several sentences.' : ''}
 
 CRITICAL: Respond ONLY in ${primaryLanguage}. Do not use any other language.
 ${userLanguages.length > 1 ? `Available languages: ${userLanguages.join(', ')}. Use ${primaryLanguage} only.` : ''}
 
 Consider ${randomUser.nickname}'s writing style:
 - Formality: ${randomUser.writingStyle.formality}
-- Verbosity: ${randomUser.writingStyle.verbosity}
+- Verbosity: ${randomUser.writingStyle.verbosity} ${randomUser.writingStyle.verbosity === 'very_verbose' ? '(write very long, detailed messages with multiple sentences and thorough explanations)' : randomUser.writingStyle.verbosity === 'verbose' ? '(write moderately detailed messages with several sentences)' : randomUser.writingStyle.verbosity === 'terse' ? '(write brief, concise messages)' : randomUser.writingStyle.verbosity === 'very_terse' ? '(write very brief messages)' : ''}
 - Humor: ${randomUser.writingStyle.humor}
 - Emoji usage: ${randomUser.writingStyle.emojiUsage}
 - Punctuation: ${randomUser.writingStyle.punctuation}
@@ -260,7 +292,7 @@ ${isChannelOperator(channel, randomUser.nickname) ? `- Role: Channel operator (c
                 config: {
                     systemInstruction: getBaseSystemInstruction(currentUserNickname),
                     temperature: 0.8,
-                    maxOutputTokens: 150,
+                    maxOutputTokens: tokenLimit,
                     thinkingConfig: { thinkingBudget: 0 },
                 },
             })
@@ -293,6 +325,21 @@ export const generatePrivateMessageResponse = async (conversation: PrivateMessag
     const userLanguages = getAllLanguages(aiUser.languageSkills);
     const primaryLanguage = userLanguages[0] || 'English';
     
+    // Calculate appropriate token limit based on verbosity
+    const getTokenLimit = (verbosity: string): number => {
+      switch (verbosity) {
+        case 'very_terse': return 50;
+        case 'terse': return 75;
+        case 'neutral': return 100;
+        case 'verbose': return 300;
+        case 'very_verbose': return 500;
+        default: return 100;
+      }
+    };
+
+    const tokenLimit = getTokenLimit(aiUser.writingStyle.verbosity);
+    console.log(`[AI Debug] Token limit for private message from ${aiUser.nickname} (${aiUser.writingStyle.verbosity}): ${tokenLimit}`);
+    
     const prompt = `
 You are roleplaying as an IRC user named '${aiUser.nickname}'. 
 Your personality is: ${aiUser.personality}.
@@ -307,7 +354,7 @@ ${userLanguages.length > 1 ? `Available languages: ${userLanguages.join(', ')}. 
 
 Your writing style:
 - Formality: ${aiUser.writingStyle.formality}
-- Verbosity: ${aiUser.writingStyle.verbosity}
+- Verbosity: ${aiUser.writingStyle.verbosity} ${aiUser.writingStyle.verbosity === 'very_verbose' ? '(write very long, detailed messages with multiple sentences and thorough explanations)' : aiUser.writingStyle.verbosity === 'verbose' ? '(write moderately detailed messages with several sentences)' : aiUser.writingStyle.verbosity === 'terse' ? '(write brief, concise messages)' : aiUser.writingStyle.verbosity === 'very_terse' ? '(write very brief messages)' : ''}
 - Humor: ${aiUser.writingStyle.humor}
 - Emoji usage: ${aiUser.writingStyle.emojiUsage}
 - Punctuation: ${aiUser.writingStyle.punctuation}
@@ -317,6 +364,7 @@ ${getLanguageAccent(aiUser.languageSkills) ? `- Accent: ${getLanguageAccent(aiUs
 
 Generate a natural, in-character response.
 The response must be a single line in the format: "${aiUser.nickname}: message"
+${aiUser.writingStyle.verbosity === 'very_verbose' ? 'IMPORTANT: This user is very verbose - write a long, detailed response with multiple sentences and thorough explanations. Do not cut off the message.' : aiUser.writingStyle.verbosity === 'verbose' ? 'IMPORTANT: This user is verbose - write a moderately detailed response with several sentences.' : ''}
 `;
 
     try {
@@ -328,7 +376,7 @@ The response must be a single line in the format: "${aiUser.nickname}: message"
                 config: {
                     systemInstruction: getBaseSystemInstruction(currentUserNickname),
                     temperature: 0.75,
-                    maxOutputTokens: 200,
+                    maxOutputTokens: tokenLimit,
                     thinkingConfig: { thinkingBudget: 0 },
                 },
             })
