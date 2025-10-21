@@ -40,6 +40,7 @@ export interface Channel {
   topic: string;
   users: User[];
   messages: Message[];
+  operators: string[]; // Array of user nicknames who are channel operators
 }
 
 export interface PrivateMessageConversation {
@@ -122,6 +123,32 @@ export const getLanguageAccent = (languageSkills: User['languageSkills'], langua
     return languageSkills.accent || '';
   }
   return '';
+};
+
+// Channel operator utility functions
+export const isChannelOperator = (channel: Channel, nickname: string): boolean => {
+  return channel.operators.includes(nickname);
+};
+
+export const addChannelOperator = (channel: Channel, nickname: string): Channel => {
+  if (!channel.operators.includes(nickname)) {
+    return {
+      ...channel,
+      operators: [...channel.operators, nickname]
+    };
+  }
+  return channel;
+};
+
+export const removeChannelOperator = (channel: Channel, nickname: string): Channel => {
+  return {
+    ...channel,
+    operators: channel.operators.filter(op => op !== nickname)
+  };
+};
+
+export const canUserPerformAction = (channel: Channel, nickname: string, action: 'kick' | 'ban' | 'topic' | 'mode'): boolean => {
+  return isChannelOperator(channel, nickname);
 };
 
 export interface ModelsListResponse {

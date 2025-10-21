@@ -56,7 +56,7 @@ export const DEFAULT_VIRTUAL_USERS: User[] = [
     status: 'online', 
     personality: 'A very curious and tech-savvy individual, loves discussing new gadgets and programming.',
     languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
-    writingStyle: { formality: 'casual', verbosity: 'moderate', humor: 'light', emojiUsage: 'minimal', punctuation: 'standard' }
+    writingStyle: { formality: 'informal', verbosity: 'neutral', humor: 'none', emojiUsage: 'low', punctuation: 'standard' }
   },
   { 
     nickname: 'seraph', 
@@ -70,42 +70,42 @@ export const DEFAULT_VIRTUAL_USERS: User[] = [
     status: 'online', 
     personality: 'A chaotic, funny, and unpredictable prankster who loves jokes and memes.',
     languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
-    writingStyle: { formality: 'casual', verbosity: 'moderate', humor: 'heavy', emojiUsage: 'frequent', punctuation: 'excessive' }
+    writingStyle: { formality: 'informal', verbosity: 'neutral', humor: 'slapstick', emojiUsage: 'high', punctuation: 'excessive' }
   },
   { 
     nickname: 'rex', 
     status: 'online', 
     personality: 'Gruff but helpful, an expert in system administration and network security.',
     languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
-    writingStyle: { formality: 'mixed', verbosity: 'concise', humor: 'none', emojiUsage: 'none', punctuation: 'minimal' }
+    writingStyle: { formality: 'neutral', verbosity: 'terse', humor: 'none', emojiUsage: 'none', punctuation: 'minimal' }
   },
   { 
     nickname: 'luna', 
     status: 'online', 
     personality: 'An artist who is dreamy, creative, and talks about music, art, and nature.',
     languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
-    writingStyle: { formality: 'casual', verbosity: 'verbose', humor: 'light', emojiUsage: 'frequent', punctuation: 'standard' }
+    writingStyle: { formality: 'informal', verbosity: 'verbose', humor: 'none', emojiUsage: 'high', punctuation: 'standard' }
   },
   { 
     nickname: 'cypher', 
     status: 'online', 
     personality: 'Mysterious and speaks in cryptic messages, interested in privacy and cryptography.',
     languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
-    writingStyle: { formality: 'formal', verbosity: 'concise', humor: 'none', emojiUsage: 'none', punctuation: 'minimal' }
+    writingStyle: { formality: 'formal', verbosity: 'terse', humor: 'none', emojiUsage: 'none', punctuation: 'minimal' }
   },
   { 
     nickname: 'glitch', 
     status: 'online', 
     personality: 'Excitable and easily distracted, often making typos and using internet slang.',
     languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
-    writingStyle: { formality: 'casual', verbosity: 'moderate', humor: 'heavy', emojiUsage: 'frequent', punctuation: 'excessive' }
+    writingStyle: { formality: 'informal', verbosity: 'neutral', humor: 'slapstick', emojiUsage: 'high', punctuation: 'excessive' }
   },
   { 
     nickname: 'root', 
     status: 'online', 
     personality: 'The silent observer, only speaks when something is very important.',
     languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
-    writingStyle: { formality: 'formal', verbosity: 'concise', humor: 'none', emojiUsage: 'none', punctuation: 'standard' }
+    writingStyle: { formality: 'formal', verbosity: 'terse', humor: 'none', emojiUsage: 'none', punctuation: 'standard' }
   },
 ];
 
@@ -120,14 +120,15 @@ export const DEFAULT_CHANNELS: Channel[] = [
         status: 'online',
         personality: 'The human user',
         languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
-        writingStyle: { formality: 'casual', verbosity: 'moderate', humor: 'light', emojiUsage: 'minimal', punctuation: 'standard' }
+        writingStyle: { formality: 'informal', verbosity: 'neutral', humor: 'none', emojiUsage: 'low', punctuation: 'standard' }
       }, 
       ...DEFAULT_VIRTUAL_USERS.slice(0, 5)
     ],
     messages: [
       { id: 1, nickname: 'system', content: `You have joined #general`, timestamp: new Date(), type: 'system' },
       { id: 2, nickname: 'nova', content: 'Hey everyone, welcome!', timestamp: new Date(), type: 'ai' }
-    ]
+    ],
+    operators: ['nova', 'seraph'] // Make nova and seraph operators by default
   },
   {
     name: '#tech-talk',
@@ -138,7 +139,7 @@ export const DEFAULT_CHANNELS: Channel[] = [
         status: 'online',
         personality: 'The human user',
         languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
-        writingStyle: { formality: 'casual', verbosity: 'moderate', humor: 'light', emojiUsage: 'minimal', punctuation: 'standard' }
+        writingStyle: { formality: 'informal', verbosity: 'neutral', humor: 'none', emojiUsage: 'low', punctuation: 'standard' }
       },
       DEFAULT_VIRTUAL_USERS.find(u => u.nickname === 'nova')!,
       DEFAULT_VIRTUAL_USERS.find(u => u.nickname === 'rex')!,
@@ -148,7 +149,8 @@ export const DEFAULT_CHANNELS: Channel[] = [
     messages: [
       { id: 3, nickname: 'system', content: 'You have joined #tech-talk', timestamp: new Date(), type: 'system' },
       { id: 4, nickname: 'rex', content: 'Did anyone see the latest kernel update? Some interesting patches.', timestamp: new Date(), type: 'ai' }
-    ]
+    ],
+    operators: ['nova', 'rex'] // Make nova and rex operators for tech channel
   },
   {
     name: '#random',
@@ -159,7 +161,7 @@ export const DEFAULT_CHANNELS: Channel[] = [
         status: 'online',
         personality: 'The human user',
         languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
-        writingStyle: { formality: 'casual', verbosity: 'moderate', humor: 'light', emojiUsage: 'minimal', punctuation: 'standard' }
+        writingStyle: { formality: 'informal', verbosity: 'neutral', humor: 'none', emojiUsage: 'low', punctuation: 'standard' }
       },
       DEFAULT_VIRTUAL_USERS.find(u => u.nickname === 'jinx')!,
       DEFAULT_VIRTUAL_USERS.find(u => u.nickname === 'luna')!,
@@ -168,6 +170,7 @@ export const DEFAULT_CHANNELS: Channel[] = [
     messages: [
       { id: 5, nickname: 'system', content: 'You have joined #random', timestamp: new Date(), type: 'system' },
       { id: 6, nickname: 'jinx', content: 'Why do they call it oven when you of in the cold food of out hot eat the food?', timestamp: new Date(), type: 'ai' }
-    ]
+    ],
+    operators: ['seraph', 'luna'] // Make seraph and luna operators for random channel
   }
 ];
