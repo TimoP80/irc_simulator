@@ -20,10 +20,10 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
         accent: ''
       },
       writingStyle: {
-        formality: 'casual',
-        verbosity: 'verbose',
-        humor: 'light',
-        emojiUsage: 'frequent',
+        formality: 'informal',
+        verbosity: 'very_verbose',
+        humor: 'witty',
+        emojiUsage: 'high',
         punctuation: 'excessive'
       }
     }
@@ -40,8 +40,8 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
         accent: ''
       },
       writingStyle: {
-        formality: 'formal',
-        verbosity: 'verbose',
+        formality: 'very_formal',
+        verbosity: 'very_verbose',
         humor: 'none',
         emojiUsage: 'none',
         punctuation: 'standard'
@@ -60,10 +60,10 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
         accent: ''
       },
       writingStyle: {
-        formality: 'casual',
-        verbosity: 'moderate',
-        humor: 'heavy',
-        emojiUsage: 'minimal',
+        formality: 'informal',
+        verbosity: 'neutral',
+        humor: 'sarcastic',
+        emojiUsage: 'low',
         punctuation: 'standard'
       }
     }
@@ -81,7 +81,7 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
       },
       writingStyle: {
         formality: 'formal',
-        verbosity: 'concise',
+        verbosity: 'very_terse',
         humor: 'none',
         emojiUsage: 'none',
         punctuation: 'minimal'
@@ -100,10 +100,10 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
         accent: ''
       },
       writingStyle: {
-        formality: 'casual',
-        verbosity: 'verbose',
-        humor: 'light',
-        emojiUsage: 'frequent',
+        formality: 'informal',
+        verbosity: 'very_verbose',
+        humor: 'witty',
+        emojiUsage: 'high',
         punctuation: 'standard'
       }
     }
@@ -120,8 +120,8 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
         accent: ''
       },
       writingStyle: {
-        formality: 'mixed',
-        verbosity: 'moderate',
+        formality: 'neutral',
+        verbosity: 'neutral',
         humor: 'none',
         emojiUsage: 'none',
         punctuation: 'minimal'
@@ -140,10 +140,10 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
         accent: ''
       },
       writingStyle: {
-        formality: 'casual',
-        verbosity: 'moderate',
-        humor: 'light',
-        emojiUsage: 'frequent',
+        formality: 'informal',
+        verbosity: 'neutral',
+        humor: 'witty',
+        emojiUsage: 'high',
         punctuation: 'excessive'
       }
     }
@@ -160,8 +160,8 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
         accent: ''
       },
       writingStyle: {
-        formality: 'formal',
-        verbosity: 'verbose',
+        formality: 'very_formal',
+        verbosity: 'very_verbose',
         humor: 'none',
         emojiUsage: 'none',
         punctuation: 'standard'
@@ -251,11 +251,11 @@ export const generateRandomUser = (): User => {
   const accent = Math.random() > 0.7 ? TRAIT_POOLS.accents[Math.floor(Math.random() * TRAIT_POOLS.accents.length)] : '';
   
   const fluencyLevels = ['beginner', 'intermediate', 'advanced', 'native'] as const;
-  const formalityLevels = ['casual', 'formal', 'mixed'] as const;
-  const verbosityLevels = ['concise', 'moderate', 'verbose'] as const;
-  const humorLevels = ['none', 'light', 'heavy'] as const;
-  const emojiLevels = ['none', 'minimal', 'frequent'] as const;
-  const punctuationLevels = ['minimal', 'standard', 'excessive'] as const;
+  const formalityLevels = ['very_informal', 'informal', 'neutral', 'formal', 'very_formal'] as const;
+  const verbosityLevels = ['very_terse', 'terse', 'neutral', 'verbose', 'very_verbose'] as const;
+  const humorLevels = ['none', 'dry', 'sarcastic', 'witty', 'slapstick'] as const;
+  const emojiLevels = ['none', 'low', 'medium', 'high', 'excessive'] as const;
+  const punctuationLevels = ['minimal', 'standard', 'creative', 'excessive'] as const;
   
   return {
     nickname: generateRandomNickname(),
@@ -283,11 +283,11 @@ export const generateRandomUserAsync = async (avoidDuplicates: string[] = []): P
   const accent = Math.random() > 0.7 ? TRAIT_POOLS.accents[Math.floor(Math.random() * TRAIT_POOLS.accents.length)] : '';
   
   const fluencyLevels = ['beginner', 'intermediate', 'advanced', 'native'] as const;
-  const formalityLevels = ['casual', 'formal', 'mixed'] as const;
-  const verbosityLevels = ['concise', 'moderate', 'verbose'] as const;
-  const humorLevels = ['none', 'light', 'heavy'] as const;
-  const emojiLevels = ['none', 'minimal', 'frequent'] as const;
-  const punctuationLevels = ['minimal', 'standard', 'excessive'] as const;
+  const formalityLevels = ['very_informal', 'informal', 'neutral', 'formal', 'very_formal'] as const;
+  const verbosityLevels = ['very_terse', 'terse', 'neutral', 'verbose', 'very_verbose'] as const;
+  const humorLevels = ['none', 'dry', 'sarcastic', 'witty', 'slapstick'] as const;
+  const emojiLevels = ['none', 'low', 'medium', 'high', 'excessive'] as const;
+  const punctuationLevels = ['minimal', 'standard', 'creative', 'excessive'] as const;
   
   const nickname = await generateRandomNicknameAsync(avoidDuplicates);
   

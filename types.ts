@@ -8,11 +8,11 @@ export interface User {
     accent?: string;
   };
   writingStyle: {
-    formality: 'casual' | 'formal' | 'mixed';
-    verbosity: 'concise' | 'moderate' | 'verbose';
-    humor: 'none' | 'light' | 'heavy';
-    emojiUsage: 'none' | 'minimal' | 'frequent';
-    punctuation: 'minimal' | 'standard' | 'excessive';
+    formality: 'very_informal' | 'informal' | 'neutral' | 'formal' | 'very_formal';
+    verbosity: 'very_terse' | 'terse' | 'neutral' | 'verbose' | 'very_verbose';
+    humor: 'none' | 'dry' | 'sarcastic' | 'witty' | 'slapstick';
+    emojiUsage: 'none' | 'low' | 'medium' | 'high' | 'excessive';
+    punctuation: 'minimal' | 'standard' | 'creative' | 'excessive';
   };
 }
 
