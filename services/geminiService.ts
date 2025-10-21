@@ -1,6 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import type { Channel, Message, PrivateMessageConversation, RandomWorldConfig, GeminiModel, ModelsListResponse, User } from '../types';
-import { getLanguageFluency, getAllLanguages, getLanguageAccent } from '../types';
+import { getLanguageFluency, getAllLanguages, getLanguageAccent, isChannelOperator } from '../types';
 import { withRateLimitAndRetries } from '../utils/config';
 
 const API_KEY = process.env.GEMINI_API_KEY;
@@ -68,6 +68,7 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
 The topic of channel ${channel.name} is: "${channel.topic}".
 The users in the channel are: ${channel.users.map(u => u.nickname).join(', ')}.
 Their personalities are: ${channel.users.map(u => `${u.nickname} is ${u.personality}`).join('. ')}.
+Channel operators (who can kick/ban users): ${channel.operators.join(', ') || 'None'}.
 The last 15 messages were:
 ${formatMessageHistory(channel.messages)}
 
@@ -83,6 +84,7 @@ Consider ${randomUser.nickname}'s writing style:
 - Language fluency: ${getLanguageFluency(randomUser.languageSkills)}
 - Languages: ${getAllLanguages(randomUser.languageSkills).join(', ')}
 ${getLanguageAccent(randomUser.languageSkills) ? `- Accent: ${getLanguageAccent(randomUser.languageSkills)}` : ''}
+${isChannelOperator(channel, randomUser.nickname) ? `- Role: Channel operator (can kick/ban users)` : ''}
 `;
 
   try {
@@ -144,6 +146,7 @@ In IRC channel ${channel.name}, the user "${userMessage.nickname}" just ${messag
 The topic is: "${channel.topic}".
 The other users in the channel are: ${usersInChannel.map(u => u.nickname).join(', ')}.
 Their personalities are: ${usersInChannel.map(u => `${u.nickname} is ${u.personality}`).join('. ')}.
+Channel operators (who can kick/ban users): ${channel.operators.join(', ') || 'None'}.
 The last 15 messages were:
 ${formatMessageHistory(channel.messages)}
 
@@ -159,6 +162,7 @@ Consider ${randomUser.nickname}'s writing style:
 - Language fluency: ${getLanguageFluency(randomUser.languageSkills)}
 - Languages: ${getAllLanguages(randomUser.languageSkills).join(', ')}
 ${getLanguageAccent(randomUser.languageSkills) ? `- Accent: ${getLanguageAccent(randomUser.languageSkills)}` : ''}
+${isChannelOperator(channel, randomUser.nickname) ? `- Role: Channel operator (can kick/ban users)` : ''}
 `;
     
     try {

@@ -145,7 +145,8 @@ const parseChannels = (channelsString: string, allVirtualUsers: User[], currentU
                 ],
                 messages: [
                     { id: Date.now() + index, nickname: 'system', content: `You have joined ${name.trim()}`, timestamp: new Date(), type: 'system' }
-                ]
+                ],
+                operators: [] // New channels start with no operators
             };
         });
 };

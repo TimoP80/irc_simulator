@@ -5,6 +5,7 @@ import { ChatWindow } from './components/ChatWindow';
 import { SettingsModal } from './components/SettingsModal';
 import { DEFAULT_CHANNELS, DEFAULT_VIRTUAL_USERS, DEFAULT_NICKNAME, SIMULATION_INTERVALS, DEFAULT_AI_MODEL, DEFAULT_TYPING_DELAY } from './constants';
 import type { Channel, Message, User, ActiveContext, PrivateMessageConversation, AppConfig } from './types';
+import { addChannelOperator, removeChannelOperator, isChannelOperator, canUserPerformAction } from './types';
 import { generateChannelActivity, generateReactionToMessage, generatePrivateMessageResponse } from './services/geminiService';
 import { loadConfig, saveConfig, initializeStateFromConfig, saveChannelLogs, loadChannelLogs, clearChannelLogs, simulateTypingDelay } from './utils/config';
 import { aiLogger, simulationLogger, configLogger } from './utils/debugLogger';
@@ -308,34 +309,13 @@ const App: React.FC = () => {
       }
       case 'kick': {
         if (activeContext && activeContext.type === 'channel' && parsedCommand.target) {
-          const channelName = activeContext.name;
-          const targetUser = parsedCommand.target;
-          // Remove target user from channel
-          setChannels(prev => prev.map(c => 
-            c.name === channelName 
-              ? { ...c, users: c.users.filter(u => u.nickname !== targetUser) }
-              : c
-          ));
-          addMessageToContext({
-            id: Date.now(),
-            nickname: 'system',
-            content: `${targetUser} has been kicked from ${channelName}${parsedCommand.content ? ` (${parsedCommand.content})` : ''}`,
-            timestamp: new Date(),
-            type: 'system'
-          }, activeContext);
+          handleKickUser(parsedCommand.target, parsedCommand.content);
         }
         break;
       }
       case 'ban': {
         if (activeContext && activeContext.type === 'channel' && parsedCommand.target) {
-          const targetUser = parsedCommand.target;
-          addMessageToContext({
-            id: Date.now(),
-            nickname: 'system',
-            content: `${targetUser} has been banned from ${activeContext.name}${parsedCommand.content ? ` (${parsedCommand.content})` : ''}`,
-            timestamp: new Date(),
-            type: 'system'
-          }, activeContext);
+          handleBanUser(parsedCommand.target, parsedCommand.content);
         }
         break;
       }
@@ -411,6 +391,94 @@ const App: React.FC = () => {
     }
   };
   
+  // Operator management functions
+  const handleToggleOperator = (nickname: string) => {
+    if (!activeChannel) return;
+    
+    setChannels(prevChannels => 
+      prevChannels.map(channel => {
+        if (channel.name === activeChannel.name) {
+          if (isChannelOperator(channel, nickname)) {
+            return removeChannelOperator(channel, nickname);
+          } else {
+            return addChannelOperator(channel, nickname);
+          }
+        }
+        return channel;
+      })
+    );
+  };
+
+  const handleKickUser = (targetNickname: string, reason: string) => {
+    if (!activeChannel || !canUserPerformAction(activeChannel, currentUserNickname, 'kick')) {
+      addMessageToContext({
+        id: Date.now(),
+        nickname: 'system',
+        content: 'You do not have permission to kick users.',
+        timestamp: new Date(),
+        type: 'system'
+      }, activeContext);
+      return;
+    }
+
+    // Remove user from channel
+    setChannels(prevChannels => 
+      prevChannels.map(channel => {
+        if (channel.name === activeChannel.name) {
+          return {
+            ...channel,
+            users: channel.users.filter(u => u.nickname !== targetNickname)
+          };
+        }
+        return channel;
+      })
+    );
+
+    // Add kick message
+    addMessageToContext({
+      id: Date.now(),
+      nickname: 'system',
+      content: `${targetNickname} was kicked by ${currentUserNickname}${reason ? `: ${reason}` : ''}`,
+      timestamp: new Date(),
+      type: 'kick'
+    }, activeContext);
+  };
+
+  const handleBanUser = (targetNickname: string, reason: string) => {
+    if (!activeChannel || !canUserPerformAction(activeChannel, currentUserNickname, 'ban')) {
+      addMessageToContext({
+        id: Date.now(),
+        nickname: 'system',
+        content: 'You do not have permission to ban users.',
+        timestamp: new Date(),
+        type: 'system'
+      }, activeContext);
+      return;
+    }
+
+    // Remove user from channel
+    setChannels(prevChannels => 
+      prevChannels.map(channel => {
+        if (channel.name === activeChannel.name) {
+          return {
+            ...channel,
+            users: channel.users.filter(u => u.nickname !== targetNickname)
+          };
+        }
+        return channel;
+      })
+    );
+
+    // Add ban message
+    addMessageToContext({
+      id: Date.now(),
+      nickname: 'system',
+      content: `${targetNickname} was banned by ${currentUserNickname}${reason ? `: ${reason}` : ''}`,
+      timestamp: new Date(),
+      type: 'ban'
+    }, activeContext);
+  };
+
   const handleSendMessage = async (content: string) => {
     if (content.startsWith('/')) {
       handleCommand(content);
@@ -845,7 +913,13 @@ The response must be a single line in the format: "nickname: greeting message"
           typingUsers={Array.from(typingUsers)}
         />
       </main>
-      <UserList users={usersInContext} onUserClick={(nickname) => setActiveContext({ type: 'pm', with: nickname })} currentUserNickname={currentUserNickname} />
+      <UserList 
+        users={usersInContext} 
+        onUserClick={(nickname) => setActiveContext({ type: 'pm', with: nickname })} 
+        currentUserNickname={currentUserNickname}
+        channel={activeChannel}
+        onToggleOperator={handleToggleOperator}
+      />
     </div>
   );
 };
