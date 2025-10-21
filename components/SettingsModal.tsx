@@ -60,16 +60,32 @@ const parseChannelsFromText = (text: string) => {
   return text.split('\n')
     .filter(line => line.trim())
     .map(line => {
-      const [name, ...topicParts] = line.split(',');
-      return {
-        name: name.trim(),
-        topic: topicParts.join(',').trim()
-      };
+      // Check if line has dominant language (format: "#channel, topic | language")
+      const hasLanguage = line.includes(' | ');
+      if (hasLanguage) {
+        const [channelPart, dominantLanguage] = line.split(' | ');
+        const [name, ...topicParts] = channelPart.split(',');
+        return {
+          name: name.trim(),
+          topic: topicParts.join(',').trim(),
+          dominantLanguage: dominantLanguage.trim()
+        };
+      } else {
+        // Legacy format without dominant language
+        const [name, ...topicParts] = line.split(',');
+        return {
+          name: name.trim(),
+          topic: topicParts.join(',').trim()
+        };
+      }
     });
 };
 
-const formatChannelsToText = (channels: { name: string; topic: string }[]) => {
-  return channels.map(channel => `${channel.name}, ${channel.topic}`).join('\n');
+const formatChannelsToText = (channels: { name: string; topic: string; dominantLanguage?: string }[]) => {
+  return channels.map(channel => {
+    const base = `${channel.name}, ${channel.topic}`;
+    return channel.dominantLanguage ? `${base} | ${channel.dominantLanguage}` : base;
+  }).join('\n');
 };
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel, currentChannels, onChannelsChange }) => {
@@ -84,9 +100,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel, 
       simulationSpeed: savedConfig?.simulationSpeed || 'normal',
       aiModel: aiModel,
       typingDelay: savedConfig?.typingDelay || DEFAULT_TYPING_DELAY,
+      userObjects: savedConfig?.userObjects,
     };
   });
-  const [users, setUsers] = useState<User[]>(() => parseUsersFromText(config.virtualUsers));
+  const [users, setUsers] = useState<User[]>(() => {
+    // Use userObjects if available (for proper persistence), otherwise parse from text
+    return config.userObjects || parseUsersFromText(config.virtualUsers);
+  });
   const [channels, setChannels] = useState(() => currentChannels || parseChannelsFromText(config.channels));
   const [isRandomizing, setIsRandomizing] = useState(false);
   const [debugConfig, setDebugConfig] = useState(getDebugConfig());
@@ -160,7 +180,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel, 
     const configToSave = {
       ...config,
       virtualUsers: formatUsersToText(users),
-      channels: formatChannelsToText(channels)
+      channels: formatChannelsToText(channels),
+      // Store the full user objects for proper persistence
+      userObjects: users
     };
     
     // Notify parent component about channel changes

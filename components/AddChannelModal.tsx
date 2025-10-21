@@ -3,10 +3,10 @@ import React, { useState, useEffect } from 'react';
 interface AddChannelModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAddChannel: (name: string, topic: string) => void;
+  onAddChannel: (name: string, topic: string, dominantLanguage?: string) => void;
   existingChannelNames: string[];
-  editingChannel?: { name: string; topic: string } | null;
-  onUpdateChannel?: (oldName: string, newName: string, topic: string) => void;
+  editingChannel?: { name: string; topic: string; dominantLanguage?: string } | null;
+  onUpdateChannel?: (oldName: string, newName: string, topic: string, dominantLanguage?: string) => void;
 }
 
 export const AddChannelModal: React.FC<AddChannelModalProps> = ({
@@ -19,6 +19,7 @@ export const AddChannelModal: React.FC<AddChannelModalProps> = ({
 }) => {
   const [name, setName] = useState('');
   const [topic, setTopic] = useState('');
+  const [dominantLanguage, setDominantLanguage] = useState('');
   const [errors, setErrors] = useState<{ name?: string; topic?: string }>({});
 
   const isEditing = !!editingChannel;
@@ -29,9 +30,11 @@ export const AddChannelModal: React.FC<AddChannelModalProps> = ({
       if (editingChannel) {
         setName(editingChannel.name);
         setTopic(editingChannel.topic);
+        setDominantLanguage(editingChannel.dominantLanguage || '');
       } else {
         setName('');
         setTopic('');
+        setDominantLanguage('');
       }
       setErrors({});
     }
@@ -88,9 +91,9 @@ export const AddChannelModal: React.FC<AddChannelModalProps> = ({
     }
 
     if (isEditing && editingChannel && onUpdateChannel) {
-      onUpdateChannel(editingChannel.name, name.trim(), topic.trim());
+      onUpdateChannel(editingChannel.name, name.trim(), topic.trim(), dominantLanguage || undefined);
     } else {
-      onAddChannel(name.trim(), topic.trim());
+      onAddChannel(name.trim(), topic.trim(), dominantLanguage || undefined);
     }
     
     onClose();
@@ -166,6 +169,39 @@ export const AddChannelModal: React.FC<AddChannelModalProps> = ({
             )}
             <p className="text-gray-500 text-xs mt-1">
               {topic.length}/150 characters. Be descriptive about the channel's purpose.
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="channelLanguage" className="block text-sm font-medium text-gray-300 mb-2">
+              Dominant Language
+            </label>
+            <select
+              id="channelLanguage"
+              value={dominantLanguage}
+              onChange={(e) => setDominantLanguage(e.target.value)}
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="">Auto-detect from users</option>
+              <option value="English">English</option>
+              <option value="Finnish">Finnish</option>
+              <option value="Spanish">Spanish</option>
+              <option value="French">French</option>
+              <option value="German">German</option>
+              <option value="Japanese">Japanese</option>
+              <option value="Italian">Italian</option>
+              <option value="Portuguese">Portuguese</option>
+              <option value="Russian">Russian</option>
+              <option value="Chinese">Chinese</option>
+              <option value="Korean">Korean</option>
+              <option value="Arabic">Arabic</option>
+              <option value="Dutch">Dutch</option>
+              <option value="Swedish">Swedish</option>
+              <option value="Norwegian">Norwegian</option>
+              <option value="Danish">Danish</option>
+            </select>
+            <p className="text-gray-500 text-xs mt-1">
+              Set the primary language for this channel. AI users will respond in this language.
             </p>
           </div>
 

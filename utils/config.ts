@@ -119,14 +119,32 @@ const parseChannels = (channelsString: string, allVirtualUsers: User[], currentU
         .map(line => line.trim())
         .filter(line => line.startsWith('#') && line.includes(','))
         .map((line, index) => {
-            const [name, ...topicParts] = line.split(',');
+            // Check if line has dominant language (format: "#channel, topic | language")
+            const hasLanguage = line.includes(' | ');
+            let name: string, topic: string, dominantLanguage: string | undefined;
+            
+            if (hasLanguage) {
+                const [channelPart, dominantLanguagePart] = line.split(' | ');
+                const [namePart, ...topicParts] = channelPart.split(',');
+                name = namePart.trim();
+                topic = topicParts.join(',').trim();
+                dominantLanguage = dominantLanguagePart.trim();
+            } else {
+                // Legacy format without dominant language
+                const [namePart, ...topicParts] = line.split(',');
+                name = namePart.trim();
+                topic = topicParts.join(',').trim();
+                dominantLanguage = undefined;
+            }
+            
             // Use all configured virtual users for each channel
             // This ensures that all configured users are available in the virtual world
             const usersForChannel = [...allVirtualUsers];
 
             return {
-                name: name.trim(),
-                topic: topicParts.join(',').trim(),
+                name,
+                topic,
+                dominantLanguage,
                 users: [
                     { 
                         nickname: currentUserNickname, 
@@ -144,7 +162,7 @@ const parseChannels = (channelsString: string, allVirtualUsers: User[], currentU
                     ...usersForChannel
                 ],
                 messages: [
-                    { id: Date.now() + index, nickname: 'system', content: `You have joined ${name.trim()}`, timestamp: new Date(), type: 'system' }
+                    { id: Date.now() + index, nickname: 'system', content: `You have joined ${name}`, timestamp: new Date(), type: 'system' }
                 ],
                 operators: [] // New channels start with no operators
             };
@@ -159,7 +177,8 @@ const parseChannels = (channelsString: string, allVirtualUsers: User[], currentU
  */
 export const initializeStateFromConfig = (config: AppConfig) => {
     const nickname = config.currentUserNickname || DEFAULT_NICKNAME;
-    const virtualUsers = config.virtualUsers ? parseVirtualUsers(config.virtualUsers) : DEFAULT_VIRTUAL_USERS;
+    // Use userObjects if available (for proper persistence), otherwise fall back to text parsing
+    const virtualUsers = config.userObjects || (config.virtualUsers ? parseVirtualUsers(config.virtualUsers) : DEFAULT_VIRTUAL_USERS);
     
     // Always use configured channels if they exist, otherwise use default channels
     let channels: Channel[];

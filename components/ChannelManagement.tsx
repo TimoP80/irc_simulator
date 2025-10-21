@@ -15,21 +15,22 @@ export const ChannelManagement: React.FC<ChannelManagementProps> = ({ channels, 
   const [isImportExportModalOpen, setIsImportExportModalOpen] = useState(false);
   const [editingChannel, setEditingChannel] = useState<Channel | null>(null);
 
-  const handleAddChannel = (name: string, topic: string) => {
+  const handleAddChannel = (name: string, topic: string, dominantLanguage?: string) => {
     const newChannel: Channel = { 
       name, 
       topic, 
       users: [], 
       messages: [],
-      operators: []
+      operators: [],
+      dominantLanguage
     };
     onChannelsChange([...channels, newChannel]);
   };
 
-  const handleUpdateChannel = (oldName: string, newName: string, topic: string) => {
+  const handleUpdateChannel = (oldName: string, newName: string, topic: string, dominantLanguage?: string) => {
     const updatedChannels = channels.map(channel => 
       channel.name === oldName 
-        ? { ...channel, name: newName, topic }
+        ? { ...channel, name: newName, topic, dominantLanguage }
         : channel
     );
     onChannelsChange(updatedChannels);
@@ -177,6 +178,43 @@ export const ChannelManagement: React.FC<ChannelManagementProps> = ({ channels, 
                     )}
                   </div>
                   <p className="text-gray-300 text-sm leading-relaxed mb-3">{channel.topic}</p>
+                  
+                  {/* Dominant Language Setting */}
+                  <div className="mb-3">
+                    <label className="block text-xs font-medium text-gray-400 mb-1">
+                      Dominant Language
+                    </label>
+                    <select
+                      value={channel.dominantLanguage || ''}
+                      onChange={(e) => {
+                        const updatedChannels = channels.map(c => 
+                          c.name === channel.name 
+                            ? { ...c, dominantLanguage: e.target.value || undefined }
+                            : c
+                        );
+                        onChannelsChange(updatedChannels);
+                      }}
+                      className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    >
+                      <option value="">Auto-detect from users</option>
+                      <option value="English">English</option>
+                      <option value="Finnish">Finnish</option>
+                      <option value="Spanish">Spanish</option>
+                      <option value="French">French</option>
+                      <option value="German">German</option>
+                      <option value="Japanese">Japanese</option>
+                      <option value="Italian">Italian</option>
+                      <option value="Portuguese">Portuguese</option>
+                      <option value="Russian">Russian</option>
+                      <option value="Chinese">Chinese</option>
+                      <option value="Korean">Korean</option>
+                      <option value="Arabic">Arabic</option>
+                      <option value="Dutch">Dutch</option>
+                      <option value="Swedish">Swedish</option>
+                      <option value="Norwegian">Norwegian</option>
+                      <option value="Danish">Danish</option>
+                    </select>
+                  </div>
                   
                   {/* Operator Management */}
                   <div className="space-y-2">
