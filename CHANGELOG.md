@@ -4,6 +4,39 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 
 *Note: This project was previously known as "Gemini IRC Simulator" and was renamed to "Station V - Virtual IRC Simulator" as of v1.5.1.*
 
+## 1.13.11 - 2025-01-21
+
+### Fixed
+- **User List Personality Display**: Fixed settings modal not showing correct personality settings
+  - **State Synchronization**: Added useEffect to update user list when currentUsers prop changes
+  - **Real-time Updates**: Settings modal now reflects current app state immediately
+  - **Data Flow**: Improved user data flow between main app and settings modal
+
+- **Import/Export Writing Styles**: Fixed writing style settings not being imported correctly
+  - **CSV Format**: Updated to handle new per-language format for language skills
+  - **JSON Import**: Enhanced to detect and preserve Station V format vs World Editor format
+  - **Format Compatibility**: Added backward compatibility for legacy data formats
+  - **Writing Style Preservation**: All humor, emoji usage, formality, and verbosity settings now persist
+
+- **Very Verbose Message Cutoffs**: Fixed very verbose users getting cut off messages
+  - **Token Limits**: Increased very_verbose from 300 to 500 tokens, verbose from 200 to 300 tokens
+  - **Enhanced Prompts**: Added explicit instructions for message length expectations
+  - **Cutoff Prevention**: Added "Do not cut off the message" warnings for verbose users
+  - **Debug Logging**: Added token limit tracking for better debugging
+
+### Added
+- **Channel Log Export UI**: Added prominent channel log export functionality
+  - **Export Button**: Added green "Export Logs" button in channel management section
+  - **Cross-Component Integration**: Channel management button opens user management export modal
+  - **Modal Improvements**: Enhanced export modal title and description for clarity
+  - **Multiple Export Options**: Export all channels or individual channels as HTML files
+
+### Technical Improvements
+- **Token Limit Optimization**: Dynamic token limits based on user verbosity settings
+- **Prompt Engineering**: Enhanced AI prompts with explicit length and style instructions
+- **Event System**: Custom event system for cross-component communication
+- **Debug Logging**: Added comprehensive logging for token limits and user selection
+
 ## 1.13.10 - 2025-01-21
 
 ### Fixed

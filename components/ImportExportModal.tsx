@@ -217,8 +217,11 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="text-2xl font-bold text-white mb-6">
-          Import / Export Users
+          Import / Export Data
         </h3>
+        <p className="text-gray-400 mb-6">
+          Export users, channels, and chat logs. Import users and channels from files.
+        </p>
         
         {/* Tab Navigation */}
         <div className="flex space-x-1 mb-6">

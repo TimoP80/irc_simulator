@@ -946,7 +946,7 @@ The response must be a single line in the format: "nickname: greeting message"
 
   return (
     <div className="flex h-screen w-screen bg-gray-800 font-mono">
-      {isSettingsOpen && <SettingsModal onSave={handleSaveSettings} onCancel={handleCloseSettings} currentChannels={channels} onChannelsChange={setChannels} />}
+      {isSettingsOpen && <SettingsModal onSave={handleSaveSettings} onCancel={handleCloseSettings} currentChannels={channels} onChannelsChange={setChannels} currentUsers={virtualUsers} />}
       <ChannelList 
         channels={channels}
         privateMessageUsers={allPMUsers}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User, Channel, isPerLanguageFormat, isLegacyFormat, getAllLanguages } from '../types';
 import { AddUserModal } from './AddUserModal';
 import { BatchUserModal } from './BatchUserModal';
@@ -60,6 +60,18 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onUsersCh
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
   const [isImportExportModalOpen, setIsImportExportModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+
+  // Listen for custom event to open channel log export
+  useEffect(() => {
+    const handleOpenChannelLogExport = () => {
+      setIsImportExportModalOpen(true);
+    };
+
+    window.addEventListener('openChannelLogExport', handleOpenChannelLogExport);
+    return () => {
+      window.removeEventListener('openChannelLogExport', handleOpenChannelLogExport);
+    };
+  }, []);
 
   const handleAddUser = (user: User) => {
     onUsersChange([...users, user]);
@@ -181,7 +193,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onUsersCh
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
             </svg>
-            Import/Export
+            Data Export
           </button>
           <button
             type="button"

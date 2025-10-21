@@ -12,6 +12,7 @@ interface SettingsModalProps {
   onCancel: () => void;
   currentChannels?: Channel[];
   onChannelsChange?: (channels: Channel[]) => void;
+  currentUsers?: User[];
 }
 
 const DEFAULT_USERS_TEXT = `nova, A curious tech-savvy individual who loves gadgets.
@@ -88,7 +89,7 @@ const formatChannelsToText = (channels: { name: string; topic: string; dominantL
   }).join('\n');
 };
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel, currentChannels, onChannelsChange }) => {
+export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel, currentChannels, onChannelsChange, currentUsers }) => {
   const [config, setConfig] = useState<AppConfig>(() => {
     const savedConfig = loadConfig();
     const aiModel = savedConfig?.aiModel || DEFAULT_AI_MODEL;
@@ -104,9 +105,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel, 
     };
   });
   const [users, setUsers] = useState<User[]>(() => {
-    // Use userObjects if available (for proper persistence), otherwise parse from text
-    return config.userObjects || parseUsersFromText(config.virtualUsers);
+    // Use currentUsers if available (from main app state), otherwise use userObjects, otherwise parse from text
+    return currentUsers || config.userObjects || parseUsersFromText(config.virtualUsers);
   });
+
+  // Update users when currentUsers prop changes
+  useEffect(() => {
+    if (currentUsers) {
+      setUsers(currentUsers);
+    }
+  }, [currentUsers]);
   const [channels, setChannels] = useState(() => currentChannels || parseChannelsFromText(config.channels));
   const [isRandomizing, setIsRandomizing] = useState(false);
   const [debugConfig, setDebugConfig] = useState(getDebugConfig());
