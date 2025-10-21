@@ -4,6 +4,23 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 
 *Note: This project was previously known as "Gemini IRC Simulator" and was renamed to "Station V - Virtual IRC Simulator" as of v1.5.1.*
 
+## 1.13.9 - 2025-01-21
+
+### Fixed
+- **AI Language Simulation Issues**: Fixed AI users not respecting their configured language settings
+  - **Language Compliance**: AI now properly responds in user's primary language (e.g., Finnish users speak Finnish)
+  - **System Instructions**: Enhanced base system instructions with explicit language requirements
+  - **Prompt Enhancement**: Added "CRITICAL: Respond ONLY in [language]" instructions to all AI prompts
+  - **Channel Language Context**: Added analysis of channel's dominant language for better context
+  - **Multilingual Support**: Improved support for users with multiple languages by using primary language
+  - **Consistency Across Interactions**: Applied language constraints to channel activity, reactions, and private messages
+
+### Technical Improvements
+- **Language Detection**: Enhanced primary language detection from user language skills
+- **Channel Analysis**: Added dominant language analysis for better AI context
+- **Prompt Engineering**: Improved AI prompt structure with explicit language constraints
+- **Realistic Simulation**: More authentic multilingual chat experiences
+
 ## 1.13.8 - 2025-01-21
 
 ### Fixed

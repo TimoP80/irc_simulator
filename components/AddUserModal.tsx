@@ -165,7 +165,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
       newErrors.personality = 'Personality must be 200 characters or less';
     }
 
-    if (languageSkills.languages.length === 0) {
+    if (!languageSkills || languageSkills.length === 0) {
       newErrors.languages = 'At least one language must be selected';
     }
 
@@ -185,7 +185,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
       status: 'online',
       personality: personality.trim(),
       languageSkills: {
-        languages: languageSkills.filter(lang => lang.language.trim() !== '')
+        languages: (languageSkills || []).filter(lang => lang && lang.language && lang.language.trim() !== '')
       },
       writingStyle
     };
@@ -260,7 +260,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
   };
 
   const addLanguage = () => {
-    setLanguageSkills(prev => [...prev, {
+    setLanguageSkills(prev => [...(prev || []), {
       language: '',
       fluency: 'native',
       accent: ''
@@ -268,13 +268,13 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
   };
 
   const updateLanguage = (index: number, field: 'language' | 'fluency' | 'accent', value: string) => {
-    setLanguageSkills(prev => prev.map((lang, i) => 
+    setLanguageSkills(prev => (prev || []).map((lang, i) => 
       i === index ? { ...lang, [field]: value } : lang
     ));
   };
 
   const removeLanguage = (index: number) => {
-    setLanguageSkills(prev => prev.filter((_, i) => i !== index));
+    setLanguageSkills(prev => (prev || []).filter((_, i) => i !== index));
   };
 
   // Channel assignment functions
