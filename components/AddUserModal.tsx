@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Channel } from '../types';
+import { User, Channel, isPerLanguageFormat, isLegacyFormat } from '../types';
 import { generateRandomNicknameAsync } from '../utils/personalityTemplates';
 
 interface AddUserModalProps {
@@ -25,11 +25,15 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
 }) => {
   const [nickname, setNickname] = useState('');
   const [personality, setPersonality] = useState('');
-  const [languageSkills, setLanguageSkills] = useState({
-    fluency: 'native' as 'beginner' | 'intermediate' | 'advanced' | 'native',
-    languages: ['English'],
+  const [languageSkills, setLanguageSkills] = useState<Array<{
+    language: string;
+    fluency: 'beginner' | 'intermediate' | 'advanced' | 'native';
+    accent: string;
+  }>>([{
+    language: 'English',
+    fluency: 'native',
     accent: ''
-  });
+  }]);
   const [writingStyle, setWritingStyle] = useState({
     formality: 'neutral' as 'very_informal' | 'informal' | 'neutral' | 'formal' | 'very_formal',
     verbosity: 'neutral' as 'very_terse' | 'terse' | 'neutral' | 'verbose' | 'very_verbose',
@@ -49,11 +53,22 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
       if (editingUser) {
         setNickname(editingUser.nickname);
         setPersonality(editingUser.personality);
-        setLanguageSkills({
-          fluency: editingUser.languageSkills?.fluency || 'native',
-          languages: editingUser.languageSkills?.languages || ['English'],
-          accent: editingUser.languageSkills?.accent || ''
-        });
+        // Handle both legacy and per-language formats
+        if (isPerLanguageFormat(editingUser.languageSkills)) {
+          setLanguageSkills(editingUser.languageSkills.languages);
+        } else if (isLegacyFormat(editingUser.languageSkills)) {
+          setLanguageSkills([{
+            language: editingUser.languageSkills.languages[0] || 'English',
+            fluency: editingUser.languageSkills.fluency,
+            accent: editingUser.languageSkills.accent || ''
+          }]);
+        } else {
+          setLanguageSkills([{
+            language: 'English',
+            fluency: 'native',
+            accent: ''
+          }]);
+        }
         setWritingStyle({
           formality: editingUser.writingStyle?.formality || 'neutral',
           verbosity: editingUser.writingStyle?.verbosity || 'neutral',
@@ -69,11 +84,11 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
       } else {
         setNickname('');
         setPersonality('');
-        setLanguageSkills({
+        setLanguageSkills([{
+          language: 'English',
           fluency: 'native',
-          languages: ['English'],
           accent: ''
-        });
+        }]);
         setWritingStyle({
           formality: 'neutral',
           verbosity: 'neutral',
@@ -144,8 +159,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
       status: 'online',
       personality: personality.trim(),
       languageSkills: {
-        ...languageSkills,
-        languages: languageSkills.languages.filter(lang => lang.trim() !== '')
+        languages: languageSkills.filter(lang => lang.language.trim() !== '')
       },
       writingStyle
     };
@@ -220,24 +234,21 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
   };
 
   const addLanguage = () => {
-    setLanguageSkills(prev => ({
-      ...prev,
-      languages: [...prev.languages, '']
-    }));
+    setLanguageSkills(prev => [...prev, {
+      language: '',
+      fluency: 'native',
+      accent: ''
+    }]);
   };
 
-  const updateLanguage = (index: number, value: string) => {
-    setLanguageSkills(prev => ({
-      ...prev,
-      languages: prev.languages.map((lang, i) => i === index ? value : lang)
-    }));
+  const updateLanguage = (index: number, field: 'language' | 'fluency' | 'accent', value: string) => {
+    setLanguageSkills(prev => prev.map((lang, i) => 
+      i === index ? { ...lang, [field]: value } : lang
+    ));
   };
 
   const removeLanguage = (index: number) => {
-    setLanguageSkills(prev => ({
-      ...prev,
-      languages: prev.languages.filter((_, i) => i !== index)
-    }));
+    setLanguageSkills(prev => prev.filter((_, i) => i !== index));
   };
 
   // Channel assignment functions
@@ -359,72 +370,78 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
               Language Skills
             </h4>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="fluency" className="block text-sm font-medium text-gray-300 mb-2">
-                  Fluency Level
-                </label>
-                <select
-                  id="fluency"
-                  value={languageSkills.fluency}
-                  onChange={(e) => setLanguageSkills(prev => ({ ...prev, fluency: e.target.value as any }))}
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="beginner">Beginner</option>
-                  <option value="intermediate">Intermediate</option>
-                  <option value="advanced">Advanced</option>
-                  <option value="native">Native</option>
-                </select>
-              </div>
-
-              <div>
-                <label htmlFor="accent" className="block text-sm font-medium text-gray-300 mb-2">
-                  Accent/Dialect (Optional)
-                </label>
-                <input
-                  type="text"
-                  id="accent"
-                  value={languageSkills.accent}
-                  onChange={(e) => setLanguageSkills(prev => ({ ...prev, accent: e.target.value }))}
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="e.g., British, Southern, Australian"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Languages
-              </label>
-              <div className="space-y-2">
-                {languageSkills.languages.map((lang, index) => (
-                  <div key={index} className="flex gap-2">
-                    <input
-                      type="text"
-                      value={lang}
-                      onChange={(e) => updateLanguage(index, e.target.value)}
-                      className="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      placeholder="Language name"
-                    />
-                    {languageSkills.languages.length > 1 && (
+            <div className="space-y-4">
+              {languageSkills.map((lang, index) => (
+                <div key={index} className="bg-gray-800 p-4 rounded-lg border border-gray-600">
+                  <div className="flex justify-between items-center mb-3">
+                    <h5 className="text-sm font-medium text-gray-300">
+                      Language {index + 1}
+                    </h5>
+                    {languageSkills.length > 1 && (
                       <button
                         type="button"
                         onClick={() => removeLanguage(index)}
-                        className="bg-red-600 text-white rounded-lg px-3 py-2 hover:bg-red-500 transition-colors"
+                        className="text-red-400 hover:text-red-300 text-sm"
                       >
                         Remove
                       </button>
                     )}
                   </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={addLanguage}
-                  className="bg-green-600 text-white rounded-lg px-4 py-2 hover:bg-green-500 transition-colors"
-                >
-                  Add Language
-                </button>
-              </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Language
+                      </label>
+                      <input
+                        type="text"
+                        value={lang.language}
+                        onChange={(e) => updateLanguage(index, 'language', e.target.value)}
+                        className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        placeholder="e.g., English, Spanish, French"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Fluency Level
+                      </label>
+                      <select
+                        value={lang.fluency}
+                        onChange={(e) => updateLanguage(index, 'fluency', e.target.value)}
+                        className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      >
+                        <option value="beginner">Beginner</option>
+                        <option value="intermediate">Intermediate</option>
+                        <option value="advanced">Advanced</option>
+                        <option value="native">Native</option>
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Accent/Dialect (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={lang.accent}
+                        onChange={(e) => updateLanguage(index, 'accent', e.target.value)}
+                        className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        placeholder="e.g., British, Southern, Australian"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+              
+              <button
+                type="button"
+                onClick={addLanguage}
+                className="w-full bg-green-600 text-white rounded-lg px-4 py-2 hover:bg-green-500 transition-colors"
+              >
+                Add Language
+              </button>
+              
               {errors.languages && (
                 <p className="text-red-400 text-xs mt-1">{errors.languages}</p>
               )}

@@ -1,4 +1,5 @@
 import type { User, Channel, Message } from '../types';
+import { isPerLanguageFormat, isLegacyFormat } from '../types';
 
 // Helper function to parse CSV line properly handling quoted fields
 const parseCSVLine = (line: string): string[] => {
@@ -149,35 +150,48 @@ export const importUsersFromJSON = (jsonContent: string): User[] => {
     if (Array.isArray(data)) {
       return data.map(user => {
         // Handle different languageSkills formats from World Editor
-        let languageSkills: { fluency: string; languages: string[]; accent: string };
+        let languageSkills: User['languageSkills'];
         
         if (Array.isArray(user.languageSkills)) {
           // World Editor format: array of {language, fluency, accent} objects
-          const languages = user.languageSkills.map((lang: any) => lang.language).filter(Boolean);
-          const primaryFluency = user.languageSkills.find((lang: any) => lang.fluency === 'Native')?.fluency || 
-                                user.languageSkills[0]?.fluency || 'native';
-          const primaryAccent = user.languageSkills.find((lang: any) => lang.accent)?.accent || '';
-          
           languageSkills = {
-            fluency: primaryFluency.toLowerCase(),
-            languages: languages.length > 0 ? languages : ['English'],
-            accent: primaryAccent
+            languages: user.languageSkills.map((lang: any) => ({
+              language: lang.language || 'English',
+              fluency: (lang.fluency || 'native').toLowerCase(),
+              accent: lang.accent || ''
+            }))
           };
         } else if (user.languageSkills && typeof user.languageSkills === 'object') {
-          // Station V format: {fluency, languages, accent}
-          languageSkills = {
-            fluency: user.languageSkills.fluency || 'native',
-            languages: Array.isArray(user.languageSkills.languages) 
-              ? user.languageSkills.languages 
-              : (user.languageSkills.languages ? [user.languageSkills.languages] : ['English']),
-            accent: user.languageSkills.accent || ''
-          };
+          // Check if it's already in per-language format
+          if (isPerLanguageFormat(user.languageSkills)) {
+            languageSkills = user.languageSkills;
+          } else if (isLegacyFormat(user.languageSkills)) {
+            // Convert legacy format to per-language format
+            languageSkills = {
+              languages: user.languageSkills.languages.map(lang => ({
+                language: lang,
+                fluency: user.languageSkills.fluency,
+                accent: user.languageSkills.accent || ''
+              }))
+            };
+          } else {
+            // Default fallback
+            languageSkills = {
+              languages: [{
+                language: 'English',
+                fluency: 'native',
+                accent: ''
+              }]
+            };
+          }
         } else {
           // Default fallback
           languageSkills = {
-            fluency: 'native',
-            languages: ['English'],
-            accent: ''
+            languages: [{
+              language: 'English',
+              fluency: 'native',
+              accent: ''
+            }]
           };
         }
 

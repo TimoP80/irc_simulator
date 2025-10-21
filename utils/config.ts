@@ -89,15 +89,17 @@ const parseVirtualUsers = (usersString: string): User[] => {
                 personality: personalityParts.join(',').trim(),
                 status: 'online' as const,
                 languageSkills: {
-                    fluency: 'native' as const,
-                    languages: ['English'],
-                    accent: ''
+                    languages: [{
+                        language: 'English',
+                        fluency: 'native' as const,
+                        accent: ''
+                    }]
                 },
                 writingStyle: {
-                    formality: 'casual' as const,
-                    verbosity: 'moderate' as const,
-                    humor: 'light' as const,
-                    emojiUsage: 'minimal' as const,
+                    formality: 'informal' as const,
+                    verbosity: 'neutral' as const,
+                    humor: 'none' as const,
+                    emojiUsage: 'low' as const,
                     punctuation: 'standard' as const
                 }
             };
@@ -130,8 +132,14 @@ const parseChannels = (channelsString: string, allVirtualUsers: User[], currentU
                         nickname: currentUserNickname, 
                         status: 'online' as const,
                         personality: 'The human user',
-                        languageSkills: { fluency: 'native' as const, languages: ['English'], accent: '' },
-                        writingStyle: { formality: 'casual' as const, verbosity: 'moderate' as const, humor: 'light' as const, emojiUsage: 'minimal' as const, punctuation: 'standard' as const }
+                        languageSkills: { 
+                            languages: [{
+                                language: 'English',
+                                fluency: 'native' as const,
+                                accent: ''
+                            }]
+                        },
+                        writingStyle: { formality: 'informal' as const, verbosity: 'neutral' as const, humor: 'none' as const, emojiUsage: 'low' as const, punctuation: 'standard' as const }
                     }, 
                     ...usersForChannel
                 ],
@@ -165,8 +173,14 @@ export const initializeStateFromConfig = (config: AppConfig) => {
                     nickname, 
                     status: 'online' as const,
                     personality: 'The human user',
-                    languageSkills: { fluency: 'native' as const, languages: ['English'], accent: '' },
-                    writingStyle: { formality: 'casual' as const, verbosity: 'moderate' as const, humor: 'light' as const, emojiUsage: 'minimal' as const, punctuation: 'standard' as const }
+                    languageSkills: { 
+                        languages: [{
+                            language: 'English',
+                            fluency: 'native' as const,
+                            accent: ''
+                        }]
+                    },
+                    writingStyle: { formality: 'informal' as const, verbosity: 'neutral' as const, humor: 'none' as const, emojiUsage: 'low' as const, punctuation: 'standard' as const }
                 },
                 ...virtualUsers
             ]
