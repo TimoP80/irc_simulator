@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User } from '../types';
+import { User, Channel } from '../types';
 import { generateRandomNicknameAsync } from '../utils/personalityTemplates';
 
 interface AddUserModalProps {
@@ -9,6 +9,8 @@ interface AddUserModalProps {
   existingNicknames: string[];
   editingUser?: User | null;
   onUpdateUser?: (oldNickname: string, newUser: User) => void;
+  channels?: Channel[];
+  onChannelsChange?: (channels: Channel[]) => void;
 }
 
 export const AddUserModal: React.FC<AddUserModalProps> = ({
@@ -17,7 +19,9 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
   onAddUser,
   existingNicknames,
   editingUser,
-  onUpdateUser
+  onUpdateUser,
+  channels = [],
+  onChannelsChange
 }) => {
   const [nickname, setNickname] = useState('');
   const [personality, setPersonality] = useState('');
@@ -27,14 +31,15 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
     accent: ''
   });
   const [writingStyle, setWritingStyle] = useState({
-    formality: 'casual' as 'casual' | 'formal' | 'mixed',
-    verbosity: 'moderate' as 'concise' | 'moderate' | 'verbose',
-    humor: 'light' as 'none' | 'light' | 'heavy',
-    emojiUsage: 'minimal' as 'none' | 'minimal' | 'frequent',
-    punctuation: 'standard' as 'minimal' | 'standard' | 'excessive'
+    formality: 'neutral' as 'very_informal' | 'informal' | 'neutral' | 'formal' | 'very_formal',
+    verbosity: 'neutral' as 'very_terse' | 'terse' | 'neutral' | 'verbose' | 'very_verbose',
+    humor: 'none' as 'none' | 'dry' | 'sarcastic' | 'witty' | 'slapstick',
+    emojiUsage: 'low' as 'none' | 'low' | 'medium' | 'high' | 'excessive',
+    punctuation: 'standard' as 'minimal' | 'standard' | 'creative' | 'excessive'
   });
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [isRandomizing, setIsRandomizing] = useState(false);
+  const [assignedChannels, setAssignedChannels] = useState<string[]>([]);
 
   const isEditing = !!editingUser;
 
@@ -44,8 +49,23 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
       if (editingUser) {
         setNickname(editingUser.nickname);
         setPersonality(editingUser.personality);
-        setLanguageSkills(editingUser.languageSkills);
-        setWritingStyle(editingUser.writingStyle);
+        setLanguageSkills({
+          fluency: editingUser.languageSkills?.fluency || 'native',
+          languages: editingUser.languageSkills?.languages || ['English'],
+          accent: editingUser.languageSkills?.accent || ''
+        });
+        setWritingStyle({
+          formality: editingUser.writingStyle?.formality || 'neutral',
+          verbosity: editingUser.writingStyle?.verbosity || 'neutral',
+          humor: editingUser.writingStyle?.humor || 'none',
+          emojiUsage: editingUser.writingStyle?.emojiUsage || 'low',
+          punctuation: editingUser.writingStyle?.punctuation || 'standard'
+        });
+        // Get channels where this user is assigned
+        const userChannels = channels
+          .filter(channel => channel.users.some(u => u.nickname === editingUser.nickname))
+          .map(channel => channel.name);
+        setAssignedChannels(userChannels);
       } else {
         setNickname('');
         setPersonality('');
@@ -55,16 +75,17 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
           accent: ''
         });
         setWritingStyle({
-          formality: 'casual',
-          verbosity: 'moderate',
-          humor: 'light',
-          emojiUsage: 'minimal',
+          formality: 'neutral',
+          verbosity: 'neutral',
+          humor: 'none',
+          emojiUsage: 'low',
           punctuation: 'standard'
         });
+        setAssignedChannels([]);
       }
       setErrors({});
     }
-  }, [isOpen, editingUser]);
+  }, [isOpen, editingUser, channels]);
 
   // Handle Escape key to close modal
   useEffect(() => {
@@ -129,6 +150,30 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
       writingStyle
     };
 
+    // Handle channel assignments
+    if (onChannelsChange && assignedChannels.length > 0) {
+      const updatedChannels = channels.map(channel => {
+        if (assignedChannels.includes(channel.name)) {
+          // Check if user is already in this channel (for editing)
+          const isAlreadyInChannel = channel.users.some(u => u.nickname === newUser.nickname);
+          if (!isAlreadyInChannel) {
+            return {
+              ...channel,
+              users: [...channel.users, newUser]
+            };
+          }
+        } else if (isEditing && editingUser) {
+          // Remove user from channels they're no longer assigned to
+          return {
+            ...channel,
+            users: channel.users.filter(u => u.nickname !== editingUser.nickname)
+          };
+        }
+        return channel;
+      });
+      onChannelsChange(updatedChannels);
+    }
+
     if (isEditing && editingUser && onUpdateUser) {
       onUpdateUser(editingUser.nickname, newUser);
     } else {
@@ -164,10 +209,10 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
       accent: ''
     });
     setWritingStyle({
-      formality: 'casual',
-      verbosity: 'moderate',
-      humor: 'light',
-      emojiUsage: 'minimal',
+      formality: 'neutral',
+      verbosity: 'neutral',
+      humor: 'none',
+      emojiUsage: 'low',
       punctuation: 'standard'
     });
     setErrors({});
@@ -193,6 +238,21 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
       ...prev,
       languages: prev.languages.filter((_, i) => i !== index)
     }));
+  };
+
+  // Channel assignment functions
+  const assignToChannel = (channelName: string) => {
+    if (!assignedChannels.includes(channelName)) {
+      setAssignedChannels(prev => [...prev, channelName]);
+    }
+  };
+
+  const removeFromChannel = (channelName: string) => {
+    setAssignedChannels(prev => prev.filter(name => name !== channelName));
+  };
+
+  const getAvailableChannels = () => {
+    return channels.filter(channel => !assignedChannels.includes(channel.name));
   };
 
   if (!isOpen) return null;
@@ -388,9 +448,11 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
                   onChange={(e) => setWritingStyle(prev => ({ ...prev, formality: e.target.value as any }))}
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
-                  <option value="casual">Casual</option>
+                  <option value="very_informal">Very Informal</option>
+                  <option value="informal">Informal</option>
+                  <option value="neutral">Neutral</option>
                   <option value="formal">Formal</option>
-                  <option value="mixed">Mixed</option>
+                  <option value="very_formal">Very Formal</option>
                 </select>
               </div>
 
@@ -404,9 +466,11 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
                   onChange={(e) => setWritingStyle(prev => ({ ...prev, verbosity: e.target.value as any }))}
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
-                  <option value="concise">Concise</option>
-                  <option value="moderate">Moderate</option>
+                  <option value="very_terse">Very Terse</option>
+                  <option value="terse">Terse</option>
+                  <option value="neutral">Neutral</option>
                   <option value="verbose">Verbose</option>
+                  <option value="very_verbose">Very Verbose</option>
                 </select>
               </div>
 
@@ -421,8 +485,10 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   <option value="none">None</option>
-                  <option value="light">Light</option>
-                  <option value="heavy">Heavy</option>
+                  <option value="dry">Dry</option>
+                  <option value="sarcastic">Sarcastic</option>
+                  <option value="witty">Witty</option>
+                  <option value="slapstick">Slapstick</option>
                 </select>
               </div>
 
@@ -437,8 +503,10 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   <option value="none">None</option>
-                  <option value="minimal">Minimal</option>
-                  <option value="frequent">Frequent</option>
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="excessive">Excessive</option>
                 </select>
               </div>
 
@@ -454,11 +522,72 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
                 >
                   <option value="minimal">Minimal</option>
                   <option value="standard">Standard</option>
+                  <option value="creative">Creative</option>
                   <option value="excessive">Excessive</option>
                 </select>
               </div>
             </div>
           </div>
+
+          {/* Channel Assignments */}
+          {channels.length > 0 && onChannelsChange && (
+            <div className="space-y-4">
+              <h4 className="text-lg font-semibold text-gray-200 border-b border-gray-600 pb-2">
+                Channel Assignments
+              </h4>
+              
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-300">Assign to channels:</span>
+                  {getAvailableChannels().length > 0 && (
+                    <select
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          assignToChannel(e.target.value);
+                          e.target.value = '';
+                        }
+                      }}
+                      className="bg-gray-600 text-white text-sm rounded px-3 py-1 border border-gray-500"
+                      defaultValue=""
+                    >
+                      <option value="">Add to channel...</option>
+                      {getAvailableChannels().map(channel => (
+                        <option key={channel.name} value={channel.name}>
+                          {channel.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                
+                <div className="flex flex-wrap gap-2">
+                  {assignedChannels.map(channelName => (
+                    <span
+                      key={channelName}
+                      className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium bg-indigo-900 text-indigo-200"
+                    >
+                      {channelName}
+                      <button
+                        type="button"
+                        onClick={() => removeFromChannel(channelName)}
+                        className="ml-1 text-indigo-300 hover:text-indigo-100"
+                        title={`Remove from ${channelName}`}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                  {assignedChannels.length === 0 && (
+                    <span className="text-gray-500 text-sm italic">Not assigned to any channels</span>
+                  )}
+                </div>
+                
+                <p className="text-gray-500 text-xs">
+                  Users will only appear in channels they're assigned to. You can assign users to channels later from the main user list.
+                </p>
+              </div>
+            </div>
+          )}
 
           <div className="flex justify-end gap-3 pt-4 border-t border-gray-600">
             <button

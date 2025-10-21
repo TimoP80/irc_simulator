@@ -235,6 +235,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel, 
             aiModel={config.aiModel}
             channels={currentChannels || channels}
             currentUserNickname={config.currentUserNickname}
+            onChannelsChange={setChannels}
           />
           <ChannelManagement channels={channels} onChannelsChange={setChannels} />
           

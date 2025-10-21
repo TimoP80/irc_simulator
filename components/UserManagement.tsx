@@ -10,9 +10,52 @@ interface UserManagementProps {
   aiModel: string;
   channels: Channel[];
   currentUserNickname: string;
+  onChannelsChange?: (channels: Channel[]) => void;
 }
 
-export const UserManagement: React.FC<UserManagementProps> = ({ users, onUsersChange, aiModel, channels, currentUserNickname }) => {
+// Helper function to convert internal values to display text
+const formatWritingStyleValue = (value: string, type: 'formality' | 'verbosity' | 'humor' | 'emojiUsage' | 'punctuation'): string => {
+  const mappings = {
+    formality: {
+      'very_informal': 'Very Informal',
+      'informal': 'Informal',
+      'neutral': 'Neutral',
+      'formal': 'Formal',
+      'very_formal': 'Very Formal'
+    },
+    verbosity: {
+      'very_terse': 'Very Terse',
+      'terse': 'Terse',
+      'neutral': 'Neutral',
+      'verbose': 'Verbose',
+      'very_verbose': 'Very Verbose'
+    },
+    humor: {
+      'none': 'None',
+      'dry': 'Dry',
+      'sarcastic': 'Sarcastic',
+      'witty': 'Witty',
+      'slapstick': 'Slapstick'
+    },
+    emojiUsage: {
+      'none': 'None',
+      'low': 'Low',
+      'medium': 'Medium',
+      'high': 'High',
+      'excessive': 'Excessive'
+    },
+    punctuation: {
+      'minimal': 'Minimal',
+      'standard': 'Standard',
+      'creative': 'Creative',
+      'excessive': 'Excessive'
+    }
+  };
+  
+  return mappings[type][value as keyof typeof mappings[typeof type]] || value;
+};
+
+export const UserManagement: React.FC<UserManagementProps> = ({ users, onUsersChange, aiModel, channels, currentUserNickname, onChannelsChange }) => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
   const [isImportExportModalOpen, setIsImportExportModalOpen] = useState(false);
@@ -60,6 +103,51 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onUsersCh
 
   const handleImportUsers = (importedUsers: User[]) => {
     onUsersChange([...users, ...importedUsers]);
+  };
+
+  // Get channels where a user is assigned
+  const getUserChannels = (user: User): Channel[] => {
+    return channels.filter(channel => 
+      channel.users.some(channelUser => channelUser.nickname === user.nickname)
+    );
+  };
+
+  // Assign user to a channel
+  const assignUserToChannel = (user: User, channelName: string) => {
+    if (!onChannelsChange) return;
+    
+    const updatedChannels = channels.map(channel => {
+      if (channel.name === channelName) {
+        // Check if user is already in this channel
+        const isAlreadyInChannel = channel.users.some(u => u.nickname === user.nickname);
+        if (!isAlreadyInChannel) {
+          return {
+            ...channel,
+            users: [...channel.users, user]
+          };
+        }
+      }
+      return channel;
+    });
+    
+    onChannelsChange(updatedChannels);
+  };
+
+  // Remove user from a channel
+  const removeUserFromChannel = (user: User, channelName: string) => {
+    if (!onChannelsChange) return;
+    
+    const updatedChannels = channels.map(channel => {
+      if (channel.name === channelName) {
+        return {
+          ...channel,
+          users: channel.users.filter(u => u.nickname !== user.nickname)
+        };
+      }
+      return channel;
+    });
+    
+    onChannelsChange(updatedChannels);
   };
 
   return (
@@ -142,22 +230,22 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onUsersCh
                       AI User
                     </span>
                     <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-900 text-blue-200">
-                      {user.languageSkills.fluency}
+                      {user.languageSkills?.fluency || 'unknown'}
                     </span>
                   </div>
                   
                   <p className="text-gray-300 text-sm leading-relaxed mb-3">{user.personality}</p>
                   
-                  <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="grid grid-cols-2 gap-3 text-xs mb-3">
                     <div>
                       <span className="text-gray-400 font-medium">Languages:</span>
-                      <p className="text-gray-300">{user.languageSkills.languages.join(', ')}</p>
+                      <p className="text-gray-300">{user.languageSkills?.languages?.join(', ') || 'Not specified'}</p>
                     </div>
                     <div>
                       <span className="text-gray-400 font-medium">Style:</span>
-                      <p className="text-gray-300 capitalize">{user.writingStyle.formality} • {user.writingStyle.verbosity}</p>
+                      <p className="text-gray-300">{formatWritingStyleValue(user.writingStyle?.formality || 'neutral', 'formality')} • {formatWritingStyleValue(user.writingStyle?.verbosity || 'neutral', 'verbosity')}</p>
                     </div>
-                    {user.languageSkills.accent && (
+                    {user.languageSkills?.accent && (
                       <div>
                         <span className="text-gray-400 font-medium">Accent:</span>
                         <p className="text-gray-300">{user.languageSkills.accent}</p>
@@ -165,7 +253,57 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onUsersCh
                     )}
                     <div>
                       <span className="text-gray-400 font-medium">Humor:</span>
-                      <p className="text-gray-300 capitalize">{user.writingStyle.humor}</p>
+                      <p className="text-gray-300">{formatWritingStyleValue(user.writingStyle?.humor || 'none', 'humor')}</p>
+                    </div>
+                  </div>
+
+                  {/* Channel Assignments */}
+                  <div className="border-t border-gray-600 pt-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-gray-400 font-medium text-xs">Channel Assignments:</span>
+                      {onChannelsChange && (
+                        <select
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              assignUserToChannel(user, e.target.value);
+                              e.target.value = '';
+                            }
+                          }}
+                          className="bg-gray-600 text-white text-xs rounded px-2 py-1 border border-gray-500"
+                          defaultValue=""
+                        >
+                          <option value="">Add to channel...</option>
+                          {channels
+                            .filter(channel => !channel.users.some(u => u.nickname === user.nickname))
+                            .map(channel => (
+                              <option key={channel.name} value={channel.name}>
+                                {channel.name}
+                              </option>
+                            ))}
+                        </select>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {getUserChannels(user).map(channel => (
+                        <span
+                          key={channel.name}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-indigo-900 text-indigo-200"
+                        >
+                          {channel.name}
+                          {onChannelsChange && (
+                            <button
+                              onClick={() => removeUserFromChannel(user, channel.name)}
+                              className="ml-1 text-indigo-300 hover:text-indigo-100"
+                              title={`Remove from ${channel.name}`}
+                            >
+                              ×
+                            </button>
+                          )}
+                        </span>
+                      ))}
+                      {getUserChannels(user).length === 0 && (
+                        <span className="text-gray-500 text-xs italic">Not assigned to any channels</span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -204,6 +342,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onUsersCh
         onUpdateUser={handleUpdateUser}
         existingNicknames={users.map(u => u.nickname)}
         editingUser={editingUser}
+        channels={channels}
+        onChannelsChange={onChannelsChange}
       />
 
       <BatchUserModal

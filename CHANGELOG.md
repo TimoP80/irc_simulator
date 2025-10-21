@@ -4,6 +4,34 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 
 *Note: This project was previously known as "Gemini IRC Simulator" and was renamed to "Station V - Virtual IRC Simulator" as of v1.5.1.*
 
+## 1.12.0 - 2025-01-20
+
+### Added
+- **Channel Assignment System**: Complete user-channel assignment functionality for realistic IRC simulation
+  - **Visual Channel Assignments**: Each user card now displays which channels they're assigned to with colored badges
+  - **Assignment Controls**: Dropdown selector to assign users to channels and remove buttons to unassign
+  - **Real-time Updates**: Channel assignments update immediately in the user interface
+  - **World Editor Integration**: Seamlessly integrated into the existing user management interface
+  - **Assignment Status**: Clear indication when users are not assigned to any channels
+  - **Flexible Management**: Easy assign/unassign functionality for better user organization
+
+### Enhanced
+- **User Management Interface**: Enhanced user cards with dedicated channel assignment section
+  - **Channel Badges**: Indigo-colored badges showing current channel assignments
+  - **Assignment Dropdown**: Smart dropdown showing only channels where user is not yet assigned
+  - **Visual Hierarchy**: Clean separation between user details and channel assignments
+  - **Intuitive Controls**: Easy-to-use interface for managing user-channel relationships
+- **Simulation Realism**: AI simulation now only uses users assigned to the current channel
+  - **Channel-Specific Activity**: Background simulation respects channel assignments
+  - **Realistic Behavior**: Users only appear in channels they're assigned to
+  - **Better Organization**: Clear separation of users across different channels
+
+### Technical Changes
+- **UserManagement Component**: Added `onChannelsChange` prop and channel assignment functions
+- **SettingsModal Integration**: Updated to pass channel change handler to user management
+- **Assignment Logic**: Functions to assign/unassign users from channels with proper state management
+- **Visual Components**: Enhanced user display with channel assignment section and controls
+
 ## 1.11.3 - 2025-01-20
 
 ### Fixed

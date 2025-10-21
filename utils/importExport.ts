@@ -1,5 +1,38 @@
 import type { User, Channel, Message } from '../types';
 
+// Helper function to parse CSV line properly handling quoted fields
+const parseCSVLine = (line: string): string[] => {
+  const result: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        // Escaped quote
+        current += '"';
+        i++; // Skip next quote
+      } else {
+        // Toggle quote state
+        inQuotes = !inQuotes;
+      }
+    } else if (char === ',' && !inQuotes) {
+      // End of field
+      result.push(current.trim());
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  
+  // Add the last field
+  result.push(current.trim());
+  
+  return result;
+};
+
 export interface UserExportData {
   nickname: string;
   personality: string;
@@ -48,14 +81,16 @@ export const exportUsersToCSV = (users: User[]): string => {
 
 export const importUsersFromCSV = (csvContent: string): User[] => {
   const lines = csvContent.split('\n').filter(line => line.trim());
-  const headers = lines[0].split(',').map(h => h.replace(/"/g, '').trim());
   
   if (lines.length < 2) return [];
 
+  // Parse CSV header
+  const headers = parseCSVLine(lines[0]);
+  
   const users: User[] = [];
   
   for (let i = 1; i < lines.length; i++) {
-    const values = lines[i].split(',').map(v => v.replace(/"/g, '').trim());
+    const values = parseCSVLine(lines[i]);
     
     if (values.length < headers.length) continue;
 
@@ -70,10 +105,10 @@ export const importUsersFromCSV = (csvContent: string): User[] => {
         accent: values[4] || ''
       },
       writingStyle: {
-        formality: (values[5] as any) || 'casual',
-        verbosity: (values[6] as any) || 'moderate',
-        humor: (values[7] as any) || 'light',
-        emojiUsage: (values[8] as any) || 'minimal',
+        formality: (values[5] as any) || 'neutral',
+        verbosity: (values[6] as any) || 'neutral',
+        humor: (values[7] as any) || 'none',
+        emojiUsage: (values[8] as any) || 'low',
         punctuation: (values[9] as any) || 'standard'
       }
     };
@@ -89,10 +124,10 @@ export const importUsersFromCSV = (csvContent: string): User[] => {
     
     if (!user.writingStyle) {
       user.writingStyle = {
-        formality: 'casual',
-        verbosity: 'moderate',
-        humor: 'light',
-        emojiUsage: 'minimal',
+        formality: 'neutral',
+        verbosity: 'neutral',
+        humor: 'none',
+        emojiUsage: 'low',
         punctuation: 'standard'
       };
     }
@@ -113,23 +148,123 @@ export const importUsersFromJSON = (jsonContent: string): User[] => {
     
     if (Array.isArray(data)) {
       return data.map(user => {
+        // Handle different languageSkills formats from World Editor
+        let languageSkills: { fluency: string; languages: string[]; accent: string };
+        
+        if (Array.isArray(user.languageSkills)) {
+          // World Editor format: array of {language, fluency, accent} objects
+          const languages = user.languageSkills.map((lang: any) => lang.language).filter(Boolean);
+          const primaryFluency = user.languageSkills.find((lang: any) => lang.fluency === 'Native')?.fluency || 
+                                user.languageSkills[0]?.fluency || 'native';
+          const primaryAccent = user.languageSkills.find((lang: any) => lang.accent)?.accent || '';
+          
+          languageSkills = {
+            fluency: primaryFluency.toLowerCase(),
+            languages: languages.length > 0 ? languages : ['English'],
+            accent: primaryAccent
+          };
+        } else if (user.languageSkills && typeof user.languageSkills === 'object') {
+          // Station V format: {fluency, languages, accent}
+          languageSkills = {
+            fluency: user.languageSkills.fluency || 'native',
+            languages: Array.isArray(user.languageSkills.languages) 
+              ? user.languageSkills.languages 
+              : (user.languageSkills.languages ? [user.languageSkills.languages] : ['English']),
+            accent: user.languageSkills.accent || ''
+          };
+        } else {
+          // Default fallback
+          languageSkills = {
+            fluency: 'native',
+            languages: ['English'],
+            accent: ''
+          };
+        }
+
+        // Handle different writingStyle formats from World Editor
+        let writingStyle: { formality: string; verbosity: string; humor: string; emojiUsage: string; punctuation: string };
+        
+        if (user.writingStyle && typeof user.writingStyle === 'object') {
+          // Convert World Editor format to Station V format
+          const convertFormality = (formality: string) => {
+            const mapping: { [key: string]: string } = {
+              'Very Informal': 'very_informal',
+              'Informal': 'informal',
+              'Neutral': 'neutral',
+              'Formal': 'formal',
+              'Very Formal': 'very_formal'
+            };
+            return mapping[formality] || 'neutral';
+          };
+
+          const convertVerbosity = (verbosity: string) => {
+            const mapping: { [key: string]: string } = {
+              'Very Terse': 'very_terse',
+              'Terse': 'terse',
+              'Neutral': 'neutral',
+              'Verbose': 'verbose',
+              'Very Verbose': 'very_verbose'
+            };
+            return mapping[verbosity] || 'neutral';
+          };
+
+          const convertHumor = (humor: string) => {
+            const mapping: { [key: string]: string } = {
+              'None': 'none',
+              'Dry': 'dry',
+              'Sarcastic': 'sarcastic',
+              'Witty': 'witty',
+              'Slapstick': 'slapstick'
+            };
+            return mapping[humor] || 'none';
+          };
+
+          const convertEmojiUsage = (emojiUsage: string) => {
+            const mapping: { [key: string]: string } = {
+              'None': 'none',
+              'Low': 'low',
+              'Medium': 'medium',
+              'High': 'high',
+              'Excessive': 'excessive'
+            };
+            return mapping[emojiUsage] || 'low';
+          };
+
+          const convertPunctuation = (punctuation: string) => {
+            const mapping: { [key: string]: string } = {
+              'Minimal': 'minimal',
+              'Standard': 'standard',
+              'Creative': 'creative',
+              'Excessive': 'excessive'
+            };
+            return mapping[punctuation] || 'standard';
+          };
+
+          writingStyle = {
+            formality: convertFormality(user.writingStyle.formality || 'Neutral'),
+            verbosity: convertVerbosity(user.writingStyle.verbosity || 'Neutral'),
+            humor: convertHumor(user.writingStyle.humor || 'None'),
+            emojiUsage: convertEmojiUsage(user.writingStyle.emojiUsage || 'Low'),
+            punctuation: convertPunctuation(user.writingStyle.punctuation || 'Standard')
+          };
+        } else {
+          // Default fallback
+          writingStyle = {
+            formality: 'neutral',
+            verbosity: 'neutral',
+            humor: 'none',
+            emojiUsage: 'low',
+            punctuation: 'standard'
+          };
+        }
+
         // Ensure all required properties exist with defaults
         const importedUser: User = {
           nickname: user.nickname || `user${Math.random().toString(36).substr(2, 9)}`,
           status: 'online' as const,
           personality: user.personality || 'Imported user',
-          languageSkills: user.languageSkills || {
-            fluency: 'native',
-            languages: ['English'],
-            accent: ''
-          },
-          writingStyle: user.writingStyle || {
-            formality: 'casual',
-            verbosity: 'moderate',
-            humor: 'light',
-            emojiUsage: 'minimal',
-            punctuation: 'standard'
-          }
+          languageSkills,
+          writingStyle
         };
 
         return importedUser;
