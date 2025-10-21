@@ -4,6 +4,65 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 
 *Note: This project was previously known as "Gemini IRC Simulator" and was renamed to "Station V - Virtual IRC Simulator" as of v1.5.1.*
 
+## 1.13.7 - 2025-01-20
+
+### Fixed
+- **Settings Save Issue**: Fixed operator assignments being reset when pressing "Save" in settings
+  - **Config Preservation**: Settings save now preserves current channels with operator assignments
+  - **Operator Persistence**: Added localStorage persistence for operator assignments across app restarts
+  - **Real-time Updates**: Operator changes are immediately visible and persist when settings are saved
+  - **No More Reset**: Pressing "Save" no longer resets operator status to regular users
+
+## 1.13.6 - 2025-01-20
+
+### Fixed
+- **Real-time Operator Updates**: Fixed channel operator assignments not being reflected immediately in the user list
+  - **Live Updates**: Channel operator changes in settings now update the main app in real-time
+  - **State Synchronization**: Added callback to sync channel changes between settings modal and main app
+  - **Active Context Preservation**: Settings save now preserves active channel context when possible
+  - **Immediate Feedback**: Operator status changes are now visible immediately without needing to save settings
+
+## 1.13.5 - 2025-01-20
+
+### Fixed
+- **UserList Import Error**: Fixed "isChannelOperator is not defined" error when clicking on channels
+  - **Import Fix**: Changed from type import to function import for isChannelOperator
+  - **Function vs Type**: isChannelOperator is a utility function, not a type
+
+## 1.13.4 - 2025-01-20
+
+### Fixed
+- **Operator Utility Functions**: Fixed "can't access property 'includes', channel.operators is undefined" error in operator utility functions
+  - **isChannelOperator**: Now safely handles undefined operators property
+  - **addChannelOperator**: Uses fallback for undefined operators
+  - **removeChannelOperator**: Uses fallback for undefined operators
+  - **canUserPerformAction**: Inherits safe behavior from isChannelOperator
+
+## 1.13.3 - 2025-01-20
+
+### Fixed
+- **Channel Operators Error**: Fixed "can't access property 'length', channel.operators is undefined" error
+  - **Backward Compatibility**: Added migration for existing channels without operators property
+  - **Defensive Programming**: Added null checks for operators property in all components
+  - **Safe Access**: All operator-related code now uses `(channel.operators || [])` pattern
+
+## 1.13.2 - 2025-01-20
+
+### Added
+- **Channel Operator Management**: Added comprehensive operator management in the settings/channel management interface
+  - **Visual Operator Display**: See all channel operators with @nickname badges
+  - **Add Operators**: Dropdown to assign any user as a channel operator
+  - **Remove Operators**: Click × button to remove operator privileges
+  - **Operator Count**: Shows number of operators per channel
+  - **Per-Channel Management**: Each channel can have different operators
+
+## 1.13.1 - 2025-01-20
+
+### Fixed
+- **User Management Display**: Fixed language skills display showing "[object Object]" instead of proper language names
+- **Per-Language Format**: Enhanced user management to properly display per-language fluency levels and accents
+- **Data Migration**: Improved handling of malformed language skills data during import/export
+
 ## 1.13.0 - 2025-01-20
 
 ### Added

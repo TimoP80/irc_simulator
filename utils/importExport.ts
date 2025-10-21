@@ -175,14 +175,38 @@ export const importUsersFromJSON = (jsonContent: string): User[] => {
               }))
             };
           } else {
-            // Default fallback
-            languageSkills = {
-              languages: [{
-                language: 'English',
-                fluency: 'native',
-                accent: ''
-              }]
-            };
+            // Handle malformed data - try to extract what we can
+            const languages = (user.languageSkills as any).languages;
+            if (Array.isArray(languages) && languages.length > 0) {
+              // If languages is an array of strings, convert to per-language format
+              if (typeof languages[0] === 'string') {
+                languageSkills = {
+                  languages: languages.map((lang: string) => ({
+                    language: lang,
+                    fluency: 'native',
+                    accent: ''
+                  }))
+                };
+              } else {
+                // Default fallback
+                languageSkills = {
+                  languages: [{
+                    language: 'English',
+                    fluency: 'native',
+                    accent: ''
+                  }]
+                };
+              }
+            } else {
+              // Default fallback
+              languageSkills = {
+                languages: [{
+                  language: 'English',
+                  fluency: 'native',
+                  accent: ''
+                }]
+              };
+            }
           }
         } else {
           // Default fallback

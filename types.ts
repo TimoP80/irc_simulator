@@ -88,11 +88,20 @@ export interface GeminiModel {
 
 // Type guards for language skills
 export const isPerLanguageFormat = (languageSkills: User['languageSkills']): languageSkills is { languages: Array<{ language: string; fluency: 'beginner' | 'intermediate' | 'advanced' | 'native'; accent?: string; }> } => {
-  return 'languages' in languageSkills && Array.isArray(languageSkills.languages) && languageSkills.languages.length > 0 && 'language' in languageSkills.languages[0];
+  return 'languages' in languageSkills && 
+         Array.isArray(languageSkills.languages) && 
+         languageSkills.languages.length > 0 && 
+         typeof languageSkills.languages[0] === 'object' && 
+         languageSkills.languages[0] !== null &&
+         'language' in languageSkills.languages[0];
 };
 
 export const isLegacyFormat = (languageSkills: User['languageSkills']): languageSkills is { fluency: 'beginner' | 'intermediate' | 'advanced' | 'native'; languages: string[]; accent?: string; } => {
-  return 'fluency' in languageSkills && 'languages' in languageSkills && Array.isArray(languageSkills.languages);
+  return 'fluency' in languageSkills && 
+         'languages' in languageSkills && 
+         Array.isArray(languageSkills.languages) &&
+         languageSkills.languages.length > 0 &&
+         typeof languageSkills.languages[0] === 'string';
 };
 
 // Utility functions for working with language skills
@@ -103,6 +112,7 @@ export const getLanguageFluency = (languageSkills: User['languageSkills'], langu
   } else if (isLegacyFormat(languageSkills)) {
     return languageSkills.fluency;
   }
+  // Fallback for malformed data
   return 'native';
 };
 
@@ -111,6 +121,13 @@ export const getAllLanguages = (languageSkills: User['languageSkills']): string[
     return languageSkills.languages.map(l => l.language);
   } else if (isLegacyFormat(languageSkills)) {
     return languageSkills.languages;
+  }
+  // Fallback for malformed data - try to extract languages if possible
+  if (languageSkills && typeof languageSkills === 'object' && 'languages' in languageSkills) {
+    const languages = (languageSkills as any).languages;
+    if (Array.isArray(languages)) {
+      return languages.filter(lang => typeof lang === 'string');
+    }
   }
   return ['English'];
 };
@@ -122,28 +139,31 @@ export const getLanguageAccent = (languageSkills: User['languageSkills'], langua
   } else if (isLegacyFormat(languageSkills)) {
     return languageSkills.accent || '';
   }
+  // Fallback for malformed data
   return '';
 };
 
 // Channel operator utility functions
 export const isChannelOperator = (channel: Channel, nickname: string): boolean => {
-  return channel.operators.includes(nickname);
+  return (channel.operators || []).includes(nickname);
 };
 
 export const addChannelOperator = (channel: Channel, nickname: string): Channel => {
-  if (!channel.operators.includes(nickname)) {
+  const operators = channel.operators || [];
+  if (!operators.includes(nickname)) {
     return {
       ...channel,
-      operators: [...channel.operators, nickname]
+      operators: [...operators, nickname]
     };
   }
   return channel;
 };
 
 export const removeChannelOperator = (channel: Channel, nickname: string): Channel => {
+  const operators = channel.operators || [];
   return {
     ...channel,
-    operators: channel.operators.filter(op => op !== nickname)
+    operators: operators.filter(op => op !== nickname)
   };
 };
 

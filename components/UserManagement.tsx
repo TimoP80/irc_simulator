@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
+import { User, Channel, isPerLanguageFormat, isLegacyFormat, getAllLanguages } from '../types';
 import { AddUserModal } from './AddUserModal';
 import { BatchUserModal } from './BatchUserModal';
 import { ImportExportModal } from './ImportExportModal';
-import { User, Channel } from '../types';
 
 interface UserManagementProps {
   users: User[];
@@ -239,18 +239,27 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onUsersCh
                   <div className="grid grid-cols-2 gap-3 text-xs mb-3">
                     <div>
                       <span className="text-gray-400 font-medium">Languages:</span>
-                      <p className="text-gray-300">{user.languageSkills?.languages?.join(', ') || 'Not specified'}</p>
+                      <p className="text-gray-300">
+                        {isPerLanguageFormat(user.languageSkills) 
+                          ? user.languageSkills.languages.map(lang => `${lang.language} (${lang.fluency})`).join(', ')
+                          : getAllLanguages(user.languageSkills).join(', ') || 'Not specified'
+                        }
+                      </p>
                     </div>
                     <div>
                       <span className="text-gray-400 font-medium">Style:</span>
                       <p className="text-gray-300">{formatWritingStyleValue(user.writingStyle?.formality || 'neutral', 'formality')} • {formatWritingStyleValue(user.writingStyle?.verbosity || 'neutral', 'verbosity')}</p>
                     </div>
-                    {user.languageSkills?.accent && (
-                      <div>
-                        <span className="text-gray-400 font-medium">Accent:</span>
-                        <p className="text-gray-300">{user.languageSkills.accent}</p>
-                      </div>
-                    )}
+                    {(() => {
+                      const languages = isPerLanguageFormat(user.languageSkills) ? user.languageSkills.languages : [];
+                      const accents = languages.filter(lang => lang.accent).map(lang => `${lang.language} (${lang.accent})`);
+                      return accents.length > 0 && (
+                        <div>
+                          <span className="text-gray-400 font-medium">Accents:</span>
+                          <p className="text-gray-300">{accents.join(', ')}</p>
+                        </div>
+                      );
+                    })()}
                     <div>
                       <span className="text-gray-400 font-medium">Humor:</span>
                       <p className="text-gray-300">{formatWritingStyleValue(user.writingStyle?.humor || 'none', 'humor')}</p>

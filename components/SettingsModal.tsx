@@ -11,6 +11,7 @@ interface SettingsModalProps {
   onSave: (config: AppConfig) => void;
   onCancel: () => void;
   currentChannels?: Channel[];
+  onChannelsChange?: (channels: Channel[]) => void;
 }
 
 const DEFAULT_USERS_TEXT = `nova, A curious tech-savvy individual who loves gadgets.
@@ -71,7 +72,7 @@ const formatChannelsToText = (channels: { name: string; topic: string }[]) => {
   return channels.map(channel => `${channel.name}, ${channel.topic}`).join('\n');
 };
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel, currentChannels }) => {
+export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel, currentChannels, onChannelsChange }) => {
   const [config, setConfig] = useState<AppConfig>(() => {
     const savedConfig = loadConfig();
     const aiModel = savedConfig?.aiModel || DEFAULT_AI_MODEL;
@@ -86,7 +87,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel, 
     };
   });
   const [users, setUsers] = useState<User[]>(() => parseUsersFromText(config.virtualUsers));
-  const [channels, setChannels] = useState(() => parseChannelsFromText(config.channels));
+  const [channels, setChannels] = useState(() => currentChannels || parseChannelsFromText(config.channels));
   const [isRandomizing, setIsRandomizing] = useState(false);
   const [debugConfig, setDebugConfig] = useState(getDebugConfig());
   const [availableModels, setAvailableModels] = useState<GeminiModel[]>([]);
@@ -237,7 +238,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel, 
             currentUserNickname={config.currentUserNickname}
             onChannelsChange={setChannels}
           />
-          <ChannelManagement channels={channels} onChannelsChange={setChannels} />
+          <ChannelManagement 
+            channels={channels} 
+            onChannelsChange={(newChannels) => {
+              setChannels(newChannels);
+              onChannelsChange?.(newChannels);
+            }} 
+            allUsers={users} 
+          />
           
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">Background Simulation Speed</label>
