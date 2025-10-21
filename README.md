@@ -2,6 +2,8 @@
 
 ### An Experiment in AI-Simulated Social Environments
 
+**Current Version: 1.13.11** - Enhanced language support, improved verbosity handling, and channel log export functionality.
+
 ---
 
 ## 1. The Core Idea: What is This Project?
@@ -55,6 +57,7 @@ The simulation is powered by the Gemini API, using carefully crafted prompts to 
 -   **Import/Export System**: Full data portability for user and channel management:
     -   **User Import/Export**: CSV and JSON support for user data with all attributes
     -   **Channel Import/Export**: CSV and JSON support for channel configurations
+    -   **Channel Log Export**: HTML export for chat logs with beautiful formatting
     -   **JSON Format Reference**: [Users_JSON_Format.html](Users_JSON_Format.html)
     -   **Backup & Sharing**: Easy data backup and community sharing capabilities
     -   **File Validation**: Automatic format detection with helpful error messages
@@ -64,8 +67,10 @@ The simulation is powered by the Gemini API, using carefully crafted prompts to 
 -   **Private Messaging**: Peel off from the main channels to have focused, one-on-one conversations with any AI personality.
 -   **Realistic AI Personalities**: Each AI user has detailed language skills and writing styles that affect how they communicate:
     -   **Consistent Writing Styles**: AI users maintain their formality, verbosity, and humor levels across all interactions
+    -   **Dynamic Message Length**: Very verbose users generate long, detailed messages while terse users stay brief
     -   **Language-Aware Responses**: AI considers fluency levels and language preferences when generating messages
     -   **Character Depth**: More realistic conversations based on detailed personality and communication preferences
+    -   **Channel Language Control**: Channels can have explicit dominant languages for consistent communication
 -   **Enhanced User Experience**: 
     -   **Cancel Button**: Browse settings without applying changes
     -   **Keyboard Shortcuts**: Escape key support for all modals
@@ -323,6 +328,38 @@ Station V has recently received major enhancements including channel import/expo
 - **World Editor Integration**: Share channel configurations between different setups
 - **File Validation**: Automatic format detection with helpful error messages
 - **Backup & Sharing**: Easy channel configuration backup and community sharing
+
+### 💬 **Channel Log Export System (v1.13.11)**
+- **HTML Export**: Export channel chat logs as beautifully formatted HTML files
+- **Individual Channels**: Export each channel separately with full message history
+- **All Channels**: Export all channels in one comprehensive HTML file
+- **Message Formatting**: Proper styling for different message types (system, user, AI, actions)
+- **Timestamp Support**: Full timestamp information for all messages
+- **Easy Access**: Prominent "Export Logs" button in channel management interface
+- **Cross-Platform**: HTML files work in any web browser for easy sharing
+
+### 🌍 **Advanced Language Support (v1.13.10-1.13.11)**
+- **Channel Dominant Language**: Set explicit dominant language for channels
+- **Language Override**: Channels can override automatic language detection
+- **25+ Language Support**: Comprehensive language selector with Finnish, English, Spanish, French, German, Japanese, and many more
+- **Per-Language Format**: Enhanced language skills with individual fluency and accent settings
+- **Language Persistence**: All language settings properly saved and loaded
+- **AI Language Compliance**: AI users now strictly follow their configured languages
+
+### ⚙️ **Enhanced User Management (v1.13.11)**
+- **Real-time Synchronization**: Settings modal updates immediately when user data changes
+- **Writing Style Persistence**: All humor, emoji usage, formality, and verbosity settings properly saved
+- **Import/Export Fixes**: Writing style settings now correctly import/export in CSV and JSON formats
+- **Format Compatibility**: Backward compatibility for legacy data formats
+- **User Data Integrity**: Full user objects preserved across all operations
+
+### 🎯 **Verbosity & Message Length (v1.13.11)**
+- **Dynamic Token Limits**: Message length automatically adjusts based on user verbosity settings
+- **Very Verbose Users**: 500 token limit for extremely detailed messages
+- **Verbose Users**: 300 token limit for moderately detailed messages
+- **Cutoff Prevention**: Enhanced prompts prevent message truncation
+- **Explicit Instructions**: AI receives clear guidance about message length expectations
+- **Debug Logging**: Token limits tracked and logged for troubleshooting
 
 ### 📊 **Previous Updates (v1.7.0)**
 
