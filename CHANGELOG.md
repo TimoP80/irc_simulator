@@ -4,6 +4,20 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 
 *Note: This project was previously known as "Gemini IRC Simulator" and was renamed to "Station V - Virtual IRC Simulator" as of v1.5.1.*
 
+## 1.13.13 - 2025-01-21
+
+### Fixed
+- **Message Count Preservation**: Fixed conversation reset mechanism that was too aggressive
+  - **Reset Frequency**: Changed from every 10-15 minutes to every 2-3 hours
+  - **Message Retention**: Increased from 3 messages to 100 messages during reset
+  - **Long-term Simulation**: Messages now persist much longer during extended simulation runs
+  - **Better Balance**: Maintains conversation diversity while preserving message history
+
+### Technical Improvements
+- **Conversation Reset Logic**: Much less frequent and more conservative message trimming
+- **Debug Logging**: Enhanced logging for conversation reset decisions
+- **Performance**: Reduced unnecessary message clearing operations
+
 ## 1.13.12 - 2025-01-21
 
 ### Added
