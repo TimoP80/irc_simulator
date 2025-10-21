@@ -4,6 +4,25 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 
 *Note: This project was previously known as "Gemini IRC Simulator" and was renamed to "Station V - Virtual IRC Simulator" as of v1.5.1.*
 
+## 1.13.12 - 2025-01-21
+
+### Added
+- **Time-of-Day Synchronization**: Complete time-based simulation behavior
+  - **Real-time Context**: AI prompts now include current time, day of week, and social context
+  - **Time-Appropriate Topics**: Conversations adapt to time of day (morning coffee, evening plans, late-night thoughts)
+  - **Energy Level Matching**: Message tone and energy match the time period
+  - **Weekend Awareness**: Different behavior patterns for weekends vs weekdays
+  - **Smart User Selection**: Time-based user filtering (energetic users in morning, introspective at night)
+  - **Dynamic Simulation Frequency**: More active during peak hours (17-21), quieter at night
+  - **5 Time Periods**: Morning (6-12), Afternoon (12-17), Evening (17-21), Late Evening (21-24), Late Night (0-6)
+
+### Technical Improvements
+- **Time Context Generation**: Automatic detection of time periods and social contexts
+- **User Activity Patterns**: Personality-based user selection for different times of day
+- **Frequency Adjustment**: Simulation speed adapts to natural human activity patterns
+- **Debug Logging**: Comprehensive time-based decision tracking
+- **Performance Optimized**: Minimal overhead for time calculations
+
 ## 1.13.11 - 2025-01-21
 
 ### Fixed

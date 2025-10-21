@@ -2,7 +2,7 @@
 
 ### An Experiment in AI-Simulated Social Environments
 
-**Current Version: 1.13.11** - Enhanced language support, improved verbosity handling, and channel log export functionality.
+**Current Version: 1.13.12** - Time-of-day synchronization, conversation diversity improvements, and enhanced realism.
 
 ---
 
@@ -71,6 +71,14 @@ The simulation is powered by the Gemini API, using carefully crafted prompts to 
     -   **Language-Aware Responses**: AI considers fluency levels and language preferences when generating messages
     -   **Character Depth**: More realistic conversations based on detailed personality and communication preferences
     -   **Channel Language Control**: Channels can have explicit dominant languages for consistent communication
+-   **Time-of-Day Synchronization**: The simulation adapts to real-world time patterns for maximum realism:
+    -   **Real-time Context**: AI conversations include current time, day of week, and social context
+    -   **Time-Appropriate Topics**: Morning coffee discussions, evening plans, late-night deep thoughts
+    -   **Energy Level Matching**: Message tone and energy match the time period naturally
+    -   **Smart User Selection**: Energetic users active in morning, introspective users at night
+    -   **Dynamic Activity**: More active during peak hours (5-9 PM), quieter at night
+    -   **Weekend Awareness**: Different behavior patterns for weekends vs weekdays
+    -   **5 Time Periods**: Morning, Afternoon, Evening, Late Evening, and Late Night with unique characteristics
 -   **Enhanced User Experience**: 
     -   **Cancel Button**: Browse settings without applying changes
     -   **Keyboard Shortcuts**: Escape key support for all modals
@@ -294,9 +302,26 @@ npm run lint
 npx tsc --noEmit
 ```
 
-## 6. Recent Updates (v1.11.3)
+## 6. Recent Updates (v1.13.12)
 
-Station V has recently received major enhancements including channel import/export, HTML chat log export, and comprehensive user management capabilities:
+Station V has recently received major enhancements including time-of-day synchronization, conversation diversity improvements, and enhanced realism:
+
+### 🕐 **Time-of-Day Synchronization (v1.13.12)**
+- **Real-time Context**: AI conversations automatically include current time, day of week, and social context
+- **Time-Appropriate Topics**: Morning coffee discussions, evening plans, late-night deep thoughts
+- **Energy Level Matching**: Message tone and energy naturally match the time period
+- **Smart User Selection**: Energetic users active in morning, introspective users at night
+- **Dynamic Activity**: More active during peak hours (5-9 PM), quieter at night
+- **Weekend Awareness**: Different behavior patterns for weekends vs weekdays
+- **5 Time Periods**: Morning, Afternoon, Evening, Late Evening, and Late Night with unique characteristics
+
+### 🎯 **Conversation Diversity Improvements (v1.13.12)**
+- **Diversity Prompts**: 50% chance of special prompts to break repetitive patterns
+- **User Rotation**: Smart user selection prevents same users always speaking
+- **Activity Tracking**: Prefer users who haven't spoken recently
+- **Temperature Variation**: Random AI creativity levels for more diverse responses
+- **Conversation Resets**: Automatic conversation refresh every 10-15 minutes
+- **Topic Evolution**: Conversations naturally evolve and change direction
 
 ### 🤖 **AI Model Selector**
 - **Dynamic Model Loading**: Models are fetched live from Google's Gemini API models endpoint
