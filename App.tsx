@@ -8,6 +8,7 @@ import type { Channel, Message, User, ActiveContext, PrivateMessageConversation,
 import { addChannelOperator, removeChannelOperator, isChannelOperator, canUserPerformAction } from './types';
 import { generateChannelActivity, generateReactionToMessage, generatePrivateMessageResponse } from './services/geminiService';
 import { loadConfig, saveConfig, initializeStateFromConfig, saveChannelLogs, loadChannelLogs, clearChannelLogs, simulateTypingDelay } from './utils/config';
+import { getIRCExportService, getDefaultIRCExportConfig, type IRCExportConfig, type IRCExportStatus, type IRCExportMessage } from './services/ircExportService';
 
 // Operator persistence functions
 const saveOperatorAssignments = (channels: Channel[]) => {
@@ -15,12 +16,12 @@ const saveOperatorAssignments = (channels: Channel[]) => {
     name: channel.name,
     operators: channel.operators || []
   }));
-  localStorage.setItem('irc_simulator_operators', JSON.stringify(operatorData));
+  localStorage.setItem('station_v_operators', JSON.stringify(operatorData));
 };
 
 const loadOperatorAssignments = (channels: Channel[]): Channel[] => {
   try {
-    const saved = localStorage.getItem('irc_simulator_operators');
+    const saved = localStorage.getItem('station_v_operators');
     if (saved) {
       const operatorData = JSON.parse(saved);
       return channels.map(channel => {
@@ -37,7 +38,6 @@ const loadOperatorAssignments = (channels: Channel[]): Channel[] => {
   return channels;
 };
 import { aiLogger, simulationLogger, configLogger } from './utils/debugLogger';
-import { parseIRCCommand, createCommandMessage, getIRCCommandsHelp } from './utils/ircCommands';
 
 // Migration function to ensure all channels have operators property
 const migrateChannels = (channels: Channel[]): Channel[] => {
@@ -60,9 +60,31 @@ const App: React.FC = () => {
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
   const [typingDelayConfig, setTypingDelayConfig] = useState(DEFAULT_TYPING_DELAY);
   
+  // IRC Export state
+  const [ircExportConfig, setIrcExportConfig] = useState<IRCExportConfig>(getDefaultIRCExportConfig());
+  const [ircExportStatus, setIrcExportStatus] = useState<IRCExportStatus>({
+    connected: false,
+    server: '',
+    channel: '',
+    nickname: '',
+    lastActivity: null,
+    error: null
+  });
+  
   const simulationIntervalRef = useRef<number | null>(null);
   const lastSimErrorTimestampRef = useRef<number>(0);
   const lastUserMessageTimeRef = useRef<number>(0);
+  
+  // Track conversation patterns to prevent repetition
+  const conversationPatternsRef = useRef<{
+    recentPhrases: string[];
+    topicHistory: string[];
+    lastTopicChange: number;
+  }>({
+    recentPhrases: [],
+    topicHistory: [],
+    lastTopicChange: 0
+  });
   const burstModeRef = useRef<boolean>(false);
   const lastConversationResetRef = useRef<Record<string, number>>({});
 
@@ -125,17 +147,34 @@ const App: React.FC = () => {
         
         
         configLogger.debug('Merged channels message counts:', mergedChannels.map(c => ({ name: c.name, messageCount: c.messages?.length || 0 })));
-        setChannels(loadOperatorAssignments(migrateChannels(mergedChannels)));
+        const channelsWithOperators = loadOperatorAssignments(migrateChannels(mergedChannels));
+        // Ensure current user is an operator of all channels
+        const channelsWithUserAsOperator = channelsWithOperators.map(channel => {
+          if (!isChannelOperator(channel, currentUserNickname)) {
+            return addChannelOperator(channel, currentUserNickname);
+          }
+          return channel;
+        });
+        setChannels(channelsWithUserAsOperator);
       } else {
         configLogger.debug('No saved logs, using configured channels');
         configLogger.debug('Configured channels message counts:', channels.map(c => ({ name: c.name, messageCount: c.messages?.length || 0 })));
-        setChannels(loadOperatorAssignments(migrateChannels(channels)));
+        const channelsWithOperators = loadOperatorAssignments(migrateChannels(channels));
+        // Ensure current user is an operator of all channels
+        const channelsWithUserAsOperator = channelsWithOperators.map(channel => {
+          if (!isChannelOperator(channel, currentUserNickname)) {
+            return addChannelOperator(channel, currentUserNickname);
+          }
+          return channel;
+        });
+        setChannels(channelsWithUserAsOperator);
       }
     } else {
       // If no config, open settings for the user to configure the app
       setIsSettingsOpen(true);
     }
   }, []);
+
 
   // Save channel logs and operator assignments whenever channels change
   useEffect(() => {
@@ -165,6 +204,7 @@ const App: React.FC = () => {
     setAiModel(savedAiModel || DEFAULT_AI_MODEL);
     setTypingDelayConfig(typingDelay || DEFAULT_TYPING_DELAY);
     setPrivateMessages({});
+
     
     // Preserve active context if it's a channel that still exists
     if (activeContext?.type === 'channel') {
@@ -177,6 +217,7 @@ const App: React.FC = () => {
     }
     setIsSettingsOpen(false);
   };
+
 
   const handleOpenSettings = () => {
     // Stop simulation immediately when opening settings
@@ -191,6 +232,46 @@ const App: React.FC = () => {
     setIsSettingsOpen(false);
   };
 
+  // IRC Export handlers
+  const handleIrcExportConfigChange = (newConfig: IRCExportConfig) => {
+    setIrcExportConfig(newConfig);
+  };
+
+  const handleIrcExportConnect = async () => {
+    try {
+      const ircService = getIRCExportService();
+      await ircService.connect(ircExportConfig);
+      
+      const status = ircService.getStatus();
+      setIrcExportStatus(status);
+      console.log('[IRC Export] Connected successfully');
+    } catch (error) {
+      console.error('[IRC Export] Connection failed:', error);
+      setIrcExportStatus(prev => ({
+        ...prev,
+        error: error instanceof Error ? error.message : 'Connection failed'
+      }));
+    }
+  };
+
+  const handleIrcExportDisconnect = async () => {
+    try {
+      const ircService = getIRCExportService();
+      await ircService.disconnect();
+      setIrcExportStatus({
+        connected: false,
+        server: '',
+        channel: '',
+        nickname: '',
+        lastActivity: null,
+        error: null
+      });
+      console.log('[IRC Export] Disconnected successfully');
+    } catch (error) {
+      console.error('[IRC Export] Disconnect failed:', error);
+    }
+  };
+
   const setTyping = (nickname: string, isTyping: boolean) => {
     setTypingUsers(prev => {
       const newSet = new Set(prev);
@@ -201,6 +282,75 @@ const App: React.FC = () => {
       }
       return newSet;
     });
+  };
+
+  // Function to track conversation patterns and suggest topic changes
+  const trackConversationPatterns = (message: Message, channel: Channel) => {
+    const patterns = conversationPatternsRef.current;
+    
+    // Track recent phrases (keep last 20)
+    const words = message.content.toLowerCase().split(/\s+/);
+    const phrases = [];
+    for (let i = 0; i < words.length - 1; i++) {
+      for (let len = 2; len <= Math.min(3, words.length - i); len++) {
+        const phrase = words.slice(i, i + len).join(' ');
+        if (phrase.length > 3) {
+          phrases.push(phrase);
+        }
+      }
+    }
+    
+    patterns.recentPhrases.push(...phrases);
+    if (patterns.recentPhrases.length > 50) {
+      patterns.recentPhrases = patterns.recentPhrases.slice(-50);
+    }
+    
+    // Track topic changes
+    if (message.type === 'topic') {
+      patterns.topicHistory.push(message.content);
+      patterns.lastTopicChange = Date.now();
+      if (patterns.topicHistory.length > 10) {
+        patterns.topicHistory = patterns.topicHistory.slice(-10);
+      }
+    }
+    
+    // Check if conversation is getting repetitive
+    const recentMessages = channel.messages.slice(-10);
+    const phraseCounts: { [key: string]: number } = {};
+    patterns.recentPhrases.forEach(phrase => {
+      phraseCounts[phrase] = (phraseCounts[phrase] || 0) + 1;
+    });
+    
+    const repetitivePhrases = Object.entries(phraseCounts)
+      .filter(([_, count]) => count > 2)
+      .map(([phrase, _]) => phrase);
+    
+    // If we have repetitive patterns and it's been a while since topic change, suggest a topic change
+    if (repetitivePhrases.length > 3 && 
+        Date.now() - patterns.lastTopicChange > 300000 && // 5 minutes
+        Math.random() < 0.3) { // 30% chance
+      
+      const topicSuggestions = [
+        'Let\'s talk about something completely different!',
+        'This conversation is getting repetitive, how about a new topic?',
+        'Anyone want to change the subject?',
+        'We\'ve been going in circles, let\'s try something fresh!',
+        'Time for a topic change, what should we discuss?'
+      ];
+      
+      const suggestion = topicSuggestions[Math.floor(Math.random() * topicSuggestions.length)];
+      
+      // Add a system message suggesting topic change
+      setTimeout(() => {
+        addMessageToContext({
+          id: Date.now(),
+          nickname: 'system',
+          content: suggestion,
+          timestamp: new Date(),
+          type: 'system'
+        }, { type: 'channel', name: channel.name });
+      }, 2000 + Math.random() * 3000);
+    }
   };
 
   const addMessageToContext = useCallback((message: Message, context: ActiveContext | null) => {
@@ -215,6 +365,7 @@ const App: React.FC = () => {
         simulationLogger.debug(`Message added to channel ${context.name}. Updated channel messages count: ${updatedChannels.find(c => c.name === context.name)?.messages?.length || 0}`);
         return updatedChannels;
       });
+
     } else { // 'pm'
       setPrivateMessages(prev => {
         const conversation = prev[context.with] || { user: virtualUsers.find(u => u.nickname === context.with)!, messages: [] };
@@ -227,220 +378,164 @@ const App: React.FC = () => {
         };
       });
     }
-  }, [virtualUsers]);
+
+    // Export to IRC if enabled and message is from AI
+    if (ircExportStatus.connected && (message.type === 'ai' || message.type === 'user')) {
+      const ircService = getIRCExportService();
+      if (ircService && ircService.isConnected()) {
+        ircService.sendMessage(message.content, message.nickname).catch(error => {
+          console.error('[IRC Export] Failed to send message:', error);
+        });
+      }
+    }
+  }, [virtualUsers, ircExportStatus.connected]);
+
+
+  // Handle IRC Export messages
+  useEffect(() => {
+    if (ircExportStatus.connected) {
+      const ircService = getIRCExportService();
+      if (ircService) {
+        ircService.onMessage((message: IRCExportMessage) => {
+          if (message.type === 'import') {
+            // Add message from IRC to Station V
+            const ircMessage: Message = {
+              id: Date.now(),
+              nickname: message.nickname,
+              content: message.content,
+              timestamp: message.timestamp,
+              type: 'user'
+            };
+            
+            // Add to the active channel if we're in one
+            if (activeContext?.type === 'channel') {
+              addMessageToContext(ircMessage, activeContext);
+            }
+          }
+        });
+      }
+    }
+  }, [ircExportStatus.connected, activeContext, addMessageToContext]);
 
   const handleCommand = (command: string) => {
-    const parsedCommand = parseIRCCommand(command);
+    // Basic command handling for web app
     
-    if (!parsedCommand) {
+    if (command.startsWith('/')) {
+      const parts = command.split(' ');
+      const cmd = parts[0].toLowerCase();
+      
+      // Handle /topic command
+      if (cmd === '/topic') {
+        if (activeContext?.type !== 'channel') {
+          addMessageToContext({
+            id: Date.now(),
+            nickname: 'system',
+            content: 'You can only change topics in channels',
+            timestamp: new Date(),
+            type: 'system'
+          }, activeContext);
+          return;
+        }
+        
+        const activeChannel = channels.find(c => c.name === activeContext.name);
+        if (!activeChannel) return;
+        
+        // Check if user is a channel operator
+        if (!isChannelOperator(activeChannel, currentUserNickname)) {
+          addMessageToContext({
+            id: Date.now(),
+            nickname: 'system',
+            content: 'You must be a channel operator to change the topic',
+            timestamp: new Date(),
+            type: 'system'
+          }, activeContext);
+          return;
+        }
+        
+        // If no new topic provided, show current topic
+        if (parts.length === 1) {
+          addMessageToContext({
+            id: Date.now(),
+            nickname: 'system',
+            content: `Current topic for ${activeChannel.name}: ${activeChannel.topic || 'No topic set'}`,
+            timestamp: new Date(),
+            type: 'system'
+          }, activeContext);
+          return;
+        }
+        
+        // Set new topic
+        const newTopic = parts.slice(1).join(' ');
+        setChannels(prevChannels => 
+          prevChannels.map(channel => 
+            channel.name === activeChannel.name 
+              ? { ...channel, topic: newTopic }
+              : channel
+          )
+        );
+        
+        // Add topic change message
+        addMessageToContext({
+          id: Date.now(),
+          nickname: currentUserNickname,
+          content: newTopic,
+          timestamp: new Date(),
+          type: 'topic',
+          command: 'topic'
+        }, activeContext);
+        
+        // Trigger AI reactions to topic change
+        if (activeChannel) {
+          setTimeout(async () => {
+            try {
+              const reaction = await generateReactionToMessage(activeChannel, {
+                id: Date.now(),
+                nickname: currentUserNickname,
+                content: newTopic,
+                timestamp: new Date(),
+                type: 'topic',
+                command: 'topic'
+              }, currentUserNickname, aiModel);
+              
+              if (reaction) {
+                addMessageToContext(reaction, activeContext);
+              }
+            } catch (error) {
+              console.error('Failed to generate AI reaction to topic change:', error);
+            }
+          }, 1000 + Math.random() * 2000); // Random delay between 1-3 seconds
+        }
+        
+        return;
+      }
+      
+      // Handle /help command
+      if (cmd === '/help') {
+        addMessageToContext({
+          id: Date.now(),
+          nickname: 'system',
+          content: `Available commands:
+/topic [new topic] - View or change channel topic (operators only)
+/me <action> - Perform an action (e.g., /me waves)
+/help - Show this help message`,
+          timestamp: new Date(),
+          type: 'system'
+        }, activeContext);
+        return;
+      }
+      
+      // Handle other commands
       addMessageToContext({
         id: Date.now(),
         nickname: 'system',
-        content: `Unknown command: ${command}`,
+        content: `Command not supported in web mode: ${command}. Type /help for available commands.`,
         timestamp: new Date(),
         type: 'system'
       }, activeContext);
       return;
     }
 
-    const channelName = activeContext?.type === 'channel' ? activeContext.name : null;
-    const message = createCommandMessage(parsedCommand, currentUserNickname, channelName || '');
-
-    switch (parsedCommand.command) {
-      case 'nick': {
-        const newNickname = parsedCommand.content.trim();
-        if (newNickname && newNickname !== currentUserNickname) {
-          const oldNickname = currentUserNickname;
-          // Update nickname in all channels' user lists
-          setChannels(prevChannels => prevChannels.map(channel => ({
-            ...channel,
-            users: channel.users.map(u => u.nickname === oldNickname ? { ...u, nickname: newNickname } : u)
-          })));
-          setCurrentUserNickname(newNickname);
-          // Persist the change
-          const currentConfig = loadConfig();
-          if (currentConfig) {
-            saveConfig({ ...currentConfig, currentUserNickname: newNickname });
-          }
-          addMessageToContext({
-            id: Date.now(),
-            nickname: 'system',
-            content: `You are now known as ${newNickname}`,
-            timestamp: new Date(),
-            type: 'system'
-          }, activeContext);
-        }
-        break;
-      }
-      case 'join': {
-        const channelName = parsedCommand.content.trim();
-        const channelExists = channels.some(c => c.name === channelName);
-        if (channelExists) {
-            const channel = channels.find(c => c.name === channelName);
-            const isAlreadyInChannel = channel?.users.some(u => u.nickname === currentUserNickname);
-            
-            // Add user to channel if not already there
-            setChannels(prev => prev.map(c => {
-                if (c.name === channelName && !c.users.some(u => u.nickname === currentUserNickname)) {
-                    return { ...c, users: [...c.users, { nickname: currentUserNickname, status: 'online' }]};
-                }
-                return c;
-            }));
-            setActiveContext({ type: 'channel', name: channelName });
-            
-            // Generate greeting if user is joining for the first time
-            if (!isAlreadyInChannel && channel) {
-              generateGreetingForNewUser(channel, currentUserNickname);
-            }
-        } else {
-            addMessageToContext({
-                id: Date.now(),
-                nickname: 'system',
-                content: `Channel ${channelName} does not exist.`,
-                timestamp: new Date(),
-                type: 'system'
-            }, activeContext);
-        }
-        break;
-      }
-      case 'part': {
-        if (activeContext && activeContext.type === 'channel') {
-          const channelName = activeContext.name;
-          // Remove user from channel
-          setChannels(prev => prev.map(c => 
-            c.name === channelName 
-              ? { ...c, users: c.users.filter(u => u.nickname !== currentUserNickname) }
-              : c
-          ));
-          // Switch to first available channel or clear context
-          const remainingChannels = channels.filter(c => c.name !== channelName && c.users.some(u => u.nickname === currentUserNickname));
-          if (remainingChannels.length > 0) {
-            setActiveContext({ type: 'channel', name: remainingChannels[0].name });
-          } else {
-            setActiveContext(null);
-          }
-        }
-        addMessageToContext(message, activeContext);
-        break;
-      }
-      case 'quit': {
-        // In a real IRC client, this would disconnect. For simulation, we'll just show the message
-        addMessageToContext(message, activeContext);
-        break;
-      }
-      case 'topic': {
-        if (activeContext && activeContext.type === 'channel') {
-          const channelName = activeContext.name;
-          if (parsedCommand.content.trim()) {
-            // Set new topic
-            setChannels(prev => prev.map(c => 
-              c.name === channelName 
-                ? { ...c, topic: parsedCommand.content }
-                : c
-            ));
-            addMessageToContext({
-              id: Date.now(),
-              nickname: 'system',
-              content: `Topic for ${channelName} changed to: ${parsedCommand.content}`,
-              timestamp: new Date(),
-              type: 'system'
-            }, activeContext);
-          } else {
-            // Show current topic
-            const channel = channels.find(c => c.name === channelName);
-            addMessageToContext({
-              id: Date.now(),
-              nickname: 'system',
-              content: `Topic for ${channelName}: ${channel?.topic || 'No topic set'}`,
-              timestamp: new Date(),
-              type: 'system'
-            }, activeContext);
-          }
-        }
-        break;
-      }
-      case 'kick': {
-        if (activeContext && activeContext.type === 'channel' && parsedCommand.target) {
-          handleKickUser(parsedCommand.target, parsedCommand.content);
-        }
-        break;
-      }
-      case 'ban': {
-        if (activeContext && activeContext.type === 'channel' && parsedCommand.target) {
-          handleBanUser(parsedCommand.target, parsedCommand.content);
-        }
-        break;
-      }
-      case 'unban': {
-        if (activeContext && activeContext.type === 'channel' && parsedCommand.target) {
-          const targetUser = parsedCommand.target;
-          addMessageToContext({
-            id: Date.now(),
-            nickname: 'system',
-            content: `${targetUser} has been unbanned from ${activeContext.name}`,
-            timestamp: new Date(),
-            type: 'system'
-          }, activeContext);
-        }
-        break;
-      }
-      case 'who': {
-        if (activeContext && activeContext.type === 'channel') {
-          const channel = channels.find(c => c.name === activeContext.name);
-          if (channel) {
-            const userList = channel.users.map(u => u.nickname).join(', ');
-            addMessageToContext({
-              id: Date.now(),
-              nickname: 'system',
-              content: `Users in ${channel.name}: ${userList}`,
-              timestamp: new Date(),
-              type: 'system'
-            }, activeContext);
-          }
-        }
-        break;
-      }
-      case 'help': {
-        const helpText = getIRCCommandsHelp();
-        helpText.forEach(line => {
-          addMessageToContext({
-            id: Date.now() + Math.random(),
-            nickname: 'system',
-            content: line,
-            timestamp: new Date(),
-            type: 'system'
-          }, activeContext);
-        });
-        break;
-      }
-      case 'notice': {
-        // For notices, we'll add them as system messages for now
-        if (parsedCommand.target) {
-          addMessageToContext({
-            id: Date.now(),
-            nickname: 'system',
-            content: `Notice to ${parsedCommand.target}: ${parsedCommand.content}`,
-            timestamp: new Date(),
-            type: 'system'
-          }, activeContext);
-        }
-        break;
-      }
-      case 'me': {
-        // Action messages are handled by adding the message to context
-        addMessageToContext(message, activeContext);
-        break;
-      }
-      default:
-        addMessageToContext({
-          id: Date.now(),
-          nickname: 'system',
-          content: `Unknown command: /${parsedCommand.command}`,
-          timestamp: new Date(),
-          type: 'system'
-        }, activeContext);
-        break;
-    }
+    // No additional command handling needed for web app
   };
   
   // Operator management functions
@@ -537,12 +632,13 @@ const App: React.FC = () => {
       
       // Trigger AI reactions for action commands (/me)
       if (content.startsWith('/me ')) {
-        const parsedCommand = parseIRCCommand(content);
-        if (parsedCommand && parsedCommand.command === 'me') {
+        // Handle /me commands for web app
+        if (content.startsWith('/me ')) {
+          const actionContent = content.substring(4); // Remove '/me '
           const userMessage: Message = {
             id: Date.now(),
             nickname: currentUserNickname,
-            content: parsedCommand.content,
+            content: actionContent,
             timestamp: new Date(),
             type: 'action',
             command: 'me'
@@ -690,7 +786,7 @@ const App: React.FC = () => {
       if (usersInChannel.length === 0) return;
 
       const prompt = `
-A new user named "${newUserNickname}" just joined the IRC channel ${channel.name}.
+A new user named "${newUserNickname}" just joined the channel ${channel.name}.
 The channel topic is: "${channel.topic}".
 The existing users in the channel are: ${usersInChannel.map(u => u.nickname).join(', ')}.
 Their personalities are: ${usersInChannel.map(u => `${u.nickname} is ${u.personality}`).join('. ')}.
@@ -733,6 +829,92 @@ The response must be a single line in the format: "nickname: greeting message"
       console.error("Failed to generate greeting:", error);
     }
   };
+
+  // Enhanced user management with dynamic channel joining
+  const handleUsersChange = useCallback((newUsers: User[]) => {
+    const oldUsers = virtualUsers;
+    const addedUsers = newUsers.filter(newUser => 
+      !oldUsers.some(oldUser => oldUser.nickname === newUser.nickname)
+    );
+    const removedUsers = oldUsers.filter(oldUser => 
+      !newUsers.some(newUser => newUser.nickname === oldUser.nickname)
+    );
+    
+    // Update virtual users
+    setVirtualUsers(newUsers);
+    
+    // Handle added users - add them to channels dynamically
+    if (addedUsers.length > 0) {
+      setChannels(prevChannels => 
+        prevChannels.map(channel => {
+          const updatedChannel = { ...channel };
+          
+          // Add new users to this channel
+          addedUsers.forEach(newUser => {
+            const isAlreadyInChannel = channel.users.some(u => u.nickname === newUser.nickname);
+            if (!isAlreadyInChannel) {
+              updatedChannel.users = [...updatedChannel.users, newUser];
+              
+              // Add join message
+              const joinMessage: Message = {
+                id: Date.now() + Math.random(),
+                nickname: newUser.nickname,
+                content: `joined ${channel.name}`,
+                timestamp: new Date(),
+                type: 'join'
+              };
+              updatedChannel.messages = [...updatedChannel.messages, joinMessage];
+            }
+          });
+          
+          return updatedChannel;
+        })
+      );
+      
+      // Generate greetings for new users in active channel
+      if (activeContext?.type === 'channel') {
+        const activeChannel = channels.find(c => c.name === activeContext.name);
+        if (activeChannel) {
+          addedUsers.forEach(async (newUser) => {
+            try {
+              // Use the existing generateGreetingForNewUser function
+              await generateGreetingForNewUser(activeChannel, newUser.nickname);
+            } catch (error) {
+              console.error('Failed to generate greeting for new user:', error);
+            }
+          });
+        }
+      }
+    }
+    
+    // Handle removed users - remove them from channels
+    if (removedUsers.length > 0) {
+      setChannels(prevChannels => 
+        prevChannels.map(channel => {
+          const updatedChannel = { ...channel };
+          
+          removedUsers.forEach(removedUser => {
+            const wasInChannel = channel.users.some(u => u.nickname === removedUser.nickname);
+            if (wasInChannel) {
+              updatedChannel.users = updatedChannel.users.filter(u => u.nickname !== removedUser.nickname);
+              
+              // Add part message
+              const partMessage: Message = {
+                id: Date.now() + Math.random(),
+                nickname: removedUser.nickname,
+                content: `left ${channel.name}`,
+                timestamp: new Date(),
+                type: 'part'
+              };
+              updatedChannel.messages = [...updatedChannel.messages, partMessage];
+            }
+          });
+          
+          return updatedChannel;
+        })
+      );
+    }
+  }, [virtualUsers, activeContext, channels, addMessageToContext, generateGreetingForNewUser, aiModel]);
 
   // Function to adjust simulation frequency based on time of day
   const getTimeAdjustedInterval = useCallback((baseInterval: number): number => {
@@ -1010,7 +1192,21 @@ The response must be a single line in the format: "nickname: greeting message"
 
   return (
     <div className="flex h-screen w-screen bg-gray-800 font-mono">
-      {isSettingsOpen && <SettingsModal onSave={handleSaveSettings} onCancel={handleCloseSettings} currentChannels={channels} onChannelsChange={setChannels} currentUsers={virtualUsers} />}
+      {isSettingsOpen && (
+        <SettingsModal 
+          onSave={handleSaveSettings} 
+          onCancel={handleCloseSettings} 
+          currentChannels={channels} 
+          onChannelsChange={setChannels} 
+          currentUsers={virtualUsers}
+          onUsersChange={handleUsersChange}
+          ircExportConfig={ircExportConfig}
+          ircExportStatus={ircExportStatus}
+          onIrcExportConfigChange={handleIrcExportConfigChange}
+          onIrcExportConnect={handleIrcExportConnect}
+          onIrcExportDisconnect={handleIrcExportDisconnect}
+        />
+      )}
       <ChannelList 
         channels={channels}
         privateMessageUsers={allPMUsers}

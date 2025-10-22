@@ -31,7 +31,7 @@ export interface Message {
   content: string;
   timestamp: Date;
   type: MessageType;
-  command?: string; // For IRC commands like 'me', 'notice', 'topic', etc.
+  command?: string; // For commands like 'me', 'notice', 'topic', etc.
   target?: string; // For commands that target specific users or channels
 }
 
@@ -71,6 +71,16 @@ export interface AppConfig {
   };
   // Store full user objects for proper persistence of language skills and writing styles
   userObjects?: User[];
+  // IRC Export configuration
+  ircExport?: {
+    enabled: boolean;
+    server: string;
+    port: number;
+    nickname: string;
+    realname: string;
+    channel: string;
+    ssl: boolean;
+  };
 }
 
 export interface GeminiModel {

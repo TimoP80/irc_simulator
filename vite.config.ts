@@ -34,7 +34,6 @@ export default defineConfig(({ mode }) => {
               // Split utility functions
               'utils': [
                 './utils/importExport.ts',
-                './utils/ircCommands.ts',
                 './utils/personalityTemplates.ts',
                 './utils/config.ts',
                 './utils/debugLogger.ts'
