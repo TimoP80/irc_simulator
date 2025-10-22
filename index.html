@@ -9,6 +9,32 @@
     <style>
       body {
         font-family: 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', "Liberation Mono", "Courier New", monospace;
+        -webkit-text-size-adjust: 100%;
+        -webkit-tap-highlight-color: transparent;
+      }
+      
+      /* Mobile-specific improvements */
+      @media (max-width: 768px) {
+        /* Prevent zoom on input focus */
+        input[type="text"], input[type="email"], input[type="password"], textarea, select {
+          font-size: 16px;
+        }
+        
+        /* Improve touch targets */
+        button, input[type="button"], input[type="submit"] {
+          min-height: 44px;
+          min-width: 44px;
+        }
+        
+        /* Better scrolling on mobile */
+        .overflow-y-auto {
+          -webkit-overflow-scrolling: touch;
+        }
+      }
+      
+      /* Prevent horizontal scroll on mobile */
+      html, body {
+        overflow-x: hidden;
       }
     </style>
   <script type="importmap">

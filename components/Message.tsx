@@ -31,9 +31,9 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
 
   if (type === 'system') {
     return (
-      <div className="flex items-center gap-4 text-sm">
-        <span className="text-gray-600 font-semibold">{time}</span>
-        <p className="text-gray-500 italic">-- {content}</p>
+      <div className="flex items-center gap-2 lg:gap-4 text-xs lg:text-sm">
+        <span className="text-gray-600 font-semibold flex-shrink-0">{time}</span>
+        <p className="text-gray-500 italic break-words">-- {content}</p>
       </div>
     );
   }
@@ -43,10 +43,10 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
   // Handle action messages (/me)
   if (type === 'action') {
     return (
-      <div className="flex items-start gap-4 text-sm">
-        <span className="text-gray-600 font-semibold flex-shrink-0 w-14 text-right">{time}</span>
+      <div className="flex items-start gap-2 lg:gap-4 text-xs lg:text-sm">
+        <span className="text-gray-600 font-semibold flex-shrink-0 w-12 lg:w-14 text-right">{time}</span>
         <div className="flex-1">
-          <span className="text-gray-500 italic">
+          <span className="text-gray-500 italic break-words">
             * <span className={`${nicknameColor} font-bold`}>{nickname}</span> {content}
           </span>
         </div>
@@ -57,8 +57,8 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
   // Handle notice messages
   if (type === 'notice') {
     return (
-      <div className="flex items-start gap-4 text-sm">
-        <span className="text-gray-600 font-semibold flex-shrink-0 w-14 text-right">{time}</span>
+      <div className="flex items-start gap-2 lg:gap-4 text-xs lg:text-sm">
+        <span className="text-gray-600 font-semibold flex-shrink-0 w-12 lg:w-14 text-right">{time}</span>
         <div className="flex-1">
           <span className="text-orange-400 font-semibold">Notice from {nickname}:</span>
           <span className="text-gray-200 break-words whitespace-pre-wrap ml-2">{content}</span>
@@ -70,8 +70,8 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
   // Handle topic changes
   if (type === 'topic') {
     return (
-      <div className="flex items-start gap-4 text-sm">
-        <span className="text-gray-600 font-semibold flex-shrink-0 w-14 text-right">{time}</span>
+      <div className="flex items-start gap-2 lg:gap-4 text-xs lg:text-sm">
+        <span className="text-gray-600 font-semibold flex-shrink-0 w-12 lg:w-14 text-right">{time}</span>
         <div className="flex-1">
           <span className="text-purple-400 font-semibold">Topic changed by {nickname}:</span>
           <span className="text-gray-200 break-words whitespace-pre-wrap ml-2">{content}</span>
@@ -83,8 +83,8 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
   // Handle kick messages
   if (type === 'kick') {
     return (
-      <div className="flex items-start gap-4 text-sm">
-        <span className="text-gray-600 font-semibold flex-shrink-0 w-14 text-right">{time}</span>
+      <div className="flex items-start gap-2 lg:gap-4 text-xs lg:text-sm">
+        <span className="text-gray-600 font-semibold flex-shrink-0 w-12 lg:w-14 text-right">{time}</span>
         <div className="flex-1">
           <span className="text-red-400 font-semibold">
             {nickname} kicked {message.target || 'someone'}{content ? `: ${content}` : ''}
@@ -97,8 +97,8 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
   // Handle ban messages
   if (type === 'ban') {
     return (
-      <div className="flex items-start gap-4 text-sm">
-        <span className="text-gray-600 font-semibold flex-shrink-0 w-14 text-right">{time}</span>
+      <div className="flex items-start gap-2 lg:gap-4 text-xs lg:text-sm">
+        <span className="text-gray-600 font-semibold flex-shrink-0 w-12 lg:w-14 text-right">{time}</span>
         <div className="flex-1">
           <span className="text-red-500 font-semibold">
             {nickname} banned {message.target || 'someone'}{content ? `: ${content}` : ''}
@@ -111,8 +111,8 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
   // Handle join messages
   if (type === 'join') {
     return (
-      <div className="flex items-start gap-4 text-sm">
-        <span className="text-gray-600 font-semibold flex-shrink-0 w-14 text-right">{time}</span>
+      <div className="flex items-start gap-2 lg:gap-4 text-xs lg:text-sm">
+        <span className="text-gray-600 font-semibold flex-shrink-0 w-12 lg:w-14 text-right">{time}</span>
         <div className="flex-1">
           <span className="text-green-400 font-semibold">
             {nickname} joined {content}
@@ -125,8 +125,8 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
   // Handle part messages
   if (type === 'part') {
     return (
-      <div className="flex items-start gap-4 text-sm">
-        <span className="text-gray-600 font-semibold flex-shrink-0 w-14 text-right">{time}</span>
+      <div className="flex items-start gap-2 lg:gap-4 text-xs lg:text-sm">
+        <span className="text-gray-600 font-semibold flex-shrink-0 w-12 lg:w-14 text-right">{time}</span>
         <div className="flex-1">
           <span className="text-yellow-400 font-semibold">
             {nickname} left{content ? `: ${content}` : ''}
@@ -139,8 +139,8 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
   // Handle quit messages
   if (type === 'quit') {
     return (
-      <div className="flex items-start gap-4 text-sm">
-        <span className="text-gray-600 font-semibold flex-shrink-0 w-14 text-right">{time}</span>
+      <div className="flex items-start gap-2 lg:gap-4 text-xs lg:text-sm">
+        <span className="text-gray-600 font-semibold flex-shrink-0 w-12 lg:w-14 text-right">{time}</span>
         <div className="flex-1">
           <span className="text-gray-400 font-semibold">
             {nickname} quit{content ? `: ${content}` : ''}
@@ -152,8 +152,8 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
 
   // Default message display
   return (
-    <div className="flex items-start gap-4 text-sm">
-      <span className="text-gray-600 font-semibold flex-shrink-0 w-14 text-right">{time}</span>
+    <div className="flex items-start gap-2 lg:gap-4 text-xs lg:text-sm">
+      <span className="text-gray-600 font-semibold flex-shrink-0 w-12 lg:w-14 text-right">{time}</span>
       <div className="flex-1">
         <span className={`${nicknameColor} font-bold mr-2`}>{nickname}</span>
         <span className="text-gray-200 break-words whitespace-pre-wrap">{content}</span>
