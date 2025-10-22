@@ -32,6 +32,25 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
   - **Improved Prompts**: Enhanced AI instructions for complete but brief messages
   - **Better Balance**: Ensures terse users generate complete, meaningful responses
 
+- **Mass Add Users Language Skills Display**: Fixed "object Object" showing in language skills
+  - **Format Conversion**: Fixed legacy format to per-language format conversion in batch generation
+  - **Template Compatibility**: All personality templates now use correct per-language format
+  - **Randomization Fix**: Language and accent randomization now uses proper format structure
+  - **Type Safety**: Added proper type guards and format detection
+  - **Display Accuracy**: Language skills now show correctly (e.g., "English (native), Finnish (intermediate)")
+
+- **React Key Collision Error**: Fixed duplicate message IDs when adding users dynamically
+  - **Unique ID Generator**: Implemented counter-based unique message ID generation
+  - **Collision Prevention**: Eliminated duplicate keys that caused React runtime errors
+  - **Join/Part Messages**: Fixed ID generation for user join and part messages
+  - **Thread Safety**: Used useRef for consistent counter state across renders
+  - **React Compliance**: All message keys now guaranteed unique for proper component identity
+
+- **Build Configuration Error**: Fixed missing file reference in vite.config.ts
+  - **Removed Invalid Reference**: Removed reference to non-existent `ircCommands.ts` file
+  - **Build Success**: Production builds now complete without errors
+  - **Chunk Optimization**: Maintained proper code splitting configuration
+
 ### Enhanced
 - **Chat Simulation Anti-Repetition System**: Comprehensive conversation diversity improvements
   - **Repetition Detection**: Automatically detects repetitive 2-4 word phrases in recent messages

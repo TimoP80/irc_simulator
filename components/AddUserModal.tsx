@@ -161,8 +161,8 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
       newErrors.personality = 'Personality is required';
     } else if (personality.length < 10) {
       newErrors.personality = 'Personality must be at least 10 characters';
-    } else if (personality.length > 200) {
-      newErrors.personality = 'Personality must be 200 characters or less';
+    } else if (personality.length > 500) {
+      newErrors.personality = 'Personality must be 500 characters or less';
     }
 
     if (!languageSkills || languageSkills.length === 0) {
@@ -243,11 +243,11 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
   const handleCancel = () => {
     setNickname('');
     setPersonality('');
-    setLanguageSkills({
+    setLanguageSkills([{
+      language: 'English',
       fluency: 'native',
-      languages: ['English'],
       accent: ''
-    });
+    }]);
     setWritingStyle({
       formality: 'neutral',
       verbosity: 'neutral',
@@ -269,7 +269,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
 
   const updateLanguage = (index: number, field: 'language' | 'fluency' | 'accent', value: string) => {
     setLanguageSkills(prev => (prev || []).map((lang, i) => 
-      i === index ? { ...lang, [field]: value } : lang
+      i === index ? { ...lang, [field]: value || '' } : lang
     ));
   };
 
@@ -374,18 +374,18 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
                 id="personality"
                 value={personality}
                 onChange={(e) => setPersonality(e.target.value)}
-                rows={3}
+                rows={4}
                 className={`w-full bg-gray-700 border rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none ${
                   errors.personality ? 'border-red-500' : 'border-gray-600'
                 }`}
                 placeholder="Describe this user's personality, interests, and how they should behave in chat..."
-                maxLength={200}
+                maxLength={500}
               />
               {errors.personality && (
                 <p className="text-red-400 text-xs mt-1">{errors.personality}</p>
               )}
               <p className="text-gray-500 text-xs mt-1">
-                {personality.length}/200 characters. Be descriptive about their behavior and interests.
+                {personality.length}/500 characters. Be descriptive about their behavior and interests.
               </p>
             </div>
           </div>
@@ -420,7 +420,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
                         Language
                       </label>
                       <select
-                        value={lang.language}
+                        value={lang.language || ''}
                         onChange={(e) => updateLanguage(index, 'language', e.target.value)}
                         className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       >
@@ -462,7 +462,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
                         Fluency Level
                       </label>
                       <select
-                        value={lang.fluency}
+                        value={lang.fluency || 'native'}
                         onChange={(e) => updateLanguage(index, 'fluency', e.target.value)}
                         className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       >
@@ -479,7 +479,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
                       </label>
                       <input
                         type="text"
-                        value={lang.accent}
+                        value={lang.accent || ''}
                         onChange={(e) => updateLanguage(index, 'accent', e.target.value)}
                         className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         placeholder={lang.language === 'Other' ? 'Specify the language name here' : 'e.g., British, Southern, Australian'}
@@ -516,7 +516,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
                 </label>
                 <select
                   id="formality"
-                  value={writingStyle.formality}
+                  value={writingStyle.formality || 'neutral'}
                   onChange={(e) => setWritingStyle(prev => ({ ...prev, formality: e.target.value as any }))}
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
@@ -534,7 +534,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
                 </label>
                 <select
                   id="verbosity"
-                  value={writingStyle.verbosity}
+                  value={writingStyle.verbosity || 'neutral'}
                   onChange={(e) => setWritingStyle(prev => ({ ...prev, verbosity: e.target.value as any }))}
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
@@ -552,7 +552,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
                 </label>
                 <select
                   id="humor"
-                  value={writingStyle.humor}
+                  value={writingStyle.humor || 'none'}
                   onChange={(e) => setWritingStyle(prev => ({ ...prev, humor: e.target.value as any }))}
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
@@ -570,7 +570,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
                 </label>
                 <select
                   id="emojiUsage"
-                  value={writingStyle.emojiUsage}
+                  value={writingStyle.emojiUsage || 'low'}
                   onChange={(e) => setWritingStyle(prev => ({ ...prev, emojiUsage: e.target.value as any }))}
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
@@ -588,7 +588,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
                 </label>
                 <select
                   id="punctuation"
-                  value={writingStyle.punctuation}
+                  value={writingStyle.punctuation || 'standard'}
                   onChange={(e) => setWritingStyle(prev => ({ ...prev, punctuation: e.target.value as any }))}
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >

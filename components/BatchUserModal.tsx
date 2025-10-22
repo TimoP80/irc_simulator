@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User } from '../types';
+import { User, isLegacyFormat } from '../types';
 import { PERSONALITY_TEMPLATES, generateRandomUser, generateRandomUserAsync, TRAIT_POOLS } from '../utils/personalityTemplates';
 import { generateBatchUsers } from '../services/geminiService';
 // usernameGeneration functions are imported dynamically to avoid mixed import warnings
@@ -150,15 +150,34 @@ export const BatchUserModal: React.FC<BatchUserModalProps> = ({
       if (generationMode === 'template' && selectedTemplate) {
         const template = PERSONALITY_TEMPLATES.find(t => t.id === selectedTemplate);
         if (template) {
+          // Convert legacy languageSkills format to per-language format
+          let languageSkills;
+          if (template.baseUser.languageSkills) {
+            if (isLegacyFormat(template.baseUser.languageSkills)) {
+              // Convert legacy format to per-language format
+              languageSkills = {
+                languages: template.baseUser.languageSkills.languages.map(lang => ({
+                  language: lang,
+                  fluency: template.baseUser.languageSkills!.fluency,
+                  accent: template.baseUser.languageSkills!.accent || ''
+                }))
+              };
+            } else {
+              // Already in per-language format
+              languageSkills = template.baseUser.languageSkills;
+            }
+          } else {
+            // Default fallback
+            languageSkills = {
+              languages: [{ language: 'English', fluency: 'native', accent: '' }]
+            };
+          }
+
           user = {
             nickname: aiUsernames[i] || generateUniqueNickname(usedNicknames),
             status: 'online',
             personality: template.baseUser.personality || '',
-            languageSkills: template.baseUser.languageSkills || {
-              fluency: 'native',
-              languages: ['English'],
-              accent: ''
-            },
+            languageSkills,
             writingStyle: template.baseUser.writingStyle || {
               formality: 'casual',
               verbosity: 'moderate',
@@ -203,11 +222,23 @@ export const BatchUserModal: React.FC<BatchUserModalProps> = ({
       if (randomizationSettings.randomizeLanguages) {
         const numLanguages = Math.floor(Math.random() * 3) + 1;
         const shuffledLanguages = [...TRAIT_POOLS.languages].sort(() => 0.5 - Math.random());
-        user.languageSkills.languages = shuffledLanguages.slice(0, numLanguages);
+        const fluencyLevels = ['beginner', 'intermediate', 'advanced', 'native'] as const;
+        
+        user.languageSkills = {
+          languages: shuffledLanguages.slice(0, numLanguages).map(lang => ({
+            language: lang,
+            fluency: fluencyLevels[Math.floor(Math.random() * fluencyLevels.length)],
+            accent: ''
+          }))
+        };
       }
 
       if (randomizationSettings.randomizeAccent && Math.random() > 0.7) {
-        user.languageSkills.accent = TRAIT_POOLS.accents[Math.floor(Math.random() * TRAIT_POOLS.accents.length)];
+        const randomAccent = TRAIT_POOLS.accents[Math.floor(Math.random() * TRAIT_POOLS.accents.length)];
+        // Apply accent to the first language
+        if (user.languageSkills.languages.length > 0) {
+          user.languageSkills.languages[0].accent = randomAccent;
+        }
       }
 
       users.push(user);

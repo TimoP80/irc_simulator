@@ -87,6 +87,13 @@ const App: React.FC = () => {
   });
   const burstModeRef = useRef<boolean>(false);
   const lastConversationResetRef = useRef<Record<string, number>>({});
+  
+  // Unique ID generator to prevent React key collisions
+  const messageIdCounterRef = useRef<number>(0);
+  const generateUniqueMessageId = useCallback(() => {
+    messageIdCounterRef.current += 1;
+    return Date.now() + messageIdCounterRef.current;
+  }, []);
 
   // Load configuration and channel logs from localStorage on initial render
   useEffect(() => {
@@ -850,14 +857,14 @@ The response must be a single line in the format: "nickname: greeting message"
           const updatedChannel = { ...channel };
           
           // Add new users to this channel
-          addedUsers.forEach(newUser => {
+          addedUsers.forEach((newUser, userIndex) => {
             const isAlreadyInChannel = channel.users.some(u => u.nickname === newUser.nickname);
             if (!isAlreadyInChannel) {
               updatedChannel.users = [...updatedChannel.users, newUser];
               
-              // Add join message
+              // Add join message with unique ID
               const joinMessage: Message = {
-                id: Date.now() + Math.random(),
+                id: generateUniqueMessageId(),
                 nickname: newUser.nickname,
                 content: `joined ${channel.name}`,
                 timestamp: new Date(),
@@ -893,14 +900,14 @@ The response must be a single line in the format: "nickname: greeting message"
         prevChannels.map(channel => {
           const updatedChannel = { ...channel };
           
-          removedUsers.forEach(removedUser => {
+          removedUsers.forEach((removedUser, userIndex) => {
             const wasInChannel = channel.users.some(u => u.nickname === removedUser.nickname);
             if (wasInChannel) {
               updatedChannel.users = updatedChannel.users.filter(u => u.nickname !== removedUser.nickname);
               
-              // Add part message
+              // Add part message with unique ID
               const partMessage: Message = {
-                id: Date.now() + Math.random(),
+                id: generateUniqueMessageId(),
                 nickname: removedUser.nickname,
                 content: `left ${channel.name}`,
                 timestamp: new Date(),
