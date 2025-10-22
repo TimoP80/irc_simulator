@@ -9,6 +9,8 @@ import { addChannelOperator, removeChannelOperator, isChannelOperator, canUserPe
 import { generateChannelActivity, generateReactionToMessage, generatePrivateMessageResponse } from './services/geminiService';
 import { loadConfig, saveConfig, initializeStateFromConfig, saveChannelLogs, loadChannelLogs, clearChannelLogs, simulateTypingDelay } from './utils/config';
 import { getIRCExportService, getDefaultIRCExportConfig, type IRCExportConfig, type IRCExportStatus, type IRCExportMessage } from './services/ircExportService';
+import { getChatLogService, initializeChatLogs } from './services/chatLogService';
+import { ChatLogManager } from './components/ChatLogManager';
 
 // Operator persistence functions
 const saveOperatorAssignments = (channels: Channel[]) => {
@@ -57,6 +59,7 @@ const App: React.FC = () => {
   const [aiModel, setAiModel] = useState<AppConfig['aiModel']>(DEFAULT_AI_MODEL);
   const [isLoading, setIsLoading] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isChatLogOpen, setIsChatLogOpen] = useState(false);
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
   const [typingDelayConfig, setTypingDelayConfig] = useState(DEFAULT_TYPING_DELAY);
   
@@ -182,6 +185,10 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // Initialize chat log service
+  useEffect(() => {
+    initializeChatLogs().catch(console.error);
+  }, []);
 
   // Save channel logs and operator assignments whenever channels change
   useEffect(() => {
@@ -237,6 +244,14 @@ const App: React.FC = () => {
 
   const handleCloseSettings = () => {
     setIsSettingsOpen(false);
+  };
+
+  const handleOpenChatLogs = () => {
+    setIsChatLogOpen(true);
+  };
+
+  const handleCloseChatLogs = () => {
+    setIsChatLogOpen(false);
   };
 
   // IRC Export handlers
@@ -394,6 +409,14 @@ const App: React.FC = () => {
           console.error('[IRC Export] Failed to send message:', error);
         });
       }
+    }
+
+    // Save message to chat logs
+    if (context.type === 'channel') {
+      const chatLogService = getChatLogService();
+      chatLogService.saveMessage(context.name, message).catch(error => {
+        console.error('[Chat Log] Failed to save message:', error);
+      });
     }
   }, [virtualUsers, ircExportStatus.connected]);
 
@@ -1198,7 +1221,7 @@ The response must be a single line in the format: "nickname: greeting message"
   const allPMUsers = Object.keys(privateMessages).map(nickname => virtualUsers.find(u => u.nickname === nickname)!);
 
   return (
-    <div className="flex h-screen w-screen bg-gray-800 font-mono">
+    <div className="flex flex-col lg:flex-row h-screen w-screen bg-gray-800 font-mono">
       {isSettingsOpen && (
         <SettingsModal 
           onSave={handleSaveSettings} 
@@ -1214,14 +1237,22 @@ The response must be a single line in the format: "nickname: greeting message"
           onIrcExportDisconnect={handleIrcExportDisconnect}
         />
       )}
+      {isChatLogOpen && (
+        <ChatLogManager 
+          isOpen={isChatLogOpen}
+          onClose={handleCloseChatLogs}
+          currentChannel={activeContext?.type === 'channel' ? activeContext.name : undefined}
+        />
+      )}
       <ChannelList 
         channels={channels}
         privateMessageUsers={allPMUsers}
         activeContext={activeContext}
         onSelectContext={setActiveContext}
         onOpenSettings={handleOpenSettings}
+        onOpenChatLogs={handleOpenChatLogs}
       />
-      <main className="flex flex-1 flex-col border-l border-r border-gray-700">
+      <main className="flex flex-1 flex-col border-l border-r border-gray-700 min-h-0 lg:min-h-0">
         <ChatWindow 
           title={contextTitle}
           messages={messagesInContext}

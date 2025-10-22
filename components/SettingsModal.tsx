@@ -274,10 +274,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   // Add error boundary for debugging
   try {
     return (
-    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-      <div className="bg-gray-800 rounded-lg shadow-xl p-8 w-full max-w-4xl border border-gray-700 max-h-[90vh] overflow-y-auto">
-        <h2 className="text-2xl font-bold text-white mb-4">Simulation Configuration</h2>
-        <p className="text-gray-400 mb-6">Customize the channels, virtual users, and your nickname. Changes are saved locally.</p>
+    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+      <div className="bg-gray-800 rounded-lg shadow-xl p-4 lg:p-8 w-full max-w-4xl border border-gray-700 max-h-[95vh] overflow-y-auto">
+        <h2 className="text-xl lg:text-2xl font-bold text-white mb-4">Simulation Configuration</h2>
+        <p className="text-gray-400 mb-6 text-sm lg:text-base">Customize the channels, virtual users, and your nickname. Changes are saved locally.</p>
         
         <div className="space-y-6">
           <div>
@@ -288,7 +288,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               name="currentUserNickname"
               value={config.currentUserNickname}
               onChange={handleChange}
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 lg:px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm lg:text-base"
             />
           </div>
           
@@ -322,7 +322,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">Background Simulation Speed</label>
-            <div className="flex items-center space-x-6">
+            <div className="grid grid-cols-2 lg:flex lg:items-center lg:space-x-6 gap-2">
               {(['off', 'slow', 'normal', 'fast'] as const).map((speed) => (
                 <label key={speed} className="flex items-center text-sm text-gray-300 cursor-pointer">
                   <input
@@ -350,7 +350,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               value={config.aiModel || DEFAULT_AI_MODEL}
               onChange={handleChange}
               disabled={isLoadingModels}
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 lg:px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 text-sm lg:text-base"
             >
               {availableModels.length > 0 ? (
                 availableModels.map((model) => (
@@ -504,16 +504,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
           
-          <div className="flex justify-end pt-2 gap-4">
+          <div className="flex flex-col sm:flex-row justify-end pt-2 gap-3 sm:gap-4">
              <button
               type="button"
               onClick={handleRandomize}
               disabled={isRandomizing}
-              className="bg-gray-600 text-white rounded-lg px-6 py-2 font-semibold hover:bg-gray-500 transition-colors disabled:bg-gray-700 disabled:cursor-wait flex items-center gap-2"
+              className="bg-gray-600 text-white rounded-lg px-4 lg:px-6 py-2 font-semibold hover:bg-gray-500 transition-colors disabled:bg-gray-700 disabled:cursor-wait flex items-center justify-center gap-2 text-sm lg:text-base touch-manipulation"
             >
               {isRandomizing ? (
                 <>
-                  <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 lg:h-5 lg:w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
@@ -526,14 +526,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <button
               type="button"
               onClick={onCancel}
-              className="bg-gray-600 text-white rounded-lg px-6 py-2 font-semibold hover:bg-gray-500 transition-colors"
+              className="bg-gray-600 text-white rounded-lg px-4 lg:px-6 py-2 font-semibold hover:bg-gray-500 transition-colors text-sm lg:text-base touch-manipulation"
             >
               Cancel
             </button>
             <button
               type="button"
               onClick={handleSave}
-              className="bg-indigo-600 text-white rounded-lg px-6 py-2 font-semibold hover:bg-indigo-500 transition-colors"
+              className="bg-indigo-600 text-white rounded-lg px-4 lg:px-6 py-2 font-semibold hover:bg-indigo-500 transition-colors text-sm lg:text-base touch-manipulation"
             >
               Save and Start
             </button>

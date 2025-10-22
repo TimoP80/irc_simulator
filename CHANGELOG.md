@@ -4,6 +4,56 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 
 *Note: This project was previously known as "Gemini IRC Simulator" and was renamed to "Station V - Virtual IRC Simulator" as of v1.5.1.*
 
+## 1.13.16 - 2025-01-23
+
+### Added
+- **Lightweight Chat Log Database**: Complete IndexedDB-based chat log storage system
+  - **Persistent Storage**: All channel messages automatically saved to browser database
+  - **Chat Log Manager**: Full-featured UI for viewing, managing, and exporting chat logs
+  - **Channel Statistics**: Message counts, activity tracking, and storage usage monitoring
+  - **Export Functionality**: Export chat logs as JSON files for backup or analysis
+  - **Storage Management**: Clear individual channels or all logs with confirmation dialogs
+  - **Search & Filter**: Browse messages by channel with pagination and filtering
+  - **Mobile Compatible**: Responsive design works on all device sizes
+  - **Performance Optimized**: Efficient storage with automatic cleanup and indexing
+
+### Enhanced
+- **Mobile Device Browser Compatibility**: Comprehensive mobile responsiveness improvements
+  - **Mobile Layout Fix**: Fixed chat window visibility on mobile with proper height constraints
+  - **Mobile Channel Selection**: Fixed channel selection on mobile with increased sidebar heights
+  - **Compact Sidebars**: Channel list (192px) and user list (128px) use fixed heights on mobile
+  - **Mobile-Optimized Buttons**: Smaller, more compact buttons with better touch targets
+  - **Chat Window Priority**: Chat window takes up remaining space on mobile for better usability
+  - **Touch-Friendly Interface**: Larger touch targets (44px minimum) and improved button spacing
+  - **Mobile-Optimized Typography**: Smaller text sizes on mobile with proper scaling
+  - **Flexible Panels**: Channel list, chat window, and user list stack vertically on mobile
+  - **Improved Input Fields**: Mobile-optimized text inputs with proper font sizing
+  - **Touch Interactions**: Added `touch-manipulation` CSS for better touch response
+  - **Mobile CSS**: Prevented zoom on input focus and improved scrolling behavior
+  - **Responsive Modals**: Settings modal adapts to mobile screens with proper padding
+  - **Grid Layouts**: Radio buttons and form elements use responsive grid layouts
+  - **Message Display**: Optimized message spacing and text wrapping for mobile screens
+
+## 1.13.15 - 2025-01-21
+
+### Enhanced
+- **Mobile Device Browser Compatibility**: Comprehensive mobile responsiveness improvements
+  - **Responsive Layout**: Main layout switches from horizontal to vertical on mobile devices
+  - **Mobile Layout Fix**: Fixed chat window visibility on mobile with proper height constraints
+  - **Mobile Channel Selection**: Fixed channel selection on mobile with increased sidebar heights
+  - **Compact Sidebars**: Channel list (192px) and user list (128px) use fixed heights on mobile
+  - **Mobile-Optimized Buttons**: Smaller, more compact buttons with better touch targets
+  - **Chat Window Priority**: Chat window takes up remaining space on mobile for better usability
+  - **Touch-Friendly Interface**: Larger touch targets (44px minimum) and improved button spacing
+  - **Mobile-Optimized Typography**: Smaller text sizes on mobile with proper scaling
+  - **Flexible Panels**: Channel list, chat window, and user list stack vertically on mobile
+  - **Improved Input Fields**: Mobile-optimized text inputs with proper font sizing
+  - **Touch Interactions**: Added `touch-manipulation` CSS for better touch response
+  - **Mobile CSS**: Prevented zoom on input focus and improved scrolling behavior
+  - **Responsive Modals**: Settings modal adapts to mobile screens with proper padding
+  - **Grid Layouts**: Radio buttons and form elements use responsive grid layouts
+  - **Message Display**: Optimized message spacing and text wrapping for mobile screens
+
 ## 1.13.14 - 2025-01-21
 
 ### Added
