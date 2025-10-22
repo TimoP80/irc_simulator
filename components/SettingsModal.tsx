@@ -120,7 +120,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       virtualUsers: savedConfig?.virtualUsers || DEFAULT_USERS_TEXT,
       channels: savedConfig?.channels || DEFAULT_CHANNELS_TEXT,
       simulationSpeed: savedConfig?.simulationSpeed || 'normal',
-      aiModel: aiModel,
+      aiModel: aiModel || DEFAULT_AI_MODEL, // Ensure it's never undefined
       typingDelay: savedConfig?.typingDelay || DEFAULT_TYPING_DELAY,
       userObjects: savedConfig?.userObjects,
     };
@@ -200,8 +200,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       if (!currentModel) {
         // If current model is not found, reset to the first available model
         const firstModel = availableModels[0];
-        console.log('Resetting AI model from', config.aiModel, 'to', firstModel.baseModelId);
-        setConfig(prev => ({ ...prev, aiModel: firstModel.baseModelId }));
+        const newModelId = firstModel?.baseModelId || DEFAULT_AI_MODEL;
+        console.log('Resetting AI model from', config.aiModel, 'to', newModelId);
+        setConfig(prev => ({ ...prev, aiModel: newModelId }));
       }
     }
   }, [availableModels, config.aiModel]);
@@ -346,7 +347,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </label>
             <select
               name="aiModel"
-              value={config.aiModel}
+              value={config.aiModel || DEFAULT_AI_MODEL}
               onChange={handleChange}
               disabled={isLoadingModels}
               className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
