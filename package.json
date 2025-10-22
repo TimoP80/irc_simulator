@@ -1,5 +1,5 @@
 {
-  "name": "station-v-virtual-irc-simulator",
+  "name": "station-v-virtual-chat-simulator",
   "private": true,
   "version": "1.13.7",
   "type": "module",
@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@google/genai": "^1.25.0",
+    "irc-framework": "^4.14.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },

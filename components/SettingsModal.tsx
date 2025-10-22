@@ -5,6 +5,7 @@ import { DEFAULT_NICKNAME, FALLBACK_AI_MODELS, DEFAULT_AI_MODEL, DEFAULT_TYPING_
 import { generateRandomWorldConfiguration, listAvailableModels } from '../services/geminiService';
 import { UserManagement } from './UserManagement';
 import { ChannelManagement } from './ChannelManagement';
+import { IRCExportSettings } from './IRCExportSettings';
 import { getDebugConfig, updateDebugConfig, setDebugEnabled, setLogLevel, toggleCategory } from '../utils/debugLogger';
 
 interface SettingsModalProps {
@@ -13,6 +14,13 @@ interface SettingsModalProps {
   currentChannels?: Channel[];
   onChannelsChange?: (channels: Channel[]) => void;
   currentUsers?: User[];
+  onUsersChange?: (users: User[]) => void;
+  // IRC Export props
+  ircExportConfig?: any;
+  ircExportStatus?: any;
+  onIrcExportConfigChange?: (config: any) => void;
+  onIrcExportConnect?: () => Promise<void>;
+  onIrcExportDisconnect?: () => Promise<void>;
 }
 
 const DEFAULT_USERS_TEXT = `nova, A curious tech-savvy individual who loves gadgets.
@@ -89,7 +97,20 @@ const formatChannelsToText = (channels: { name: string; topic: string; dominantL
   }).join('\n');
 };
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel, currentChannels, onChannelsChange, currentUsers }) => {
+export const SettingsModal: React.FC<SettingsModalProps> = ({ 
+  onSave, 
+  onCancel, 
+  currentChannels, 
+  onChannelsChange, 
+  currentUsers,
+  onUsersChange,
+  // IRC Export props
+  ircExportConfig = null,
+  ircExportStatus = null,
+  onIrcExportConfigChange = null,
+  onIrcExportConnect = null,
+  onIrcExportDisconnect = null
+}) => {
   const [config, setConfig] = useState<AppConfig>(() => {
     const savedConfig = loadConfig();
     const aiModel = savedConfig?.aiModel || DEFAULT_AI_MODEL;
@@ -121,6 +142,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel, 
   const [availableModels, setAvailableModels] = useState<GeminiModel[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [modelsError, setModelsError] = useState<string | null>(null);
+  
 
   // Handle Escape key to close modal
   useEffect(() => {
@@ -235,6 +257,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel, 
     updateDebugConfig(newConfig);
   };
 
+
   const handleDebugCategoryToggle = (category: keyof typeof debugConfig.categories) => {
     const newConfig = {
       ...debugConfig,
@@ -270,7 +293,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel, 
           
           <UserManagement 
             users={users} 
-            onUsersChange={setUsers} 
+            onUsersChange={onUsersChange || setUsers} 
             aiModel={config.aiModel}
             channels={currentChannels || channels}
             currentUserNickname={config.currentUserNickname}
@@ -284,6 +307,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onCancel, 
             }} 
             allUsers={users} 
           />
+          
+          {ircExportConfig && ircExportStatus && onIrcExportConfigChange && onIrcExportConnect && onIrcExportDisconnect ? (
+            <IRCExportSettings
+              config={ircExportConfig}
+              onConfigChange={onIrcExportConfigChange}
+              status={ircExportStatus}
+              onConnect={onIrcExportConnect}
+              onDisconnect={onIrcExportDisconnect}
+            />
+          ) : null}
+          
           
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">Background Simulation Speed</label>

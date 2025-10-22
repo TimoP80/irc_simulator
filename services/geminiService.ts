@@ -35,9 +35,59 @@ const validateModelId = (model: string): string => {
 
 const formatMessageHistory = (messages: Message[]): string => {
   return messages
-    .slice(-15) // Get last 15 messages
+    .slice(-20) // Increased from 15 to 20 messages for better context
     .map(m => `${m.nickname}: ${m.content}`)
     .join('\n');
+};
+
+// Helper function to detect repetitive patterns in recent messages
+const detectRepetitivePatterns = (messages: Message[]): string[] => {
+  const recentMessages = messages.slice(-10); // Look at last 10 messages
+  const phrases: { [key: string]: number } = {};
+  
+  // Extract common phrases and count occurrences
+  recentMessages.forEach(msg => {
+    const words = msg.content.toLowerCase().split(/\s+/);
+    // Check for 2-4 word phrases
+    for (let i = 0; i < words.length - 1; i++) {
+      for (let len = 2; len <= Math.min(4, words.length - i); len++) {
+        const phrase = words.slice(i, i + len).join(' ');
+        if (phrase.length > 3) { // Only count meaningful phrases
+          phrases[phrase] = (phrases[phrase] || 0) + 1;
+        }
+      }
+    }
+  });
+  
+  // Return phrases that appear more than once
+  return Object.entries(phrases)
+    .filter(([_, count]) => count > 1)
+    .map(([phrase, _]) => phrase);
+};
+
+// Helper function to get conversation topics from recent messages
+const extractRecentTopics = (messages: Message[]): string[] => {
+  const recentMessages = messages.slice(-8); // Last 8 messages
+  const topics: string[] = [];
+  
+  // Simple keyword extraction for common topics
+  const topicKeywords = [
+    'work', 'job', 'school', 'study', 'weather', 'food', 'music', 'movie', 'game',
+    'travel', 'vacation', 'weekend', 'party', 'friend', 'family', 'love', 'relationship',
+    'health', 'exercise', 'sport', 'book', 'news', 'politics', 'technology', 'computer',
+    'internet', 'phone', 'car', 'house', 'money', 'shopping', 'hobby', 'art', 'photo'
+  ];
+  
+  recentMessages.forEach(msg => {
+    const content = msg.content.toLowerCase();
+    topicKeywords.forEach(keyword => {
+      if (content.includes(keyword) && !topics.includes(keyword)) {
+        topics.push(keyword);
+      }
+    });
+  });
+  
+  return topics;
 };
 
 // Helper function to extract text from AI response
@@ -217,37 +267,61 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
   // Calculate appropriate token limit based on verbosity
   const getTokenLimit = (verbosity: string): number => {
     switch (verbosity) {
-      case 'very_terse': return 50;
-      case 'terse': return 75;
-      case 'neutral': return 100;
-      case 'verbose': return 300;
-      case 'very_verbose': return 500;
-      default: return 100;
+      case 'very_terse': return 100;  // Increased from 50 to ensure complete messages
+      case 'terse': return 150;       // Increased from 75
+      case 'neutral': return 200;     // Increased from 100
+      case 'verbose': return 400;     // Increased from 300
+      case 'very_verbose': return 600; // Increased from 500
+      default: return 200;            // Increased from 100
     }
   };
 
   const tokenLimit = getTokenLimit(randomUser.writingStyle.verbosity);
   console.log(`[AI Debug] Token limit for ${randomUser.nickname} (${randomUser.writingStyle.verbosity}): ${tokenLimit}`);
 
-  // Add conversation diversity by introducing variety in prompts
+  // Enhanced conversation diversity and repetition prevention
   const conversationVariety = Math.random();
-  let diversityPrompt = '';
+  const repetitivePhrases = detectRepetitivePatterns(channel.messages);
+  const recentTopics = extractRecentTopics(channel.messages);
   
-  if (conversationVariety < 0.1) {
-    // 10% chance: Introduce a new subtopic or tangent
-    diversityPrompt = 'IMPORTANT: Introduce a new subtopic or interesting tangent related to the channel topic. Be creative and unexpected.';
-  } else if (conversationVariety < 0.2) {
-    // 10% chance: Ask a question to engage others
-    diversityPrompt = 'IMPORTANT: Ask an engaging question to other users in the channel to spark discussion.';
+  let diversityPrompt = '';
+  let repetitionAvoidance = '';
+  
+  // Always include repetition avoidance if patterns detected
+  if (repetitivePhrases.length > 0) {
+    repetitionAvoidance = `CRITICAL: Avoid repeating these recent phrases: "${repetitivePhrases.join('", "')}". Be creative and use different wording.`;
+  }
+  
+  // Enhanced diversity prompts with higher probability
+  if (conversationVariety < 0.15) {
+    // 15% chance: Introduce a completely new topic
+    const newTopics = ['technology', 'travel', 'food', 'music', 'movies', 'books', 'sports', 'hobbies', 'current events', 'memories'];
+    const randomTopic = newTopics[Math.floor(Math.random() * newTopics.length)];
+    diversityPrompt = `IMPORTANT: Introduce a completely new topic about ${randomTopic}. Be creative and unexpected.`;
   } else if (conversationVariety < 0.3) {
-    // 10% chance: Share a personal experience or story
+    // 15% chance: Ask a question to engage others
+    diversityPrompt = 'IMPORTANT: Ask an engaging question to other users in the channel to spark discussion.';
+  } else if (conversationVariety < 0.45) {
+    // 15% chance: Share a personal experience or story
     diversityPrompt = 'IMPORTANT: Share a brief personal experience or story related to the topic.';
-  } else if (conversationVariety < 0.4) {
-    // 10% chance: Make an observation about the current conversation
+  } else if (conversationVariety < 0.6) {
+    // 15% chance: Make an observation about the current conversation
     diversityPrompt = 'IMPORTANT: Make an observation about the current conversation or comment on what others have been discussing.';
-  } else if (conversationVariety < 0.5) {
-    // 10% chance: Change the mood or tone
+  } else if (conversationVariety < 0.75) {
+    // 15% chance: Change the mood or tone
     diversityPrompt = 'IMPORTANT: Change the mood or tone of the conversation - be more lighthearted, serious, or different from recent messages.';
+  } else if (conversationVariety < 0.9) {
+    // 15% chance: Introduce humor or wit
+    diversityPrompt = 'IMPORTANT: Add some humor, wit, or clever wordplay to the conversation.';
+  } else {
+    // 10% chance: Be more conversational and natural
+    diversityPrompt = 'IMPORTANT: Be more conversational and natural - like you\'re talking to friends in a relaxed setting.';
+  }
+  
+  // Add topic evolution if conversation is getting stale
+  let topicEvolution = '';
+  if (recentTopics.length > 3) {
+    topicEvolution = 'IMPORTANT: The conversation has been focused on similar topics recently. Try to bring up something fresh or unexpected.';
   }
 
   // Get time-of-day context
@@ -261,13 +335,18 @@ The topic of channel ${channel.name} is: "${channel.topic}".
 The users in the channel are: ${channel.users.map(u => u.nickname).join(', ')}.
 Their personalities are: ${channel.users.map(u => `${u.nickname} is ${u.personality}`).join('. ')}.
 Channel operators (who can kick/ban users): ${channel.operators.join(', ') || 'None'}.
-The last 15 messages were:
+The last 20 messages were:
 ${formatMessageHistory(channel.messages)}
+
+${repetitionAvoidance}
+
+${diversityPrompt}
+
+${topicEvolution}
 
 Generate a new, single, in-character message from ${randomUser.nickname} that is relevant to the topic or the recent conversation.
 The message should feel natural for the current time of day and social context.
 The message must be a single line in the format: "nickname: message"
-${diversityPrompt}
 
 ${randomUser.writingStyle.verbosity === 'very_verbose' ? 'IMPORTANT: This user is very verbose - write a long, detailed message with multiple sentences and thorough explanations. Do not cut off the message.' : randomUser.writingStyle.verbosity === 'verbose' ? 'IMPORTANT: This user is verbose - write a moderately detailed message with several sentences.' : ''}
 
@@ -277,7 +356,7 @@ ${dominantLanguage !== primaryLanguage ? `Note: The channel's dominant language 
 
 Consider ${randomUser.nickname}'s writing style:
 - Formality: ${randomUser.writingStyle.formality}
-- Verbosity: ${randomUser.writingStyle.verbosity} ${randomUser.writingStyle.verbosity === 'very_verbose' ? '(write very long, detailed messages with multiple sentences and thorough explanations)' : randomUser.writingStyle.verbosity === 'verbose' ? '(write moderately detailed messages with several sentences)' : randomUser.writingStyle.verbosity === 'terse' ? '(write brief, concise messages)' : randomUser.writingStyle.verbosity === 'very_terse' ? '(write very brief messages)' : ''}
+- Verbosity: ${randomUser.writingStyle.verbosity} ${randomUser.writingStyle.verbosity === 'very_verbose' ? '(write very long, detailed messages with multiple sentences and thorough explanations)' : randomUser.writingStyle.verbosity === 'verbose' ? '(write moderately detailed messages with several sentences)' : randomUser.writingStyle.verbosity === 'terse' ? '(write brief, concise messages)' : randomUser.writingStyle.verbosity === 'very_terse' ? '(write very brief messages - short phrases or single sentences, but make them complete and meaningful)' : ''}
 - Humor: ${randomUser.writingStyle.humor}
 - Emoji usage: ${randomUser.writingStyle.emojiUsage}
 - Punctuation: ${randomUser.writingStyle.punctuation}
@@ -393,12 +472,12 @@ export const generateReactionToMessage = async (channel: Channel, userMessage: M
     // Calculate appropriate token limit based on verbosity
     const getTokenLimit = (verbosity: string): number => {
       switch (verbosity) {
-        case 'very_terse': return 50;
-        case 'terse': return 75;
-        case 'neutral': return 100;
-        case 'verbose': return 300;
-        case 'very_verbose': return 500;
-        default: return 100;
+      case 'very_terse': return 100;  // Increased from 50 to ensure complete messages
+      case 'terse': return 150;       // Increased from 75
+      case 'neutral': return 200;     // Increased from 100
+      case 'verbose': return 400;     // Increased from 300
+      case 'very_verbose': return 600; // Increased from 500
+      default: return 200;            // Increased from 100
       }
     };
 
@@ -409,6 +488,14 @@ export const generateReactionToMessage = async (channel: Channel, userMessage: M
     const timeContext = getTimeOfDayContext();
     console.log(`[AI Debug] Time context for reaction: ${timeContext}`);
 
+    // Enhanced reaction diversity and repetition prevention
+    const repetitivePhrases = detectRepetitivePatterns(channel.messages);
+    let reactionRepetitionAvoidance = '';
+    
+    if (repetitivePhrases.length > 0) {
+      reactionRepetitionAvoidance = `CRITICAL: Avoid repeating these recent phrases: "${repetitivePhrases.join('", "')}". Be creative and use different wording.`;
+    }
+
     const prompt = `
 ${timeContext}
 
@@ -417,8 +504,10 @@ The topic is: "${channel.topic}".
 The other users in the channel are: ${usersInChannel.map(u => u.nickname).join(', ')}.
 Their personalities are: ${usersInChannel.map(u => `${u.nickname} is ${u.personality}`).join('. ')}.
 Channel operators (who can kick/ban users): ${channel.operators.join(', ') || 'None'}.
-The last 15 messages were:
+The last 20 messages were:
 ${formatMessageHistory(channel.messages)}
+
+${reactionRepetitionAvoidance}
 
 Generate a realistic and in-character reaction from ${randomUser.nickname}.
 The reaction should feel natural for the current time of day and social context.
@@ -430,7 +519,7 @@ ${userLanguages.length > 1 ? `Available languages: ${userLanguages.join(', ')}. 
 
 Consider ${randomUser.nickname}'s writing style:
 - Formality: ${randomUser.writingStyle.formality}
-- Verbosity: ${randomUser.writingStyle.verbosity} ${randomUser.writingStyle.verbosity === 'very_verbose' ? '(write very long, detailed messages with multiple sentences and thorough explanations)' : randomUser.writingStyle.verbosity === 'verbose' ? '(write moderately detailed messages with several sentences)' : randomUser.writingStyle.verbosity === 'terse' ? '(write brief, concise messages)' : randomUser.writingStyle.verbosity === 'very_terse' ? '(write very brief messages)' : ''}
+- Verbosity: ${randomUser.writingStyle.verbosity} ${randomUser.writingStyle.verbosity === 'very_verbose' ? '(write very long, detailed messages with multiple sentences and thorough explanations)' : randomUser.writingStyle.verbosity === 'verbose' ? '(write moderately detailed messages with several sentences)' : randomUser.writingStyle.verbosity === 'terse' ? '(write brief, concise messages)' : randomUser.writingStyle.verbosity === 'very_terse' ? '(write very brief messages - short phrases or single sentences, but make them complete and meaningful)' : ''}
 - Humor: ${randomUser.writingStyle.humor}
 - Emoji usage: ${randomUser.writingStyle.emojiUsage}
 - Punctuation: ${randomUser.writingStyle.punctuation}
@@ -493,12 +582,12 @@ export const generatePrivateMessageResponse = async (conversation: PrivateMessag
     // Calculate appropriate token limit based on verbosity
     const getTokenLimit = (verbosity: string): number => {
       switch (verbosity) {
-        case 'very_terse': return 50;
-        case 'terse': return 75;
-        case 'neutral': return 100;
-        case 'verbose': return 300;
-        case 'very_verbose': return 500;
-        default: return 100;
+      case 'very_terse': return 100;  // Increased from 50 to ensure complete messages
+      case 'terse': return 150;       // Increased from 75
+      case 'neutral': return 200;     // Increased from 100
+      case 'verbose': return 400;     // Increased from 300
+      case 'very_verbose': return 600; // Increased from 500
+      default: return 200;            // Increased from 100
       }
     };
 
@@ -525,7 +614,7 @@ ${userLanguages.length > 1 ? `Available languages: ${userLanguages.join(', ')}. 
 
 Your writing style:
 - Formality: ${aiUser.writingStyle.formality}
-- Verbosity: ${aiUser.writingStyle.verbosity} ${aiUser.writingStyle.verbosity === 'very_verbose' ? '(write very long, detailed messages with multiple sentences and thorough explanations)' : aiUser.writingStyle.verbosity === 'verbose' ? '(write moderately detailed messages with several sentences)' : aiUser.writingStyle.verbosity === 'terse' ? '(write brief, concise messages)' : aiUser.writingStyle.verbosity === 'very_terse' ? '(write very brief messages)' : ''}
+- Verbosity: ${aiUser.writingStyle.verbosity} ${aiUser.writingStyle.verbosity === 'very_verbose' ? '(write very long, detailed messages with multiple sentences and thorough explanations)' : aiUser.writingStyle.verbosity === 'verbose' ? '(write moderately detailed messages with several sentences)' : aiUser.writingStyle.verbosity === 'terse' ? '(write brief, concise messages)' : aiUser.writingStyle.verbosity === 'very_terse' ? '(write very brief messages - short phrases or single sentences, but make them complete and meaningful)' : ''}
 - Humor: ${aiUser.writingStyle.humor}
 - Emoji usage: ${aiUser.writingStyle.emojiUsage}
 - Punctuation: ${aiUser.writingStyle.punctuation}

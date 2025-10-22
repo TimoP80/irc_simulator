@@ -4,6 +4,63 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 
 *Note: This project was previously known as "Gemini IRC Simulator" and was renamed to "Station V - Virtual IRC Simulator" as of v1.5.1.*
 
+## 1.13.14 - 2025-01-21
+
+### Added
+- **IRC Topic Command Support**: Complete `/topic` command implementation
+  - **Topic Management**: `/topic` to view current topic, `/topic <new topic>` to change it
+  - **Operator Permissions**: Only channel operators can change topics (realistic IRC behavior)
+  - **Auto-Operator Assignment**: Current user automatically becomes operator of all channels
+  - **AI Reactions**: Virtual users react to topic changes with contextual responses
+  - **Help Command**: Added `/help` command showing available commands
+  - **Visual Feedback**: Topic changes display as purple "Topic changed by..." messages
+
+### Fixed
+- **User Management UI Alignment**: Fixed accent field misalignment in user cards
+  - **Consistent Grid Layout**: Accent field now always appears in same position (bottom-left)
+  - **Always Visible**: Shows "None" when no accents instead of hiding the field
+  - **Perfect Alignment**: All user cards now have identical 2x2 field layout
+  - **Better UX**: Predictable field positions regardless of data presence
+
+- **Very Terse Message Truncation**: Fixed AI messages being cut off for terse users
+  - **Increased Token Limits**: Doubled token limits for all verbosity levels
+    - `very_terse`: 50 → 100 tokens
+    - `terse`: 75 → 150 tokens  
+    - `neutral`: 100 → 200 tokens
+    - `verbose`: 300 → 400 tokens
+    - `very_verbose`: 500 → 600 tokens
+  - **Improved Prompts**: Enhanced AI instructions for complete but brief messages
+  - **Better Balance**: Ensures terse users generate complete, meaningful responses
+
+### Enhanced
+- **Chat Simulation Anti-Repetition System**: Comprehensive conversation diversity improvements
+  - **Repetition Detection**: Automatically detects repetitive 2-4 word phrases in recent messages
+  - **Enhanced Diversity Prompts**: Increased from 50% to 90% chance of diversity prompts
+  - **7 New Prompt Types**: New topics, questions, stories, observations, mood changes, humor, natural conversation
+  - **Repetition Avoidance**: AI receives explicit instructions to avoid detected repetitive phrases
+  - **Topic Evolution Warnings**: AI warned when conversations become stale or repetitive
+  - **Conversation State Tracking**: System tracks patterns and suggests topic changes when needed
+  - **Extended Message History**: Increased context from 15 to 20 messages for better AI understanding
+  - **Smart Topic Suggestions**: System messages suggest fresh topics when conversations get repetitive
+
+- **Dynamic User Management**: Real-time user addition without simulation interruption
+  - **No Simulation Reset**: Users can be added/removed while simulation continues running
+  - **Automatic Channel Joining**: New users automatically join all channels when created
+  - **Join/Part Messages**: Real-time join and part messages when users are added/removed
+  - **AI Greetings**: Existing users automatically welcome new users with contextual greetings
+  - **State Synchronization**: Virtual users and channel users stay perfectly synchronized
+  - **Visual Feedback**: Users see join/part activity in real-time
+  - **Seamless Integration**: New users immediately start participating in conversations
+
+### Technical Improvements
+- **Command System**: Robust IRC command parsing with proper argument handling
+- **Topic Persistence**: Channel topics are saved and displayed in channel headers
+- **Error Handling**: Clear error messages for invalid command usage
+- **AI Integration**: Topic changes trigger natural AI reactions with random delays
+- **UI Consistency**: Fixed grid layout issues for better visual alignment
+- **Conversation Analysis**: Real-time phrase pattern detection and repetition prevention
+- **Diversity Injection**: Enhanced AI prompt system with higher variety rates
+
 ## 1.13.13 - 2025-01-21
 
 ### Fixed

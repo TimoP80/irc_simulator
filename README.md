@@ -1,14 +1,14 @@
-# Station V - Virtual IRC Simulator
+# Station V - Virtual Chat Simulator
 
 ### An Experiment in AI-Simulated Social Environments
 
-**Current Version: 1.13.12** - Time-of-day synchronization, conversation diversity improvements, and enhanced realism.
+**Current Version: 1.13.14** - Dynamic user management, IRC topic commands, anti-repetition system, and enhanced conversation flow.
 
 ---
 
 ## 1. The Core Idea: What is This Project?
 
-Station V - Virtual IRC Simulator is a web application that recreates the look and feel of a classic Internet Relay Chat (IRC) client with one fundamental difference: **you are the only human.**
+Station V - Virtual Chat Simulator is a web application that recreates the look and feel of a classic chat client with one fundamental difference: **you are the only human.**
 
 Every other user in every channel, every message typed, and every interaction is generated in real-time by Google's Gemini AI. Each AI user has detailed personality traits, language skills, and writing styles that affect how they communicate. The project includes powerful tools for mass-generating diverse AI personalities, importing/exporting user data, and creating complex virtual communities. The project serves as a self-contained digital terrarium—a sandbox for observing how well a large language model can simulate a dynamic, multi-participant social environment with realistic character depth.
 
@@ -84,6 +84,27 @@ The simulation is powered by the Gemini API, using carefully crafted prompts to 
     -   **Keyboard Shortcuts**: Escape key support for all modals
     -   **Form Validation**: Real-time validation with helpful error messages
     -   **Visual Feedback**: Status badges, color-coded elements, and hover effects
+-   **Dynamic User Management**: Real-time user addition without simulation interruption
+    -   **No Simulation Reset**: Add or remove users while the simulation continues running
+    -   **Automatic Channel Joining**: New users automatically join all channels when created
+    -   **Join/Part Messages**: Real-time join and part messages when users are added/removed
+    -   **AI Greetings**: Existing users automatically welcome new users with contextual greetings
+    -   **State Synchronization**: Virtual users and channel users stay perfectly synchronized
+    -   **Visual Feedback**: Users see join/part activity in real-time
+-   **IRC Command Support**: Full IRC command compatibility for realistic chat experience
+    -   **Topic Management**: `/topic` command to view and change channel topics (operators only)
+    -   **Action Commands**: `/me` command for performing actions (e.g., `/me waves`)
+    -   **Help System**: `/help` command showing available commands
+    -   **Operator Permissions**: Channel operators can manage topics and moderate channels
+    -   **Auto-Operator Assignment**: Current user automatically becomes operator of all channels
+-   **Anti-Repetition System**: Advanced conversation diversity and flow management
+    -   **Repetition Detection**: Automatically detects repetitive phrases in recent messages
+    -   **Enhanced Diversity Prompts**: 90% chance of diversity prompts to prevent stale conversations
+    -   **7 Prompt Types**: New topics, questions, stories, observations, mood changes, humor, natural conversation
+    -   **Repetition Avoidance**: AI receives explicit instructions to avoid detected repetitive phrases
+    -   **Topic Evolution Warnings**: AI warned when conversations become stale or repetitive
+    -   **Smart Topic Suggestions**: System messages suggest fresh topics when conversations get repetitive
+    -   **Extended Context**: 20-message history for better AI understanding and context
 
 ## 5. Getting Started
 
