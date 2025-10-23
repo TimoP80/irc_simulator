@@ -120,6 +120,54 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
   - **Implementation**: Created uniqueUsers array by filtering duplicates based on nickname, used for display only
   - **Debug Logging**: Added console warnings to detect and log duplicate user issues
   - **Impact**: Configuration window opens without React errors, user list displays correctly without duplicates
+- **Simulation User Selection Bug**: Fixed same user generating multiple messages in a row
+  - **Root Cause**: User selection logic had low probability (30%) of avoiding recent speakers, allowing same user to be selected repeatedly
+  - **Solution**: Improved user selection algorithm with stronger avoidance of recent speakers and last message author
+  - **Implementation**: Increased probability to 80% for less active users, added last speaker avoidance, reduced recent speaker window to 3 messages
+  - **Debug Logging**: Added comprehensive logging to track user selection patterns and recent speakers
+  - **Impact**: More natural conversation flow with better user rotation, prevents single user from dominating the conversation
+- **Simulation User Participation Balance**: Fixed issue where only a few users were talking by rebalancing user selection algorithm
+  - **Root Cause**: Previous fix was too restrictive (80% probability for less active users), preventing many users from participating
+  - **Solution**: Rebalanced user selection with layered approach prioritizing long-term inactive users while allowing all users to participate
+  - **Implementation**: Added long-term inactive users filter (last 10 messages), reduced short-term probability to 50%, added 70% priority for long-term inactive users
+  - **Debug Logging**: Enhanced logging to show long-term inactive users and selection reasoning
+  - **Impact**: More balanced participation with all users getting opportunities to speak while still preventing immediate repetition
+- **Chat Log Manager Button Visibility**: Fixed buttons disappearing when chat log window opens
+  - **Root Cause**: Buttons were being disabled when no channel was selected or during loading, appearing to "disappear" when grayed out
+  - **Solution**: Enhanced button state management and added proper tooltips to explain disabled states
+  - **Implementation**: Added debug logging for button rendering, improved disabled state logic, added tooltips for user feedback
+  - **Debug Logging**: Added comprehensive logging to track button rendering state and channel selection
+  - **Impact**: Buttons remain visible and provide clear feedback about their state, improving user experience
+- **Chat Log Manager Button Flashing**: Fixed buttons flashing and disappearing when selecting channels
+  - **Root Cause**: `loadMessages` function was setting `isLoading` to true every time a channel was selected, causing buttons to be disabled and appear to flash
+  - **Solution**: Removed unnecessary loading state from message loading to prevent button flashing during channel selection
+  - **Implementation**: Modified `loadMessages` to not set `isLoading` state, added debug logging to track message loading
+  - **Debug Logging**: Enhanced logging to show message loading progress and button state changes
+  - **Impact**: Smooth channel selection without button flashing, better user experience
+- **Chat Log Manager Button Visibility**: Fixed buttons remaining hidden after initial load
+  - **Root Cause**: Buttons were dependent on `isLoading` state which could get stuck or have timing issues, causing buttons to remain disabled
+  - **Solution**: Added `isInitialized` state to track when initial data loading is complete, separate from ongoing loading operations
+  - **Implementation**: Added `isInitialized` state, updated button disabled logic to use `!isInitialized` instead of `isLoading`, improved tooltips
+  - **Debug Logging**: Enhanced logging to show initialization state and button rendering conditions
+  - **Impact**: Buttons are visible and functional once data is loaded, better state management
+- **Simulation Greeting Spam Bug**: Fixed users getting stuck spamming greetings
+  - **Root Cause**: Greeting detection was too restrictive, allowing users to repeatedly generate greeting messages without being caught by repetition detection
+  - **Solution**: Enhanced greeting detection with comprehensive patterns and added anti-greeting spam protection
+  - **Implementation**: Expanded greeting phrase detection, added user-specific greeting count tracking, implemented anti-greeting spam prompts for both channel activity and reactions
+  - **Debug Logging**: Added logging to track user greeting counts and anti-spam activation
+  - **Impact**: Prevents users from getting stuck in greeting loops, more natural conversation flow
+- **Multilingual Greeting Detection**: Enhanced greeting spam protection to work with multiple languages
+  - **Root Cause**: Greeting detection only worked for English greetings, allowing users speaking other languages to spam greetings without detection
+  - **Solution**: Added comprehensive multilingual greeting detection covering 16+ languages
+  - **Implementation**: Expanded greeting phrase lists and regex patterns for Spanish, French, German, Italian, Portuguese, Japanese, Chinese, Russian, Arabic, Korean, Dutch, Swedish, Norwegian, Danish, and Finnish
+  - **Languages Supported**: English, Spanish, French, German, Italian, Portuguese, Japanese, Chinese, Russian, Arabic, Korean, Dutch, Swedish, Norwegian, Danish, Finnish
+  - **Impact**: Prevents greeting spam in any supported language, more natural multilingual conversations
+- **Enhanced AI Time Awareness**: Made AI more contextually aware of current season, date, month, and year
+  - **Root Cause**: AI conversations lacked seasonal and temporal context, making them feel disconnected from real-world timing
+  - **Solution**: Enhanced time context system with comprehensive seasonal, date, and holiday awareness
+  - **Implementation**: Enhanced `getTimeOfDayContext` function with season detection, date awareness, holiday recognition, and seasonal topic suggestions
+  - **Features**: Season-based context (spring, summer, autumn, winter), holiday awareness (Christmas, New Year, Valentine's Day, etc.), seasonal topics, and date-specific social context
+  - **Impact**: More realistic and contextually relevant conversations that reflect current time, season, and special occasions
 
 ## 1.13.16 - 2025-01-23
 

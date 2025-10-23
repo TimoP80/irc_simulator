@@ -13,6 +13,7 @@ export const ChatLogManager: React.FC<ChatLogManagerProps> = ({ isOpen, onClose,
   const [stats, setStats] = useState<LogStats | null>(null);
   const [selectedChannel, setSelectedChannel] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
   const [storageInfo, setStorageInfo] = useState<{ used: number; available: number } | null>(null);
 
   const chatLogService = getChatLogService();
@@ -30,9 +31,8 @@ export const ChatLogManager: React.FC<ChatLogManagerProps> = ({ isOpen, onClose,
   }, [selectedChannel]);
 
   const loadData = async () => {
+    console.log('[ChatLogManager] loadData called');
     setIsLoading(true);
-    // Clear selection immediately to ensure buttons are disabled during loading
-    setSelectedChannel('');
     
     try {
       const [channelsData, statsData, storageData] = await Promise.all([
@@ -41,16 +41,27 @@ export const ChatLogManager: React.FC<ChatLogManagerProps> = ({ isOpen, onClose,
         chatLogService.getStorageSize()
       ]);
       
+      console.log('[ChatLogManager] Loaded data:', { 
+        channelsCount: channelsData.length, 
+        currentChannel, 
+        channels: channelsData.map(c => c.channelName) 
+      });
+      
       setChannels(channelsData);
       setStats(statsData);
       setStorageInfo(storageData);
       
-      // Set initial channel selection
-      if (currentChannel && channelsData.some(c => c.channelName === currentChannel)) {
-        setSelectedChannel(currentChannel);
-      } else if (channelsData.length > 0) {
-        setSelectedChannel(channelsData[0].channelName);
+      // Set initial channel selection - always select a channel if available
+      if (channelsData.length > 0) {
+        if (currentChannel && channelsData.some(c => c.channelName === currentChannel)) {
+          console.log('[ChatLogManager] Selecting current channel:', currentChannel);
+          setSelectedChannel(currentChannel);
+        } else {
+          console.log('[ChatLogManager] Selecting first channel:', channelsData[0].channelName);
+          setSelectedChannel(channelsData[0].channelName);
+        }
       } else {
+        console.log('[ChatLogManager] No channels available');
         setSelectedChannel('');
       }
     } catch (error) {
@@ -58,18 +69,20 @@ export const ChatLogManager: React.FC<ChatLogManagerProps> = ({ isOpen, onClose,
       setSelectedChannel('');
     } finally {
       setIsLoading(false);
+      setIsInitialized(true);
+      console.log('[ChatLogManager] loadData completed, selectedChannel:', selectedChannel);
     }
   };
 
   const loadMessages = async (channelName: string) => {
-    setIsLoading(true);
+    // Don't set loading state for message loading to prevent button flashing
+    console.log('[ChatLogManager] loadMessages called for channel:', channelName);
     try {
       const messagesData = await chatLogService.getMessages(channelName, 100);
+      console.log('[ChatLogManager] Loaded messages:', messagesData.length, 'for channel:', channelName);
       setMessages(messagesData);
     } catch (error) {
       console.error('Failed to load messages:', error);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -275,45 +288,52 @@ export const ChatLogManager: React.FC<ChatLogManagerProps> = ({ isOpen, onClose,
 
             {/* Actions */}
             <div className="mt-4 space-y-2">
+              {console.log('[ChatLogManager] Rendering buttons - selectedChannel:', selectedChannel, 'isLoading:', isLoading, 'isInitialized:', isInitialized, 'channels.length:', channels.length, 'messages.length:', messages.length)}
               <button
                 onClick={() => selectedChannel && handleExport(selectedChannel)}
-                disabled={!selectedChannel || isLoading}
+                disabled={!selectedChannel || !isInitialized}
                 className="w-full bg-blue-600 text-white py-2 px-3 rounded text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                title={!selectedChannel ? "Select a channel first" : !isInitialized ? "Loading..." : ""}
               >
                 Export Channel
               </button>
               <button
                 onClick={handleExportAll}
-                disabled={isLoading}
+                disabled={!isInitialized || channels.length === 0}
                 className="w-full bg-green-600 text-white py-2 px-3 rounded text-sm hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                title={channels.length === 0 ? "No channels available" : !isInitialized ? "Loading..." : ""}
               >
                 Export All Channels
               </button>
               <button
                 onClick={() => selectedChannel && handleExportCSV(selectedChannel)}
-                disabled={!selectedChannel || isLoading}
+                disabled={!selectedChannel || !isInitialized}
                 className="w-full bg-purple-600 text-white py-2 px-3 rounded text-sm hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                title={!selectedChannel ? "Select a channel first" : !isInitialized ? "Loading..." : ""}
               >
                 Export Channel (CSV)
               </button>
               <button
                 onClick={() => handleExportCSV()}
-                disabled={isLoading}
+                disabled={!isInitialized || channels.length === 0}
                 className="w-full bg-indigo-600 text-white py-2 px-3 rounded text-sm hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                title={channels.length === 0 ? "No channels available" : !isInitialized ? "Loading..." : ""}
               >
                 Export All (CSV)
               </button>
               <button
                 onClick={() => selectedChannel && handleClearChannel(selectedChannel)}
-                disabled={!selectedChannel || isLoading}
+                disabled={!selectedChannel || !isInitialized}
                 className="w-full bg-yellow-600 text-white py-2 px-3 rounded text-sm hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                title={!selectedChannel ? "Select a channel first" : !isInitialized ? "Loading..." : ""}
               >
                 Clear Channel
               </button>
               <button
                 onClick={handleClearAll}
-                disabled={isLoading}
+                disabled={!isInitialized || channels.length === 0}
                 className="w-full bg-red-600 text-white py-2 px-3 rounded text-sm hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                title={channels.length === 0 ? "No channels available" : !isInitialized ? "Loading..." : ""}
               >
                 Clear All Logs
               </button>
