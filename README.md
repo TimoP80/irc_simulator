@@ -98,6 +98,9 @@ The simulation is powered by the Gemini API, using carefully crafted prompts to 
 -   **Dynamic User Management**: Real-time user addition without simulation interruption
     -   **No Simulation Reset**: Add or remove users while the simulation continues running
     -   **Automatic Channel Joining**: New users automatically join all channels when created
+    -   **Auto-Join Empty Channels**: Virtual users automatically join channels that only have the current user
+    -   **Smart User Selection**: Randomly selects 2-4 users from available pool to populate empty channels
+    -   **Channel State Persistence**: User channel assignments are saved and restored across sessions
     -   **Join/Part Messages**: Real-time join and part messages when users are added/removed
     -   **AI Greetings**: Existing users automatically welcome new users with contextual greetings
     -   **State Synchronization**: Virtual users and channel users stay perfectly synchronized
@@ -267,7 +270,10 @@ Once configured, you can:
 5. **Adjust Settings**: Click the gear icon to modify your configuration
 6. **View Chat Logs**: Click the "Chat Logs" button to access the persistent message database:
    - **Browse History**: View all messages from any channel with timestamps and message types
-   - **Export Data**: Download chat logs as JSON files for backup or analysis
+   - **Export Data**: Download chat logs in multiple formats for backup or analysis:
+     - **JSON Export**: Structured data format for developers and data processing
+     - **CSV Export**: Spreadsheet-friendly format for data analysis and reporting
+     - **Channel-Specific**: Export individual channels or all channels at once
    - **Storage Management**: Monitor database usage and clear old logs if needed
    - **Channel Statistics**: See message counts and activity levels for each channel
 

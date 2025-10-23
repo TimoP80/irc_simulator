@@ -21,6 +21,7 @@ export interface User {
     emojiUsage: 'none' | 'low' | 'medium' | 'high' | 'excessive';
     punctuation: 'minimal' | 'standard' | 'creative' | 'excessive';
   };
+  assignedChannels?: string[]; // Track which channels this user is assigned to
 }
 
 export type MessageType = 'system' | 'user' | 'ai' | 'pm' | 'action' | 'notice' | 'topic' | 'kick' | 'ban' | 'join' | 'part' | 'quit';

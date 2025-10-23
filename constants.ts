@@ -2,7 +2,7 @@
 import type { User, Channel } from './types';
 
 // Default nickname for the user if not configured.
-export const DEFAULT_NICKNAME = "you";
+export const DEFAULT_NICKNAME = "YourNickname";
 
 // Intervals for background simulation in milliseconds.
 export const SIMULATION_INTERVALS: Record<'fast' | 'normal' | 'slow', number> = {

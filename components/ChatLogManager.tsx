@@ -129,22 +129,57 @@ export const ChatLogManager: React.FC<ChatLogManagerProps> = ({ isOpen, onClose,
     }
   };
 
-  const handleExport = async () => {
+  const handleExport = async (channelName?: string) => {
     try {
-      const exportData = await chatLogService.exportLogs(selectedChannel);
+      const exportData = await chatLogService.exportLogs(channelName);
       const dataStr = JSON.stringify(exportData, null, 2);
       const dataBlob = new Blob([dataStr], { type: 'application/json' });
       
       const url = URL.createObjectURL(dataBlob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `chat-logs-${selectedChannel || 'all'}-${new Date().toISOString().split('T')[0]}.json`;
+      link.download = `chat-logs-${channelName || 'all'}-${new Date().toISOString().split('T')[0]}.json`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Failed to export logs:', error);
+    }
+  };
+
+  const handleExportAll = async () => {
+    await handleExport(); // Export all channels
+  };
+
+  const handleExportCSV = async (channelName?: string) => {
+    try {
+      const exportData = await chatLogService.exportLogs(channelName);
+      
+      // Convert to CSV format
+      const csvHeaders = 'Timestamp,Channel,Nickname,Type,Content\n';
+      const csvRows = exportData.map(entry => {
+        const timestamp = new Date(entry.message.timestamp).toISOString();
+        const channel = entry.channelName;
+        const nickname = entry.message.nickname;
+        const type = entry.message.type;
+        const content = entry.message.content.replace(/"/g, '""'); // Escape quotes
+        return `"${timestamp}","${channel}","${nickname}","${type}","${content}"`;
+      }).join('\n');
+      
+      const csvContent = csvHeaders + csvRows;
+      const dataBlob = new Blob([csvContent], { type: 'text/csv' });
+      
+      const url = URL.createObjectURL(dataBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `chat-logs-${channelName || 'all'}-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to export CSV logs:', error);
     }
   };
 
@@ -241,11 +276,32 @@ export const ChatLogManager: React.FC<ChatLogManagerProps> = ({ isOpen, onClose,
             {/* Actions */}
             <div className="mt-4 space-y-2">
               <button
-                onClick={handleExport}
+                onClick={() => selectedChannel && handleExport(selectedChannel)}
                 disabled={!selectedChannel || isLoading}
                 className="w-full bg-blue-600 text-white py-2 px-3 rounded text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Export {selectedChannel || 'All'}
+                Export Channel
+              </button>
+              <button
+                onClick={handleExportAll}
+                disabled={isLoading}
+                className="w-full bg-green-600 text-white py-2 px-3 rounded text-sm hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Export All Channels
+              </button>
+              <button
+                onClick={() => selectedChannel && handleExportCSV(selectedChannel)}
+                disabled={!selectedChannel || isLoading}
+                className="w-full bg-purple-600 text-white py-2 px-3 rounded text-sm hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Export Channel (CSV)
+              </button>
+              <button
+                onClick={() => handleExportCSV()}
+                disabled={isLoading}
+                className="w-full bg-indigo-600 text-white py-2 px-3 rounded text-sm hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Export All (CSV)
               </button>
               <button
                 onClick={() => selectedChannel && handleClearChannel(selectedChannel)}

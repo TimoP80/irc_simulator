@@ -60,6 +60,66 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
   - **Root Cause**: Potential edge case where current user filtering wasn't working properly or current user was included in virtual users
   - **Solution**: Added enhanced debugging and additional safety checks to prevent AI generation when only current user is in channel
   - **Impact**: AI will never generate messages from the human user, ensuring proper separation between human and AI interactions
+- **Channel Operators Showing 'you'**: Fixed channel operators list showing 'you' as operator instead of actual human username
+  - **Root Cause**: Default nickname was set to "you" which appeared in operators list when user hadn't configured a proper nickname
+  - **Solution**: Changed default nickname from "you" to "YourNickname" to make it clear this is a placeholder that should be changed
+  - **Impact**: Users now see a clear placeholder nickname that encourages them to set their actual nickname
+- **Auto-Join Users to Empty Channels**: Added automatic user joining when channels only have the end user
+  - **Feature**: Virtual users now automatically join channels that only contain the current user
+  - **Implementation**: Added `autoJoinUsersToEmptyChannels` function that runs during simulation
+  - **User Selection**: Randomly selects 2-4 users from the available user pool to join empty channels
+  - **Channel State Tracking**: Added `assignedChannels` field to User interface to track channel assignments
+  - **Persistence**: User channel assignments are saved to localStorage and restored on app restart
+  - **Impact**: Channels never stay empty for long, ensuring continuous conversation activity
+- **Timestamp Serialization Error**: Fixed "message.timestamp.toISOString is not a function" error when saving channel logs
+  - **Root Cause**: Some messages had timestamps that weren't proper Date objects, causing serialization to fail
+  - **Solution**: Added safety check in `saveChannelLogs` to handle both Date objects and other timestamp formats
+  - **Implementation**: Uses `instanceof Date` check and converts non-Date timestamps to Date objects before serialization
+  - **Impact**: Channel logs now save reliably regardless of timestamp format, preventing runtime errors
+- **Join Notifications Not Visible**: Fixed join notifications not appearing in the selected channel
+  - **Root Cause**: Join messages were being added using stale channel data in `handleUsersChange` function
+  - **Solution**: Modified `handleUsersChange` to use updated channels array when adding join messages
+  - **Implementation**: Moved join message creation inside the `setChannels` callback to ensure fresh channel data
+  - **Debug Logging**: Added console logging to track join message creation and channel updates
+  - **Impact**: Join notifications now appear correctly in the selected channel when users are added
+- **Enhanced Chat Log Export**: Improved chat log export functionality with multiple formats and better UI
+  - **Multiple Export Options**: Added separate buttons for exporting specific channels vs all channels
+  - **CSV Export Support**: Added CSV export format for better data analysis and spreadsheet compatibility
+  - **Export Formats**: JSON (structured data) and CSV (spreadsheet-friendly) formats available
+  - **Improved UI**: Clear button labels and better organization of export options
+  - **File Naming**: Exports include channel name and date in filename for easy identification
+  - **Impact**: Users can now export chat logs in multiple formats for different use cases
+- **Default Nickname Flash Fix**: Fixed default nickname appearing briefly when page loads even with saved configuration
+  - **Root Cause**: State was initialized with DEFAULT_NICKNAME before configuration was loaded asynchronously
+  - **Solution**: Changed state initialization to load saved configuration synchronously using useState initializer functions
+  - **Implementation**: All state variables now check for saved config during initialization instead of after render
+  - **Impact**: No more flash of default nickname - saved nickname appears immediately on page load
+- **AI Generating Messages from Current User**: Fixed AI generating messages from "YourNickname" when it shouldn't exist
+  - **Root Cause**: Channels contained users with old nickname "YourNickname" instead of the actual saved nickname
+  - **Solution**: Added useEffect to update current user nickname in all channels when nickname changes
+  - **Implementation**: Automatically replaces DEFAULT_NICKNAME and "YourNickname" with actual currentUserNickname in channel users
+  - **Debug Logging**: Added console logging to track current user nickname and channel users during simulation
+  - **Impact**: AI will never generate messages from the current user, ensuring proper separation between human and AI interactions
+- **IRC Commands Support**: Fixed and enhanced common IRC command support
+  - **Fixed /me Command**: Moved /me command handling from handleSendMessage to handleCommand for proper structure
+  - **Added /join Command**: Join existing channels or create new ones with /join #channelname
+  - **Added /part Command**: Leave current channel with optional reason using /part [reason]
+  - **Added /nick Command**: Change nickname with /nick newnickname, includes validation and conflict checking
+  - **Enhanced /help Command**: Updated help to show all available commands with usage examples
+  - **Command Structure**: All commands now properly handled in handleCommand function with consistent error messages
+  - **Impact**: Full IRC-like command experience with proper validation and user feedback
+- **User List Update Timing**: Fixed user list not updating immediately when users are added/removed
+  - **Root Cause**: Join message creation logic was using old channel data instead of updated channel data
+  - **Solution**: Fixed handleUsersChange to properly compare old vs new channel state for join messages
+  - **Implementation**: Updated join message logic to check if user is now in channel but wasn't before
+  - **Debug Logging**: Added comprehensive debug logging to track user list updates and channel changes
+  - **Impact**: User list now updates immediately when users are added or removed from channels
+- **React Key Collision Error**: Fixed "Encountered two children with the same key" error when opening configuration window
+  - **Root Cause**: UserManagement component was receiving duplicate users with same nickname, causing React key collisions
+  - **Solution**: Added deduplication logic in UserManagement to filter out duplicate users before rendering
+  - **Implementation**: Created uniqueUsers array by filtering duplicates based on nickname, used for display only
+  - **Debug Logging**: Added console warnings to detect and log duplicate user issues
+  - **Impact**: Configuration window opens without React errors, user list displays correctly without duplicates
 
 ## 1.13.16 - 2025-01-23
 
