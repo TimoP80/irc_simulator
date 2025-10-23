@@ -2,7 +2,7 @@
 
 ### An Experiment in AI-Simulated Social Environments
 
-**Current Version: 1.13.16** - Lightweight chat log database, mobile compatibility enhancements, and persistent message storage.
+**Current Version: 1.13.17** - Primary language forcing in user generator, chat log database, and mobile compatibility enhancements.
 
 ---
 
@@ -55,6 +55,7 @@ The simulation is powered by the Gemini API, using carefully crafted prompts to 
     -   **Randomization Engine**: Generate diverse users with smart random attributes and unique nicknames
     -   **Mass Add Interface**: Create 1-50 users at once with live preview and customization options
     -   **Template Customization**: Mix predefined templates with randomization for perfect control
+    -   **Primary Language Forcing**: Force all generated users to have a specific primary language with native fluency
 -   **Import/Export System**: Full data portability for user and channel management:
     -   **User Import/Export**: CSV and JSON support for user data with all attributes
     -   **Channel Import/Export**: CSV and JSON support for channel configurations

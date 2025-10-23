@@ -71,6 +71,8 @@ export interface AppConfig {
   };
   // Store full user objects for proper persistence of language skills and writing styles
   userObjects?: User[];
+  // Store full channel objects for proper persistence of user assignments
+  channelObjects?: Channel[];
   // IRC Export configuration
   ircExport?: {
     enabled: boolean;

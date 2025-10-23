@@ -45,9 +45,30 @@ const detectRepetitivePatterns = (messages: Message[]): string[] => {
   const recentMessages = messages.slice(-10); // Look at last 10 messages
   const phrases: { [key: string]: number } = {};
   
+  // Common greeting phrases that should be excluded from repetition detection
+  const greetingPhrases = [
+    'welcome to', 'hello there', 'hi there', 'hey there', 'good to see', 'nice to meet',
+    'welcome back', 'hello everyone', 'hi everyone', 'hey everyone', 'welcome new',
+    'glad to see', 'great to see', 'welcome aboard', 'hello new', 'hi new', 'hey new'
+  ];
+  
   // Extract common phrases and count occurrences
   recentMessages.forEach(msg => {
-    const words = msg.content.toLowerCase().split(/\s+/);
+    // Skip greeting-related messages and system messages
+    if (msg.type === 'system' || msg.type === 'join' || msg.type === 'part' || msg.type === 'quit') {
+      return;
+    }
+    
+    // Skip messages that are likely greetings based on content
+    const content = msg.content.toLowerCase();
+    const isGreeting = greetingPhrases.some(phrase => content.includes(phrase)) ||
+                      content.match(/^(hi|hello|hey|welcome|greetings)/);
+    
+    if (isGreeting) {
+      return;
+    }
+    
+    const words = content.split(/\s+/);
     // Check for 2-4 word phrases
     for (let i = 0; i < words.length - 1; i++) {
       for (let len = 2; len <= Math.min(4, words.length - i); len++) {
@@ -179,8 +200,18 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
   console.log(`[AI Debug] Validated model ID: "${validatedModel}"`);
   
   const usersInChannel = channel.users.filter(u => u.nickname !== currentUserNickname);
+  console.log(`[AI Debug] Channel ${channel.name} users:`, channel.users.map(u => u.nickname));
+  console.log(`[AI Debug] Current user nickname: "${currentUserNickname}"`);
+  console.log(`[AI Debug] Filtered users (excluding current user):`, usersInChannel.map(u => u.nickname));
+  
   if (usersInChannel.length === 0) {
-    console.log(`[AI Debug] No users in channel ${channel.name} (excluding current user)`);
+    console.log(`[AI Debug] No virtual users in channel ${channel.name} (excluding current user) - skipping AI generation`);
+    return '';
+  }
+  
+  // Additional safety check: ensure we don't generate messages for the current user
+  if (usersInChannel.some(u => u.nickname === currentUserNickname)) {
+    console.log(`[AI Debug] Current user found in filtered users - this should not happen! Skipping AI generation`);
     return '';
   }
   
@@ -411,8 +442,18 @@ export const generateReactionToMessage = async (channel: Channel, userMessage: M
     console.log(`[AI Debug] Validated model ID for reaction: "${validatedModel}"`);
     
     const usersInChannel = channel.users.filter(u => u.nickname !== currentUserNickname);
+    console.log(`[AI Debug] Reaction - Channel ${channel.name} users:`, channel.users.map(u => u.nickname));
+    console.log(`[AI Debug] Reaction - Current user nickname: "${currentUserNickname}"`);
+    console.log(`[AI Debug] Reaction - Filtered users (excluding current user):`, usersInChannel.map(u => u.nickname));
+    
     if (usersInChannel.length === 0) {
-        console.log(`[AI Debug] No users in channel ${channel.name} to react (excluding current user)`);
+        console.log(`[AI Debug] No virtual users in channel ${channel.name} to react (excluding current user) - skipping reaction generation`);
+        return '';
+    }
+    
+    // Additional safety check: ensure we don't generate reactions for the current user
+    if (usersInChannel.some(u => u.nickname === currentUserNickname)) {
+        console.log(`[AI Debug] Current user found in filtered users for reaction - this should not happen! Skipping reaction generation`);
         return '';
     }
 
