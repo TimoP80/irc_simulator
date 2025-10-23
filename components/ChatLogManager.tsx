@@ -31,6 +31,9 @@ export const ChatLogManager: React.FC<ChatLogManagerProps> = ({ isOpen, onClose,
 
   const loadData = async () => {
     setIsLoading(true);
+    // Clear selection immediately to ensure buttons are disabled during loading
+    setSelectedChannel('');
+    
     try {
       const [channelsData, statsData, storageData] = await Promise.all([
         chatLogService.getAllChannels(),
@@ -47,9 +50,12 @@ export const ChatLogManager: React.FC<ChatLogManagerProps> = ({ isOpen, onClose,
         setSelectedChannel(currentChannel);
       } else if (channelsData.length > 0) {
         setSelectedChannel(channelsData[0].channelName);
+      } else {
+        setSelectedChannel('');
       }
     } catch (error) {
       console.error('Failed to load chat log data:', error);
+      setSelectedChannel('');
     } finally {
       setIsLoading(false);
     }
@@ -74,9 +80,34 @@ export const ChatLogManager: React.FC<ChatLogManagerProps> = ({ isOpen, onClose,
 
     try {
       await chatLogService.clearChannel(channelName);
-      await loadData();
-      if (selectedChannel === channelName) {
-        setMessages([]);
+      
+      // Reload data and handle channel selection
+      setIsLoading(true);
+      try {
+        const [channelsData, statsData, storageData] = await Promise.all([
+          chatLogService.getAllChannels(),
+          chatLogService.getStats(),
+          chatLogService.getStorageSize()
+        ]);
+        
+        setChannels(channelsData);
+        setStats(statsData);
+        setStorageInfo(storageData);
+        
+        // If we cleared the currently selected channel, select a new one
+        if (selectedChannel === channelName) {
+          setMessages([]);
+          if (channelsData.length > 0) {
+            // Select the first available channel
+            setSelectedChannel(channelsData[0].channelName);
+          } else {
+            setSelectedChannel('');
+          }
+        }
+      } catch (error) {
+        console.error('Failed to reload data after clearing channel:', error);
+      } finally {
+        setIsLoading(false);
       }
     } catch (error) {
       console.error('Failed to clear channel logs:', error);
@@ -92,6 +123,7 @@ export const ChatLogManager: React.FC<ChatLogManagerProps> = ({ isOpen, onClose,
       await chatLogService.clearAllLogs();
       await loadData();
       setMessages([]);
+      setSelectedChannel(''); // Clear selection since all channels are empty
     } catch (error) {
       console.error('Failed to clear all logs:', error);
     }
@@ -210,21 +242,22 @@ export const ChatLogManager: React.FC<ChatLogManagerProps> = ({ isOpen, onClose,
             <div className="mt-4 space-y-2">
               <button
                 onClick={handleExport}
-                disabled={!selectedChannel}
+                disabled={!selectedChannel || isLoading}
                 className="w-full bg-blue-600 text-white py-2 px-3 rounded text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Export {selectedChannel || 'All'}
               </button>
               <button
                 onClick={() => selectedChannel && handleClearChannel(selectedChannel)}
-                disabled={!selectedChannel}
+                disabled={!selectedChannel || isLoading}
                 className="w-full bg-yellow-600 text-white py-2 px-3 rounded text-sm hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Clear Channel
               </button>
               <button
                 onClick={handleClearAll}
-                className="w-full bg-red-600 text-white py-2 px-3 rounded text-sm hover:bg-red-700"
+                disabled={isLoading}
+                className="w-full bg-red-600 text-white py-2 px-3 rounded text-sm hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Clear All Logs
               </button>

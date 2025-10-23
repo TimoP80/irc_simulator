@@ -65,6 +65,8 @@ export const BatchUserModal: React.FC<BatchUserModalProps> = ({
     randomizeAccent: true
   });
   const [usernameStyle, setUsernameStyle] = useState<'mixed' | 'tech' | 'gaming' | 'creative' | 'realistic' | 'abstract'>('mixed');
+  const [forcePrimaryLanguage, setForcePrimaryLanguage] = useState(false);
+  const [primaryLanguage, setPrimaryLanguage] = useState<string>('English');
 
   // Reset form when modal opens
   useEffect(() => {
@@ -79,6 +81,8 @@ export const BatchUserModal: React.FC<BatchUserModalProps> = ({
         randomizeLanguages: true,
         randomizeAccent: true
       });
+      setForcePrimaryLanguage(false);
+      setPrimaryLanguage('English');
     }
   }, [isOpen]);
 
@@ -224,10 +228,20 @@ export const BatchUserModal: React.FC<BatchUserModalProps> = ({
         const shuffledLanguages = [...TRAIT_POOLS.languages].sort(() => 0.5 - Math.random());
         const fluencyLevels = ['beginner', 'intermediate', 'advanced', 'native'] as const;
         
+        let selectedLanguages = shuffledLanguages.slice(0, numLanguages);
+        
+        // Force primary language if enabled
+        if (forcePrimaryLanguage && primaryLanguage) {
+          // Remove primary language from random selection if it's there
+          selectedLanguages = selectedLanguages.filter(lang => lang !== primaryLanguage);
+          // Add primary language as the first language with native fluency
+          selectedLanguages.unshift(primaryLanguage);
+        }
+        
         user.languageSkills = {
-          languages: shuffledLanguages.slice(0, numLanguages).map(lang => ({
+          languages: selectedLanguages.map((lang, index) => ({
             language: lang,
-            fluency: fluencyLevels[Math.floor(Math.random() * fluencyLevels.length)],
+            fluency: forcePrimaryLanguage && index === 0 ? 'native' : fluencyLevels[Math.floor(Math.random() * fluencyLevels.length)],
             accent: ''
           }))
         };
@@ -451,6 +465,42 @@ export const BatchUserModal: React.FC<BatchUserModalProps> = ({
                   />
                   <span className="text-gray-300">Accent</span>
                 </label>
+              </div>
+              
+              {/* Primary Language Selection */}
+              <div className="mt-6 p-4 bg-gray-800 rounded-lg border border-gray-600">
+                <div className="flex items-center space-x-3 mb-3">
+                  <input
+                    type="checkbox"
+                    id="forcePrimaryLanguage"
+                    checked={forcePrimaryLanguage}
+                    onChange={(e) => setForcePrimaryLanguage(e.target.checked)}
+                    className="rounded border-gray-600 bg-gray-700 text-indigo-500 focus:ring-indigo-500"
+                  />
+                  <label htmlFor="forcePrimaryLanguage" className="text-gray-300 font-medium">
+                    Force Primary Language
+                  </label>
+                </div>
+                {forcePrimaryLanguage && (
+                  <div className="ml-6">
+                    <label htmlFor="primaryLanguage" className="block text-sm text-gray-400 mb-2">
+                      Primary Language
+                    </label>
+                    <select
+                      id="primaryLanguage"
+                      value={primaryLanguage}
+                      onChange={(e) => setPrimaryLanguage(e.target.value)}
+                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      {TRAIT_POOLS.languages.map(lang => (
+                        <option key={lang} value={lang}>{lang}</option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-gray-500 mt-1">
+                      All generated users will have this as their primary language with native fluency
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           )}

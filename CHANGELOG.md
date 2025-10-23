@@ -4,6 +4,63 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 
 *Note: This project was previously known as "Gemini IRC Simulator" and was renamed to "Station V - Virtual IRC Simulator" as of v1.5.1.*
 
+## 1.13.17 - 2025-01-23
+
+### Added
+- **Primary Language Forcing in User Generator**: Enhanced batch user generation with language control
+  - **Force Primary Language**: Checkbox option to force all generated users to have a specific primary language
+  - **Language Selection**: Dropdown to choose from all available languages in the trait pools
+  - **Native Fluency**: Forced primary language is automatically set to native fluency level
+  - **Smart Integration**: Works with existing randomization settings and language generation
+  - **UI Enhancement**: Clean, intuitive interface with conditional display of language selector
+  - **Flexible Generation**: Users can still have additional languages with random fluency levels
+
+### Fixed
+- **User Channel Removal Bug**: Fixed issue where users could not be removed from their first assigned channel
+  - **Root Cause**: UserManagement component was not properly propagating channel changes back to the main App state
+  - **Solution**: Updated SettingsModal to properly forward channel changes through the onChannelsChange callback
+  - **Impact**: Users can now be removed from any channel, including their first assigned channel
+- **User List Update Bug**: Fixed issue where user list did not update when users were removed from channels
+  - **Root Cause**: React state calculations were not properly memoized, causing stale references
+  - **Solution**: Wrapped activeChannel, usersInContext, and messagesInContext calculations in useMemo hooks
+  - **Impact**: User list now updates immediately when users are added or removed from channels
+- **React Key Collision Bug**: Fixed "Encountered two children with the same key" error when removing users from channels
+  - **Root Cause**: Potential duplicate users in channel users array causing React key conflicts
+  - **Solution**: Added deduplication logic in usersInContext calculation and improved key generation in UserList
+  - **Impact**: Eliminates React warnings and ensures stable component rendering during user management
+- **Channel-Specific User Lists**: Fixed user list showing all users globally instead of channel-specific users
+  - **Root Cause**: parseChannels function was adding all virtual users to every channel by default
+  - **Solution**: Modified parseChannels to start with empty channels (only current user), allowing proper channel-specific user management
+  - **Impact**: User lists now correctly show only users assigned to the current channel, enabling proper channel-specific conversations
+- **User List Update on Channel Click**: Fixed user list not updating when clicking on different channels
+  - **Root Cause**: Existing saved configuration still had old behavior with all users in every channel
+  - **Solution**: Added migration function to detect and fix old channel data, resetting to proper channel-specific user assignments
+  - **Impact**: User lists now update correctly when switching between channels, showing only relevant users for each channel
+- **Channel User Assignments Reset on Save**: Fixed user channel assignments being reset when pressing save in settings
+  - **Root Cause**: Save process only stored basic channel info (name, topic) but not user assignments
+  - **Solution**: Added channelObjects to AppConfig to store full channel data including user assignments
+  - **Impact**: User channel assignments are now preserved when saving and reloading the application
+- **Chat Log Viewer UI Buttons Disappearing**: Fixed UI buttons disappearing when clearing a channel in chat log viewer
+  - **Root Cause**: `clearChannel` function was completely removing channel metadata, causing channels to disappear from the list
+  - **Solution**: Modified `clearChannel` to keep channel metadata but update it to reflect empty state (0 messages)
+  - **Impact**: UI buttons remain visible and functional after clearing channels, providing better user experience
+- **Chat Log Viewer Buttons Flickering**: Fixed buttons appearing and quickly disappearing when entering chat log viewer
+  - **Root Cause**: Race condition during data loading where buttons were briefly enabled before proper channel selection
+  - **Solution**: Clear channel selection immediately when loading starts and disable buttons during loading state
+  - **Impact**: Buttons now have consistent disabled state during loading, preventing flickering behavior
+- **AI Greeting Repetition Bug**: Fixed users repeating greetings after running simulation for a long time
+  - **Root Cause**: Repetition detection system was treating greeting phrases as repetitive content, causing AI to avoid them and then generate more greetings
+  - **Solution**: Excluded greeting-related messages and phrases from repetition detection in both `detectRepetitivePatterns` and `trackConversationPatterns`
+  - **Impact**: Greetings are now properly excluded from anti-repetition logic, preventing the greeting loop bug
+- **Missing Join/Part Notifications**: Fixed user join and leave notifications not appearing in channels
+  - **Root Cause**: Join/part messages were being added directly to channel messages array instead of using `addMessageToContext` function
+  - **Solution**: Modified `handleUsersChange` to use `addMessageToContext` for join/part messages, ensuring proper message handling and chat log saving
+  - **Impact**: Join/part notifications now appear correctly in channels and are properly saved to chat logs
+- **AI Generating Messages as End User**: Fixed AI system generating messages from the end user when they're the only one on a channel
+  - **Root Cause**: Potential edge case where current user filtering wasn't working properly or current user was included in virtual users
+  - **Solution**: Added enhanced debugging and additional safety checks to prevent AI generation when only current user is in channel
+  - **Impact**: AI will never generate messages from the human user, ensuring proper separation between human and AI interactions
+
 ## 1.13.16 - 2025-01-23
 
 ### Added

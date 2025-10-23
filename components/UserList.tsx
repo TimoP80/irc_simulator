@@ -31,9 +31,9 @@ export const UserList: React.FC<UserListProps> = ({ users, onUserClick, currentU
       )}
       
       <div className="flex flex-col gap-0.5 lg:gap-1">
-        {users.map(user => (
+        {users.map((user, index) => (
           user.nickname === currentUserNickname ? (
-            <div key={user.nickname} className="px-2 lg:px-3 py-1 lg:py-1.5 text-xs lg:text-sm text-cyan-400 font-bold flex items-center gap-1 lg:gap-2">
+            <div key={`${user.nickname}-${index}-current`} className="px-2 lg:px-3 py-1 lg:py-1.5 text-xs lg:text-sm text-cyan-400 font-bold flex items-center gap-1 lg:gap-2">
               <span className={`h-1.5 w-1.5 lg:h-2 lg:w-2 rounded-full ${user.status === 'online' ? 'bg-green-500' : 'bg-yellow-500'}`}></span>
               <span className="truncate">{user.nickname} (You)</span>
               {isOperator(user.nickname) && (
@@ -41,7 +41,7 @@ export const UserList: React.FC<UserListProps> = ({ users, onUserClick, currentU
               )}
             </div>
           ) : (
-            <div key={user.nickname} className="flex items-center gap-1 lg:gap-2 group">
+            <div key={`${user.nickname}-${index}`} className="flex items-center gap-1 lg:gap-2 group">
               <button
                 onClick={() => onUserClick(user.nickname)}
                 className="flex-1 text-left px-2 lg:px-3 py-1 lg:py-1.5 text-xs lg:text-sm text-gray-300 hover:bg-gray-700 rounded-md flex items-center gap-1 lg:gap-2 transition-colors"

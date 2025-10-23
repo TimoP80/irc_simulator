@@ -139,6 +139,34 @@ class ChatLogService {
     });
   }
 
+  private async updateChannelMetadataStandalone(channelName: string, messageCount: number, lastActivity: Date): Promise<void> {
+    const db = await this.ensureDB();
+    
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['channels'], 'readwrite');
+      const channelStore = transaction.objectStore('channels');
+      
+      const getRequest = channelStore.get(channelName);
+      
+      getRequest.onsuccess = () => {
+        const existing = getRequest.result;
+        
+        const channelData: ChannelLog = {
+          channelName,
+          messageCount,
+          lastActivity,
+          firstMessage: existing?.firstMessage || lastActivity
+        };
+
+        const putRequest = channelStore.put(channelData);
+        putRequest.onsuccess = () => resolve();
+        putRequest.onerror = () => reject(putRequest.error);
+      };
+      
+      getRequest.onerror = () => reject(getRequest.error);
+    });
+  }
+
   async getMessages(channelName: string, limit: number = 100, offset: number = 0): Promise<ChatLogEntry[]> {
     const db = await this.ensureDB();
     
@@ -234,9 +262,8 @@ class ChatLogService {
     const db = await this.ensureDB();
     
     return new Promise((resolve, reject) => {
-      const transaction = db.transaction(['messages', 'channels'], 'readwrite');
+      const transaction = db.transaction(['messages'], 'readwrite');
       const messageStore = transaction.objectStore('messages');
-      const channelStore = transaction.objectStore('channels');
       
       const index = messageStore.index('channelName');
       const range = IDBKeyRange.only(channelName);
@@ -248,9 +275,10 @@ class ChatLogService {
           cursor.delete();
           cursor.continue();
         } else {
-          // Also remove channel metadata
-          channelStore.delete(channelName);
-          resolve();
+          // Keep channel metadata but update it to reflect empty state
+          this.updateChannelMetadataStandalone(channelName, 0, new Date()).then(() => {
+            resolve();
+          }).catch(reject);
         }
       };
       

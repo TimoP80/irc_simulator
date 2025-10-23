@@ -137,10 +137,8 @@ const parseChannels = (channelsString: string, allVirtualUsers: User[], currentU
                 dominantLanguage = undefined;
             }
             
-            // Use all configured virtual users for each channel
-            // This ensures that all configured users are available in the virtual world
-            const usersForChannel = [...allVirtualUsers];
-
+            // Start with empty channel (only current user) - users will be assigned through UI
+            // This allows for proper channel-specific user management
             return {
                 name,
                 topic,
@@ -158,8 +156,7 @@ const parseChannels = (channelsString: string, allVirtualUsers: User[], currentU
                             }]
                         },
                         writingStyle: { formality: 'informal' as const, verbosity: 'neutral' as const, humor: 'none' as const, emojiUsage: 'low' as const, punctuation: 'standard' as const }
-                    }, 
-                    ...usersForChannel
+                    }
                 ],
                 messages: [
                     { id: Date.now() + index, nickname: 'system', content: `You have joined ${name}`, timestamp: new Date(), type: 'system' }
@@ -180,12 +177,32 @@ export const initializeStateFromConfig = (config: AppConfig) => {
     // Use userObjects if available (for proper persistence), otherwise fall back to text parsing
     const virtualUsers = config.userObjects || (config.virtualUsers ? parseVirtualUsers(config.virtualUsers) : DEFAULT_VIRTUAL_USERS);
     
-    // Always use configured channels if they exist, otherwise use default channels
+    // Use channel objects if available (preserves user assignments), otherwise parse from text
     let channels: Channel[];
-    if (config.channels && config.channels.trim()) {
+    if (config.channelObjects && config.channelObjects.length > 0) {
+        // Use saved channel objects to preserve user assignments
+        channels = config.channelObjects.map(c => ({
+            ...c,
+            users: c.users.map(user => 
+                user.nickname === DEFAULT_NICKNAME ? {
+                    nickname, 
+                    status: 'online' as const,
+                    personality: 'The human user',
+                    languageSkills: { 
+                        languages: [{
+                            language: 'English',
+                            fluency: 'native' as const,
+                            accent: ''
+                        }]
+                    },
+                    writingStyle: { formality: 'informal' as const, verbosity: 'neutral' as const, humor: 'none' as const, emojiUsage: 'low' as const, punctuation: 'standard' as const }
+                } : user
+            )
+        }));
+    } else if (config.channels && config.channels.trim()) {
         channels = parseChannels(config.channels, virtualUsers, nickname);
     } else {
-        // Use default channels but ensure they have the correct users and nickname
+        // Use default channels but ensure they have the correct current user nickname
         channels = DEFAULT_CHANNELS.map(c => ({
             ...c,
             users: [
@@ -202,7 +219,7 @@ export const initializeStateFromConfig = (config: AppConfig) => {
                     },
                     writingStyle: { formality: 'informal' as const, verbosity: 'neutral' as const, humor: 'none' as const, emojiUsage: 'low' as const, punctuation: 'standard' as const }
                 },
-                ...virtualUsers
+                ...c.users.filter(u => u.nickname !== DEFAULT_NICKNAME) // Keep original channel users, just update current user
             ]
         }));
     }

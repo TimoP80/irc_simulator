@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { ChannelList } from './components/ChannelList';
 import { UserList } from './components/UserList';
 import { ChatWindow } from './components/ChatWindow';
@@ -47,6 +47,65 @@ const migrateChannels = (channels: Channel[]): Channel[] => {
     ...channel,
     operators: channel.operators || []
   }));
+};
+
+// Migration function to fix channel-specific user assignments
+const migrateChannelUsers = (channels: Channel[], virtualUsers: User[], currentUserNickname: string): Channel[] => {
+  return channels.map(channel => {
+    // If channel has all virtual users (old behavior), reset to channel-specific
+    const hasAllUsers = channel.users.length > virtualUsers.length + 1; // +1 for current user
+    const hasTooManyUsers = channel.users.some(user => 
+      user.nickname !== currentUserNickname && 
+      !DEFAULT_VIRTUAL_USERS.some(defaultUser => defaultUser.nickname === user.nickname)
+    );
+    
+    if (hasAllUsers || hasTooManyUsers) {
+      console.log(`[Migration] Resetting users for channel ${channel.name} (had ${channel.users.length} users)`);
+      
+      // Reset to default channel-specific users based on channel name
+      let channelSpecificUsers: User[] = [];
+      
+      if (channel.name === '#general') {
+        channelSpecificUsers = DEFAULT_VIRTUAL_USERS.slice(0, 5);
+      } else if (channel.name === '#tech-talk') {
+        channelSpecificUsers = [
+          DEFAULT_VIRTUAL_USERS.find(u => u.nickname === 'nova')!,
+          DEFAULT_VIRTUAL_USERS.find(u => u.nickname === 'rex')!,
+          DEFAULT_VIRTUAL_USERS.find(u => u.nickname === 'cypher')!,
+          DEFAULT_VIRTUAL_USERS.find(u => u.nickname === 'glitch')!,
+        ].filter(Boolean);
+      } else if (channel.name === '#random') {
+        channelSpecificUsers = [
+          DEFAULT_VIRTUAL_USERS.find(u => u.nickname === 'jinx')!,
+          DEFAULT_VIRTUAL_USERS.find(u => u.nickname === 'luna')!,
+          DEFAULT_VIRTUAL_USERS.find(u => u.nickname === 'seraph')!,
+        ].filter(Boolean);
+      }
+      // For other channels, start with empty (only current user)
+      
+      return {
+        ...channel,
+        users: [
+          channel.users.find(u => u.nickname === currentUserNickname) || {
+            nickname: currentUserNickname,
+            status: 'online' as const,
+            personality: 'The human user',
+            languageSkills: { 
+              languages: [{
+                language: 'English',
+                fluency: 'native' as const,
+                accent: ''
+              }]
+            },
+            writingStyle: { formality: 'informal' as const, verbosity: 'neutral' as const, humor: 'none' as const, emojiUsage: 'low' as const, punctuation: 'standard' as const }
+          },
+          ...channelSpecificUsers
+        ]
+      };
+    }
+    
+    return channel;
+  });
 };
 
 const App: React.FC = () => {
@@ -158,8 +217,10 @@ const App: React.FC = () => {
         
         configLogger.debug('Merged channels message counts:', mergedChannels.map(c => ({ name: c.name, messageCount: c.messages?.length || 0 })));
         const channelsWithOperators = loadOperatorAssignments(migrateChannels(mergedChannels));
+        // Migrate channel users to fix channel-specific assignments
+        const channelsWithMigratedUsers = migrateChannelUsers(channelsWithOperators, virtualUsers, currentUserNickname);
         // Ensure current user is an operator of all channels
-        const channelsWithUserAsOperator = channelsWithOperators.map(channel => {
+        const channelsWithUserAsOperator = channelsWithMigratedUsers.map(channel => {
           if (!isChannelOperator(channel, currentUserNickname)) {
             return addChannelOperator(channel, currentUserNickname);
           }
@@ -170,8 +231,10 @@ const App: React.FC = () => {
         configLogger.debug('No saved logs, using configured channels');
         configLogger.debug('Configured channels message counts:', channels.map(c => ({ name: c.name, messageCount: c.messages?.length || 0 })));
         const channelsWithOperators = loadOperatorAssignments(migrateChannels(channels));
+        // Migrate channel users to fix channel-specific assignments
+        const channelsWithMigratedUsers = migrateChannelUsers(channelsWithOperators, virtualUsers, currentUserNickname);
         // Ensure current user is an operator of all channels
-        const channelsWithUserAsOperator = channelsWithOperators.map(channel => {
+        const channelsWithUserAsOperator = channelsWithMigratedUsers.map(channel => {
           if (!isChannelOperator(channel, currentUserNickname)) {
             return addChannelOperator(channel, currentUserNickname);
           }
@@ -310,8 +373,28 @@ const App: React.FC = () => {
   const trackConversationPatterns = (message: Message, channel: Channel) => {
     const patterns = conversationPatternsRef.current;
     
+    // Skip greeting-related messages and system messages from pattern tracking
+    if (message.type === 'system' || message.type === 'join' || message.type === 'part' || message.type === 'quit') {
+      return;
+    }
+    
+    // Skip messages that are likely greetings based on content
+    const content = message.content.toLowerCase();
+    const greetingPhrases = [
+      'welcome to', 'hello there', 'hi there', 'hey there', 'good to see', 'nice to meet',
+      'welcome back', 'hello everyone', 'hi everyone', 'hey everyone', 'welcome new',
+      'glad to see', 'great to see', 'welcome aboard', 'hello new', 'hi new', 'hey new'
+    ];
+    
+    const isGreeting = greetingPhrases.some(phrase => content.includes(phrase)) ||
+                      content.match(/^(hi|hello|hey|welcome|greetings)/);
+    
+    if (isGreeting) {
+      return;
+    }
+    
     // Track recent phrases (keep last 20)
-    const words = message.content.toLowerCase().split(/\s+/);
+    const words = content.split(/\s+/);
     const phrases = [];
     for (let i = 0; i < words.length - 1; i++) {
       for (let len = 2; len <= Math.min(3, words.length - i); len++) {
@@ -884,22 +967,29 @@ The response must be a single line in the format: "nickname: greeting message"
             const isAlreadyInChannel = channel.users.some(u => u.nickname === newUser.nickname);
             if (!isAlreadyInChannel) {
               updatedChannel.users = [...updatedChannel.users, newUser];
-              
-              // Add join message with unique ID
-              const joinMessage: Message = {
-                id: generateUniqueMessageId(),
-                nickname: newUser.nickname,
-                content: `joined ${channel.name}`,
-                timestamp: new Date(),
-                type: 'join'
-              };
-              updatedChannel.messages = [...updatedChannel.messages, joinMessage];
             }
           });
           
           return updatedChannel;
         })
       );
+      
+      // Add join messages for new users in all channels
+      addedUsers.forEach((newUser) => {
+        channels.forEach(channel => {
+          const wasInChannel = channel.users.some(u => u.nickname === newUser.nickname);
+          if (!wasInChannel) {
+            const joinMessage: Message = {
+              id: generateUniqueMessageId(),
+              nickname: newUser.nickname,
+              content: `joined ${channel.name}`,
+              timestamp: new Date(),
+              type: 'join'
+            };
+            addMessageToContext(joinMessage, { type: 'channel', name: channel.name });
+          }
+        });
+      });
       
       // Generate greetings for new users in active channel
       if (activeContext?.type === 'channel') {
@@ -919,6 +1009,23 @@ The response must be a single line in the format: "nickname: greeting message"
     
     // Handle removed users - remove them from channels
     if (removedUsers.length > 0) {
+      // Add part messages for removed users in all channels where they were present
+      removedUsers.forEach((removedUser) => {
+        channels.forEach(channel => {
+          const wasInChannel = channel.users.some(u => u.nickname === removedUser.nickname);
+          if (wasInChannel) {
+            const partMessage: Message = {
+              id: generateUniqueMessageId(),
+              nickname: removedUser.nickname,
+              content: `left ${channel.name}`,
+              timestamp: new Date(),
+              type: 'part'
+            };
+            addMessageToContext(partMessage, { type: 'channel', name: channel.name });
+          }
+        });
+      });
+      
       setChannels(prevChannels => 
         prevChannels.map(channel => {
           const updatedChannel = { ...channel };
@@ -927,16 +1034,6 @@ The response must be a single line in the format: "nickname: greeting message"
             const wasInChannel = channel.users.some(u => u.nickname === removedUser.nickname);
             if (wasInChannel) {
               updatedChannel.users = updatedChannel.users.filter(u => u.nickname !== removedUser.nickname);
-              
-              // Add part message with unique ID
-              const partMessage: Message = {
-                id: generateUniqueMessageId(),
-                nickname: removedUser.nickname,
-                content: `left ${channel.name}`,
-                timestamp: new Date(),
-                type: 'part'
-              };
-              updatedChannel.messages = [...updatedChannel.messages, partMessage];
             }
           });
           
@@ -1197,20 +1294,47 @@ The response must be a single line in the format: "nickname: greeting message"
     };
   }, [runSimulation, simulationSpeed, isSettingsOpen]);
 
-  const activeChannel = activeContext?.type === 'channel' ? channels.find(c => c.name === activeContext.name) : undefined;
-  const activePM = activeContext?.type === 'pm' ? privateMessages[activeContext.with] : undefined;
+  const activeChannel = useMemo(() => 
+    activeContext?.type === 'channel' ? channels.find(c => c.name === activeContext.name) : undefined,
+    [activeContext, channels]
+  );
   
-  const usersInContext: User[] = activeContext?.type === 'channel' && activeChannel
-    ? activeChannel.users
-    : activeContext?.type === 'pm'
-    ? [virtualUsers.find(u => u.nickname === activeContext.with)!, { nickname: currentUserNickname, status: 'online' }]
-    : [];
+  const activePM = useMemo(() => 
+    activeContext?.type === 'pm' ? privateMessages[activeContext.with] : undefined,
+    [activeContext, privateMessages]
+  );
+  
+  const usersInContext: User[] = useMemo(() => {
+    if (activeContext?.type === 'channel' && activeChannel) {
+      // Deduplicate users by nickname to prevent React key collisions
+      const uniqueUsers = activeChannel.users.reduce((acc, user) => {
+        if (!acc.find(u => u.nickname === user.nickname)) {
+          acc.push(user);
+        }
+        return acc;
+      }, [] as User[]);
+      
+      // Debug logging to help identify duplicate issues
+      if (activeChannel.users.length !== uniqueUsers.length) {
+        console.warn(`[UserList] Found duplicate users in channel ${activeChannel.name}. Original: ${activeChannel.users.length}, Deduplicated: ${uniqueUsers.length}`);
+        console.warn('[UserList] Duplicate users:', activeChannel.users.map(u => u.nickname));
+      }
+      
+      return uniqueUsers;
+    } else if (activeContext?.type === 'pm') {
+      return [virtualUsers.find(u => u.nickname === activeContext.with)!, { nickname: currentUserNickname, status: 'online' }];
+    }
+    return [];
+  }, [activeContext, activeChannel, virtualUsers, currentUserNickname]);
 
-  const messagesInContext = activeContext?.type === 'channel' && activeChannel
-    ? activeChannel.messages
-    : activeContext?.type === 'pm' && activePM
-    ? activePM.messages
-    : [];
+  const messagesInContext = useMemo(() => {
+    if (activeContext?.type === 'channel' && activeChannel) {
+      return activeChannel.messages;
+    } else if (activeContext?.type === 'pm' && activePM) {
+      return activePM.messages;
+    }
+    return [];
+  }, [activeContext, activeChannel, activePM]);
   
   const contextTitle = activeContext?.type === 'channel' 
     ? activeChannel?.topic || activeContext.name 

@@ -213,7 +213,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       virtualUsers: formatUsersToText(users),
       channels: formatChannelsToText(channels),
       // Store the full user objects for proper persistence
-      userObjects: users
+      userObjects: users,
+      // Store the full channel objects to preserve user assignments
+      channelObjects: currentChannels || channels
     };
     
     // Notify parent component about channel changes
@@ -298,7 +300,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             aiModel={config.aiModel}
             channels={currentChannels || channels}
             currentUserNickname={config.currentUserNickname}
-            onChannelsChange={setChannels}
+            onChannelsChange={(newChannels) => {
+              setChannels(newChannels);
+              onChannelsChange?.(newChannels);
+            }}
           />
           <ChannelManagement 
             channels={channels} 
