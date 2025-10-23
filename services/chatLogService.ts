@@ -14,6 +14,8 @@ export interface ChatLogEntry {
     type: 'system' | 'user' | 'ai' | 'pm' | 'action' | 'notice' | 'topic' | 'kick' | 'ban' | 'join' | 'part' | 'quit';
     command?: string;
     target?: string;
+    links?: string[];
+    images?: string[];
   };
   createdAt: Date;
 }
@@ -167,7 +169,7 @@ class ChatLogService {
     });
   }
 
-  async getMessages(channelName: string, limit: number = 100, offset: number = 0): Promise<ChatLogEntry[]> {
+  async getMessages(channelName: string, limit: number = 1000, offset: number = 0): Promise<ChatLogEntry[]> {
     const db = await this.ensureDB();
     
     return new Promise((resolve, reject) => {
@@ -241,7 +243,20 @@ class ChatLogService {
         };
 
         if (messages.length > 0) {
-          const timestamps = messages.map(m => new Date(m.message.timestamp));
+          // Handle timestamp conversion properly - IndexedDB may store dates as strings
+          const timestamps = messages.map(m => {
+            const timestamp = m.message.timestamp;
+            console.log('[ChatLog Debug] Processing timestamp:', timestamp, 'type:', typeof timestamp);
+            // If timestamp is already a Date object, use it; otherwise convert from string
+            const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
+            // Validate the date
+            if (isNaN(date.getTime())) {
+              console.warn('[ChatLog Debug] Invalid timestamp found:', timestamp);
+              return new Date(); // Fallback to current time
+            }
+            return date;
+          });
+          
           stats.oldestMessage = new Date(Math.min(...timestamps.map(t => t.getTime())));
           stats.newestMessage = new Date(Math.max(...timestamps.map(t => t.getTime())));
 
@@ -312,7 +327,7 @@ class ChatLogService {
 
   async exportLogs(channelName?: string): Promise<ChatLogEntry[]> {
     if (channelName) {
-      return this.getMessages(channelName, 10000); // Large limit for export
+      return this.getMessages(channelName, 50000); // Large limit for export
     }
     
     const db = await this.ensureDB();

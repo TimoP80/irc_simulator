@@ -46,6 +46,16 @@ const isRateLimitError = (error: unknown): boolean => {
   return false;
 };
 
+const isNetworkError = (error: unknown): boolean => {
+  if (error instanceof Error) {
+    return error.message.includes("NetworkError") || 
+           error.message.includes("CORS") || 
+           error.message.includes("fetch") ||
+           error.message.includes("Failed to fetch");
+  }
+  return false;
+};
+
 /**
  * Wraps an API call with exponential backoff for rate limit errors.
  * @param apiCall The function that returns a promise for the API call.
@@ -58,6 +68,14 @@ export const withRateLimitAndRetries = async <T>(apiCall: () => Promise<T>): Pro
     try {
       return await apiCall();
     } catch (error) {
+      console.error(`[API Error] Attempt ${attempt + 1}/${MAX_RETRIES + 1} failed:`, error);
+      
+      if (isNetworkError(error)) {
+        console.warn(`[API Error] Network/CORS error detected. This may be due to browser security policies.`);
+        // For network errors, we don't retry as they're likely persistent
+        throw new Error(`Network error: Unable to connect to AI service. This may be due to CORS restrictions or network issues. Please check your internet connection and try again.`);
+      }
+      
       if (isRateLimitError(error) && attempt < MAX_RETRIES) {
         attempt++;
         const delay = INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1) + Math.random() * 1000; // Add jitter
@@ -244,7 +262,19 @@ export const saveChannelLogs = (channels: Channel[]) => {
         ...message,
         timestamp: message.timestamp instanceof Date 
           ? message.timestamp.toISOString() 
-          : new Date(message.timestamp).toISOString()
+          : (() => {
+              try {
+                const date = new Date(message.timestamp);
+                if (isNaN(date.getTime())) {
+                  console.warn('Invalid timestamp found, using current time:', message.timestamp);
+                  return new Date().toISOString();
+                }
+                return date.toISOString();
+              } catch (error) {
+                console.warn('Error parsing timestamp, using current time:', message.timestamp, error);
+                return new Date().toISOString();
+              }
+            })()
       }))
     }));
     

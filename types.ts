@@ -34,6 +34,8 @@ export interface Message {
   type: MessageType;
   command?: string; // For commands like 'me', 'notice', 'topic', etc.
   target?: string; // For commands that target specific users or channels
+  links?: string[]; // Array of URLs that were mentioned in the message
+  images?: string[]; // Array of image URLs that were mentioned in the message
 }
 
 export interface Channel {

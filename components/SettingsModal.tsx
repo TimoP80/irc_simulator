@@ -205,7 +205,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         setConfig(prev => ({ ...prev, aiModel: newModelId }));
       }
     }
-  }, [availableModels, config.aiModel]);
+  }, [availableModels]);
+
+  // Debug logging for config.aiModel changes
+  useEffect(() => {
+    console.log('[Settings Debug] config.aiModel changed to:', config.aiModel);
+  }, [config.aiModel]);
 
   const handleSave = () => {
     const configToSave = {
@@ -229,8 +234,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     
     // Special handling for AI model selection to ensure we use the model ID
     if (name === 'aiModel') {
-      console.log('AI Model changed to:', value);
-      setConfig(prev => ({ ...prev, [name]: value }));
+      console.log('[Settings Debug] AI Model changed to:', value);
+      console.log('[Settings Debug] Current config.aiModel before update:', config.aiModel);
+      console.log('[Settings Debug] Available models:', availableModels.map(m => ({ name: m.name, baseModelId: m.baseModelId, displayName: m.displayName })));
+      setConfig(prev => {
+        const newConfig = { ...prev, [name]: value };
+        console.log('[Settings Debug] New config after update:', newConfig);
+        return newConfig;
+      });
     } else {
       setConfig(prev => ({ ...prev, [name]: value }));
     }
