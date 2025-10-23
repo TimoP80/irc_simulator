@@ -45,11 +45,91 @@ const detectRepetitivePatterns = (messages: Message[]): string[] => {
   const recentMessages = messages.slice(-10); // Look at last 10 messages
   const phrases: { [key: string]: number } = {};
   
-  // Common greeting phrases that should be excluded from repetition detection
+  // Common greeting phrases that should be excluded from repetition detection (multilingual)
   const greetingPhrases = [
+    // English greetings
     'welcome to', 'hello there', 'hi there', 'hey there', 'good to see', 'nice to meet',
     'welcome back', 'hello everyone', 'hi everyone', 'hey everyone', 'welcome new',
-    'glad to see', 'great to see', 'welcome aboard', 'hello new', 'hi new', 'hey new'
+    'glad to see', 'great to see', 'welcome aboard', 'hello new', 'hi new', 'hey new',
+    'welcome', 'hello', 'hi', 'hey', 'greetings', 'good morning', 'good afternoon',
+    'good evening', 'howdy', 'sup', 'what\'s up', 'how are you', 'how\'s it going',
+    'nice to see you', 'great to see you', 'good to see you', 'welcome back',
+    'welcome everyone', 'hello all', 'hi all', 'hey all', 'welcome friends',
+    'hello friends', 'hi friends', 'hey friends', 'welcome back everyone',
+    'welcome back all', 'welcome back friends', 'welcome back to', 'welcome to the',
+    'welcome to our', 'welcome to this', 'welcome to the channel', 'welcome to the room',
+    'welcome to the chat', 'welcome to the server', 'welcome to the community',
+    
+    // Spanish greetings
+    'hola', 'buenos días', 'buenas tardes', 'buenas noches', 'saludos', 'bienvenido',
+    'bienvenida', 'bienvenidos', 'bienvenidas', 'hola a todos', 'hola todos',
+    'hola amigos', 'hola amigas', 'qué tal', 'cómo estás', 'cómo están',
+    'bienvenido a', 'bienvenida a', 'bienvenidos a', 'bienvenidas a',
+    
+    // French greetings
+    'bonjour', 'bonsoir', 'salut', 'bonne journée', 'bonne soirée', 'bienvenue',
+    'bonjour à tous', 'salut tout le monde', 'bonjour les amis', 'salut les amis',
+    'comment allez-vous', 'comment ça va', 'bienvenue à', 'bienvenue dans',
+    
+    // German greetings
+    'hallo', 'guten tag', 'guten morgen', 'guten abend', 'gute nacht', 'willkommen',
+    'hallo alle', 'hallo zusammen', 'hallo freunde', 'wie geht es', 'wie geht\'s',
+    'willkommen zu', 'willkommen in', 'willkommen bei',
+    
+    // Italian greetings
+    'ciao', 'buongiorno', 'buonasera', 'buonanotte', 'salve', 'benvenuto',
+    'benvenuta', 'benvenuti', 'benvenute', 'ciao a tutti', 'ciao tutti',
+    'ciao amici', 'ciao amiche', 'come stai', 'come state', 'benvenuto a',
+    'benvenuta a', 'benvenuti a', 'benvenute a',
+    
+    // Portuguese greetings
+    'olá', 'bom dia', 'boa tarde', 'boa noite', 'saudações', 'bem-vindo',
+    'bem-vinda', 'bem-vindos', 'bem-vindas', 'olá a todos', 'olá todos',
+    'olá amigos', 'olá amigas', 'como está', 'como estão', 'bem-vindo a',
+    'bem-vinda a', 'bem-vindos a', 'bem-vindas a',
+    
+    // Japanese greetings
+    'こんにちは', 'こんばんは', 'おはよう', 'おやすみ', 'ようこそ', 'みなさん',
+    'みんな', '友達', '友だち', '元気ですか', '元気？', 'ようこそ',
+    
+    // Chinese greetings
+    '你好', '您好', '大家好', '早上好', '下午好', '晚上好', '晚安', '欢迎',
+    '朋友们', '朋友们好', '你好吗', '怎么样', '欢迎来到', '欢迎加入',
+    
+    // Russian greetings
+    'привет', 'здравствуйте', 'доброе утро', 'добрый день', 'добрый вечер',
+    'спокойной ночи', 'добро пожаловать', 'всем привет', 'друзья', 'как дела',
+    'как поживаете', 'добро пожаловать в',
+    
+    // Arabic greetings
+    'مرحبا', 'السلام عليكم', 'صباح الخير', 'مساء الخير', 'أهلا وسهلا',
+    'مرحبا بكم', 'أصدقاء', 'كيف حالك', 'كيف الحال', 'أهلا وسهلا بكم في',
+    
+    // Korean greetings
+    '안녕하세요', '안녕', '좋은 아침', '좋은 저녁', '환영합니다', '모두',
+    '친구들', '어떻게 지내세요', '어떻게 지내', '환영합니다',
+    
+    // Dutch greetings
+    'hallo', 'goedemorgen', 'goedemiddag', 'goedenavond', 'goedenacht', 'welkom',
+    'hallo allemaal', 'hallo vrienden', 'hoe gaat het', 'welkom bij', 'welkom in',
+    
+    // Swedish greetings
+    'hej', 'god morgon', 'god eftermiddag', 'god kväll', 'god natt', 'välkommen',
+    'hej alla', 'hej vänner', 'hur mår du', 'hur är det', 'välkommen till',
+    
+    // Norwegian greetings
+    'hei', 'god morgen', 'god ettermiddag', 'god kveld', 'god natt', 'velkommen',
+    'hei alle', 'hei venner', 'hvordan har du det', 'hvordan går det', 'velkommen til',
+    
+    // Danish greetings
+    'hej', 'god morgen', 'god eftermiddag', 'god aften', 'god nat', 'velkommen',
+    'hej alle', 'hej venner', 'hvordan har du det', 'hvordan går det', 'velkommen til',
+    
+    // Finnish greetings
+    'hei', 'terve', 'moi', 'hyvää huomenta', 'hyvää päivää', 'hyvää iltaa', 'hyvää yötä',
+    'tervetuloa', 'hei kaikki', 'hei kaverit', 'hei ystävät', 'miten menee', 'mitä kuuluu',
+    'tervetuloa tervetuloa', 'tervetuloa tänne', 'tervetuloa kanavalle', 'tervetuloa huoneeseen',
+    'tervetuloa chattiin', 'tervetuloa palvelimelle', 'tervetuloa yhteisöön'
   ];
   
   // Extract common phrases and count occurrences
@@ -59,10 +139,47 @@ const detectRepetitivePatterns = (messages: Message[]): string[] => {
       return;
     }
     
-    // Skip messages that are likely greetings based on content
+    // Skip messages that are likely greetings based on content (multilingual)
     const content = msg.content.toLowerCase();
     const isGreeting = greetingPhrases.some(phrase => content.includes(phrase)) ||
-                      content.match(/^(hi|hello|hey|welcome|greetings)/);
+                      // English patterns
+                      content.match(/^(hi|hello|hey|welcome|greetings|good morning|good afternoon|good evening|howdy|sup|what's up|how are you|how's it going)/) ||
+                      content.match(/\b(welcome|hello|hi|hey|greetings)\b/) ||
+                      // Spanish patterns
+                      content.match(/^(hola|buenos días|buenas tardes|buenas noches|saludos|bienvenido|bienvenida|bienvenidos|bienvenidas|qué tal|cómo estás|cómo están)/) ||
+                      // French patterns
+                      content.match(/^(bonjour|bonsoir|salut|bonne journée|bonne soirée|bienvenue|comment allez-vous|comment ça va)/) ||
+                      // German patterns
+                      content.match(/^(hallo|guten tag|guten morgen|guten abend|gute nacht|willkommen|wie geht es|wie geht's)/) ||
+                      // Italian patterns
+                      content.match(/^(ciao|buongiorno|buonasera|buonanotte|salve|benvenuto|benvenuta|benvenuti|benvenute|come stai|come state)/) ||
+                      // Portuguese patterns
+                      content.match(/^(olá|bom dia|boa tarde|boa noite|saudações|bem-vindo|bem-vinda|bem-vindos|bem-vindas|como está|como estão)/) ||
+                      // Japanese patterns
+                      content.match(/^(こんにちは|こんばんは|おはよう|おやすみ|ようこそ|みなさん|みんな|友達|友だち|元気ですか|元気？)/) ||
+                      // Chinese patterns
+                      content.match(/^(你好|您好|大家好|早上好|下午好|晚上好|晚安|欢迎|朋友们|朋友们好|你好吗|怎么样)/) ||
+                      // Russian patterns
+                      content.match(/^(привет|здравствуйте|доброе утро|добрый день|добрый вечер|спокойной ночи|добро пожаловать|всем привет|друзья|как дела|как поживаете)/) ||
+                      // Arabic patterns
+                      content.match(/^(مرحبا|السلام عليكم|صباح الخير|مساء الخير|أهلا وسهلا|مرحبا بكم|أصدقاء|كيف حالك|كيف الحال)/) ||
+                      // Korean patterns
+                      content.match(/^(안녕하세요|안녕|좋은 아침|좋은 저녁|환영합니다|모두|친구들|어떻게 지내세요|어떻게 지내)/) ||
+                      // Dutch patterns
+                      content.match(/^(hallo|goedemorgen|goedemiddag|goedenavond|goedenacht|welkom|hoe gaat het)/) ||
+                      // Swedish patterns
+                      content.match(/^(hej|god morgon|god eftermiddag|god kväll|god natt|välkommen|hur mår du|hur är det)/) ||
+                      // Norwegian patterns
+                      content.match(/^(hei|god morgen|god ettermiddag|god kveld|god natt|velkommen|hvordan har du det|hvordan går det)/) ||
+                      // Danish patterns
+                      content.match(/^(hej|god morgen|god eftermiddag|god aften|god nat|velkommen|hvordan har du det|hvordan går det)/) ||
+                      // Finnish patterns
+                      content.match(/^(hei|terve|moi|hyvää huomenta|hyvää päivää|hyvää iltaa|hyvää yötä|tervetuloa|hei kaikki|hei kaverit|hei ystävät|miten menee|mitä kuuluu)/) ||
+                      // Short message detection for common greetings
+                      content.length < 20 && (content.includes('hi') || content.includes('hello') || content.includes('hey') || content.includes('welcome') || 
+                                             content.includes('hola') || content.includes('bonjour') || content.includes('hallo') || content.includes('ciao') ||
+                                             content.includes('olá') || content.includes('こんにちは') || content.includes('你好') || content.includes('привет') ||
+                                             content.includes('مرحبا') || content.includes('안녕하세요') || content.includes('hei') || content.includes('terve') || content.includes('moi'));
     
     if (isGreeting) {
       return;
@@ -137,6 +254,32 @@ const getTimeOfDayContext = (): string => {
   const now = new Date();
   const hour = now.getHours();
   const dayOfWeek = now.getDay(); // 0 = Sunday, 6 = Saturday
+  const month = now.getMonth(); // 0 = January, 11 = December
+  const day = now.getDate();
+  const year = now.getFullYear();
+  
+  // Determine season based on month
+  let season = '';
+  let seasonContext = '';
+  let seasonalTopics = '';
+  
+  if (month >= 2 && month <= 4) { // March, April, May
+    season = 'spring';
+    seasonContext = 'renewal, growth, fresh starts, outdoor activities';
+    seasonalTopics = 'spring cleaning, gardening, outdoor plans, allergies, fresh air, new beginnings';
+  } else if (month >= 5 && month <= 7) { // June, July, August
+    season = 'summer';
+    seasonContext = 'warm weather, vacations, outdoor activities, social gatherings';
+    seasonalTopics = 'vacation plans, beach trips, outdoor activities, summer festivals, ice cream, swimming, barbecues';
+  } else if (month >= 8 && month <= 10) { // September, October, November
+    season = 'autumn/fall';
+    seasonContext = 'cooling weather, harvest time, back to school, cozy activities';
+    seasonalTopics = 'back to school, harvest festivals, pumpkin spice, cozy drinks, fall colors, Halloween, Thanksgiving planning';
+  } else { // December, January, February
+    season = 'winter';
+    seasonContext = 'cold weather, holidays, indoor activities, reflection';
+    seasonalTopics = 'holiday preparations, winter sports, cozy indoor activities, hot drinks, snow, New Year resolutions, winter holidays';
+  }
   
   // Determine time of day
   let timePeriod = '';
@@ -175,7 +318,30 @@ const getTimeOfDayContext = (): string => {
   const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
   const dayContext = isWeekend ? 'weekend' : 'weekday';
   
-  return `Current time context: It's ${timePeriod} (${hour}:${now.getMinutes().toString().padStart(2, '0')}) on a ${dayContext}. 
+  // Month names
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                     'July', 'August', 'September', 'October', 'November', 'December'];
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  
+  // Special dates and holidays context
+  let specialContext = '';
+  if (month === 0 && day === 1) specialContext = 'New Year\'s Day - people are making resolutions and reflecting on the past year';
+  else if (month === 1 && day === 14) specialContext = 'Valentine\'s Day - romantic discussions and relationship topics are common';
+  else if (month === 2 && day === 17) specialContext = 'St. Patrick\'s Day - Irish celebrations and green themes';
+  else if (month === 3 && day === 1) specialContext = 'April Fool\'s Day - pranks and jokes are popular';
+  else if (month === 4 && day === 1) specialContext = 'May Day - spring celebrations and workers\' rights';
+  else if (month === 5 && day === 1) specialContext = 'Children\'s Day in many countries - family and child-related discussions';
+  else if (month === 6 && day === 4) specialContext = 'Independence Day in the US - patriotic discussions and fireworks';
+  else if (month === 9 && day === 31) specialContext = 'Halloween - costume discussions and spooky themes';
+  else if (month === 10 && day === 11) specialContext = 'Veterans Day - military appreciation and service discussions';
+  else if (month === 10 && day === 25) specialContext = 'Thanksgiving - family gatherings and gratitude discussions';
+  else if (month === 11 && day === 25) specialContext = 'Christmas Day - holiday celebrations and gift discussions';
+  else if (month === 11 && day === 31) specialContext = 'New Year\'s Eve - year-end reflections and party planning';
+  
+  return `Current time context: It's ${timePeriod} (${hour}:${now.getMinutes().toString().padStart(2, '0')}) on ${dayNames[dayOfWeek]}, ${monthNames[month]} ${day}, ${year}. 
+It's currently ${season} - a time of ${seasonContext}. 
+Seasonal topics include: ${seasonalTopics}.
+${specialContext ? `Today is ${specialContext}. ` : ''}It's a ${dayContext}. 
 People are generally ${energyLevel}. Common topics include: ${commonTopics}. 
 Social context: ${socialContext}.`;
 };
@@ -243,9 +409,18 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
   // Shuffle the array to add more variety
   const shuffledUsers = [...candidateUsers].sort(() => Math.random() - 0.5);
   
-  // Sometimes prefer users who haven't spoken recently (last 5 messages)
-  const recentSpeakers = channel.messages.slice(-5).map(msg => msg.nickname);
+  // Strongly prefer users who haven't spoken recently (last 3 messages)
+  const recentSpeakers = channel.messages.slice(-3).map(msg => msg.nickname);
   const lessActiveUsers = shuffledUsers.filter(user => !recentSpeakers.includes(user.nickname));
+  
+  // If the last message was from a specific user, strongly avoid them for the next message
+  const lastMessage = channel.messages[channel.messages.length - 1];
+  const lastSpeaker = lastMessage ? lastMessage.nickname : null;
+  const avoidLastSpeaker = lastSpeaker ? shuffledUsers.filter(user => user.nickname !== lastSpeaker) : shuffledUsers;
+  
+  // Identify users who haven't spoken in a while (last 10 messages) for priority selection
+  const longTermRecentSpeakers = channel.messages.slice(-10).map(msg => msg.nickname);
+  const longTermInactiveUsers = shuffledUsers.filter(user => !longTermRecentSpeakers.includes(user.nickname));
   
   // Time-based user activity patterns
   const now = new Date();
@@ -281,16 +456,30 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
     timeBasedUsers = shuffledUsers;
   }
   
-  // 30% chance to prefer less active users, 70% chance to use time-based selection
-  if (lessActiveUsers.length > 0 && Math.random() < 0.3) {
-    candidateUsers = lessActiveUsers;
+  // Balanced user selection to prevent same user from speaking multiple times while allowing all users to participate
+  if (longTermInactiveUsers.length > 0) {
+    // 70% chance to prefer long-term inactive users (users who haven't spoken in last 10 messages)
+    candidateUsers = Math.random() < 0.7 ? longTermInactiveUsers : timeBasedUsers;
+  } else if (lessActiveUsers.length > 0) {
+    // 50% chance to prefer less active users (users who haven't spoken in last 3 messages)
+    candidateUsers = Math.random() < 0.5 ? lessActiveUsers : timeBasedUsers;
+  } else if (avoidLastSpeaker.length > 0 && lastSpeaker) {
+    // If no less active users, avoid the last speaker but allow others
+    candidateUsers = avoidLastSpeaker;
   } else {
+    // Fallback to time-based selection
     candidateUsers = timeBasedUsers;
   }
   
   const randomUser = candidateUsers[Math.floor(Math.random() * candidateUsers.length)];
   
   console.log(`[AI Debug] Selected user: ${randomUser.nickname} for channel activity (language: ${getAllLanguages(randomUser.languageSkills)[0]})`);
+  console.log(`[AI Debug] Recent speakers (last 3): ${recentSpeakers.join(', ')}`);
+  console.log(`[AI Debug] Long-term recent speakers (last 10): ${longTermRecentSpeakers.join(', ')}`);
+  console.log(`[AI Debug] Last speaker: ${lastSpeaker || 'none'}`);
+  console.log(`[AI Debug] Less active users: ${lessActiveUsers.map(u => u.nickname).join(', ')}`);
+  console.log(`[AI Debug] Long-term inactive users: ${longTermInactiveUsers.map(u => u.nickname).join(', ')}`);
+  console.log(`[AI Debug] Candidate users: ${candidateUsers.map(u => u.nickname).join(', ')}`);
 
   const userLanguages = getAllLanguages(randomUser.languageSkills);
   const primaryLanguage = userLanguages[0] || 'English';
@@ -310,6 +499,51 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
   const tokenLimit = getTokenLimit(randomUser.writingStyle.verbosity);
   console.log(`[AI Debug] Token limit for ${randomUser.nickname} (${randomUser.writingStyle.verbosity}): ${tokenLimit}`);
 
+  // Check for greeting spam by the selected user
+  const userRecentMessages = channel.messages.slice(-5).filter(msg => msg.nickname === randomUser.nickname);
+  const userGreetingCount = userRecentMessages.filter(msg => {
+    const content = msg.content.toLowerCase();
+    return greetingPhrases.some(phrase => content.includes(phrase)) ||
+           // English patterns
+           content.match(/^(hi|hello|hey|welcome|greetings|good morning|good afternoon|good evening|howdy|sup|what's up|how are you|how's it going)/) ||
+           content.match(/\b(welcome|hello|hi|hey|greetings)\b/) ||
+           // Spanish patterns
+           content.match(/^(hola|buenos días|buenas tardes|buenas noches|saludos|bienvenido|bienvenida|bienvenidos|bienvenidas|qué tal|cómo estás|cómo están)/) ||
+           // French patterns
+           content.match(/^(bonjour|bonsoir|salut|bonne journée|bonne soirée|bienvenue|comment allez-vous|comment ça va)/) ||
+           // German patterns
+           content.match(/^(hallo|guten tag|guten morgen|guten abend|gute nacht|willkommen|wie geht es|wie geht's)/) ||
+           // Italian patterns
+           content.match(/^(ciao|buongiorno|buonasera|buonanotte|salve|benvenuto|benvenuta|benvenuti|benvenute|come stai|come state)/) ||
+           // Portuguese patterns
+           content.match(/^(olá|bom dia|boa tarde|boa noite|saudações|bem-vindo|bem-vinda|bem-vindos|bem-vindas|como está|como estão)/) ||
+           // Japanese patterns
+           content.match(/^(こんにちは|こんばんは|おはよう|おやすみ|ようこそ|みなさん|みんな|友達|友だち|元気ですか|元気？)/) ||
+           // Chinese patterns
+           content.match(/^(你好|您好|大家好|早上好|下午好|晚上好|晚安|欢迎|朋友们|朋友们好|你好吗|怎么样)/) ||
+           // Russian patterns
+           content.match(/^(привет|здравствуйте|доброе утро|добрый день|добрый вечер|спокойной ночи|добро пожаловать|всем привет|друзья|как дела|как поживаете)/) ||
+           // Arabic patterns
+           content.match(/^(مرحبا|السلام عليكم|صباح الخير|مساء الخير|أهلا وسهلا|مرحبا بكم|أصدقاء|كيف حالك|كيف الحال)/) ||
+           // Korean patterns
+           content.match(/^(안녕하세요|안녕|좋은 아침|좋은 저녁|환영합니다|모두|친구들|어떻게 지내세요|어떻게 지내)/) ||
+           // Dutch patterns
+           content.match(/^(hallo|goedemorgen|goedemiddag|goedenavond|goedenacht|welkom|hoe gaat het)/) ||
+           // Swedish patterns
+           content.match(/^(hej|god morgon|god eftermiddag|god kväll|god natt|välkommen|hur mår du|hur är det)/) ||
+           // Norwegian patterns
+           content.match(/^(hei|god morgen|god ettermiddag|god kveld|god natt|velkommen|hvordan har du det|hvordan går det)/) ||
+           // Danish patterns
+           content.match(/^(hej|god morgen|god eftermiddag|god aften|god nat|velkommen|hvordan har du det|hvordan går det)/) ||
+           // Short message detection for common greetings
+           content.length < 20 && (content.includes('hi') || content.includes('hello') || content.includes('hey') || content.includes('welcome') || 
+                                  content.includes('hola') || content.includes('bonjour') || content.includes('hallo') || content.includes('ciao') ||
+                                  content.includes('olá') || content.includes('こんにちは') || content.includes('你好') || content.includes('привет') ||
+                                  content.includes('مرحبا') || content.includes('안녕하세요'));
+  }).length;
+  
+  console.log(`[AI Debug] User ${randomUser.nickname} greeting count in last 5 messages: ${userGreetingCount}`);
+  
   // Enhanced conversation diversity and repetition prevention
   const conversationVariety = Math.random();
   const repetitivePhrases = detectRepetitivePatterns(channel.messages);
@@ -321,6 +555,13 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
   // Always include repetition avoidance if patterns detected
   if (repetitivePhrases.length > 0) {
     repetitionAvoidance = `CRITICAL: Avoid repeating these recent phrases: "${repetitivePhrases.join('", "')}". Be creative and use different wording.`;
+  }
+  
+  // Anti-greeting spam protection
+  let antiGreetingSpam = '';
+  if (userGreetingCount >= 2) {
+    antiGreetingSpam = `CRITICAL: You have been greeting too much recently (${userGreetingCount} greetings in last 5 messages). DO NOT greet anyone. Instead, contribute to the conversation with meaningful content, ask questions, share thoughts, or discuss topics. Avoid any form of greeting including "hi", "hello", "hey", "welcome", etc.`;
+    console.log(`[AI Debug] Anti-greeting spam activated for ${randomUser.nickname}: ${userGreetingCount} greetings detected`);
   }
   
   // Enhanced diversity prompts with higher probability
@@ -370,6 +611,8 @@ The last 20 messages were:
 ${formatMessageHistory(channel.messages)}
 
 ${repetitionAvoidance}
+
+${antiGreetingSpam}
 
 ${diversityPrompt}
 
@@ -484,13 +727,22 @@ export const generateReactionToMessage = async (channel: Channel, userMessage: M
     // Add user rotation for reactions too
     const shuffledUsers = [...candidateUsers].sort(() => Math.random() - 0.5);
     
-    // Sometimes prefer users who haven't reacted recently
+    // Strongly prefer users who haven't reacted recently (last 3 messages)
     const recentSpeakers = channel.messages.slice(-3).map(msg => msg.nickname);
     const lessActiveUsers = shuffledUsers.filter(user => !recentSpeakers.includes(user.nickname));
     
-    // 40% chance to prefer less active users for reactions
-    if (lessActiveUsers.length > 0 && Math.random() < 0.4) {
-      candidateUsers = lessActiveUsers;
+    // If the last message was from a specific user, avoid them for reactions
+    const lastMessage = channel.messages[channel.messages.length - 1];
+    const lastSpeaker = lastMessage ? lastMessage.nickname : null;
+    const avoidLastSpeaker = lastSpeaker ? shuffledUsers.filter(user => user.nickname !== lastSpeaker) : shuffledUsers;
+    
+    // Balanced reaction selection to prevent same user from reacting multiple times while allowing all users to participate
+    if (lessActiveUsers.length > 0) {
+      // 60% chance to prefer less active users (balanced approach)
+      candidateUsers = Math.random() < 0.6 ? lessActiveUsers : shuffledUsers;
+    } else if (avoidLastSpeaker.length > 0 && lastSpeaker) {
+      // If no less active users, avoid the last speaker but allow others
+      candidateUsers = avoidLastSpeaker;
     } else {
       candidateUsers = shuffledUsers;
     }
@@ -498,6 +750,10 @@ export const generateReactionToMessage = async (channel: Channel, userMessage: M
     const randomUser = candidateUsers[Math.floor(Math.random() * candidateUsers.length)];
     
     console.log(`[AI Debug] Selected user: ${randomUser.nickname} to react to ${userMessage.nickname}'s message (language: ${getAllLanguages(randomUser.languageSkills)[0]})`);
+    console.log(`[AI Debug] Reaction - Recent speakers (last 3): ${recentSpeakers.join(', ')}`);
+    console.log(`[AI Debug] Reaction - Last speaker: ${lastSpeaker || 'none'}`);
+    console.log(`[AI Debug] Reaction - Less active users: ${lessActiveUsers.map(u => u.nickname).join(', ')}`);
+    console.log(`[AI Debug] Reaction - Candidate users: ${candidateUsers.map(u => u.nickname).join(', ')}`);
     
     // Handle different message types
     let messageDescription = '';
@@ -506,6 +762,53 @@ export const generateReactionToMessage = async (channel: Channel, userMessage: M
     } else {
       messageDescription = `said: "${userMessage.content}"`;
     }
+    
+    // Check for greeting spam by the selected user
+    const userRecentMessages = channel.messages.slice(-5).filter(msg => msg.nickname === randomUser.nickname);
+    const userGreetingCount = userRecentMessages.filter(msg => {
+      const content = msg.content.toLowerCase();
+      return greetingPhrases.some(phrase => content.includes(phrase)) ||
+             // English patterns
+             content.match(/^(hi|hello|hey|welcome|greetings|good morning|good afternoon|good evening|howdy|sup|what's up|how are you|how's it going)/) ||
+             content.match(/\b(welcome|hello|hi|hey|greetings)\b/) ||
+             // Spanish patterns
+             content.match(/^(hola|buenos días|buenas tardes|buenas noches|saludos|bienvenido|bienvenida|bienvenidos|bienvenidas|qué tal|cómo estás|cómo están)/) ||
+             // French patterns
+             content.match(/^(bonjour|bonsoir|salut|bonne journée|bonne soirée|bienvenue|comment allez-vous|comment ça va)/) ||
+             // German patterns
+             content.match(/^(hallo|guten tag|guten morgen|guten abend|gute nacht|willkommen|wie geht es|wie geht's)/) ||
+             // Italian patterns
+             content.match(/^(ciao|buongiorno|buonasera|buonanotte|salve|benvenuto|benvenuta|benvenuti|benvenute|come stai|come state)/) ||
+             // Portuguese patterns
+             content.match(/^(olá|bom dia|boa tarde|boa noite|saudações|bem-vindo|bem-vinda|bem-vindos|bem-vindas|como está|como estão)/) ||
+             // Japanese patterns
+             content.match(/^(こんにちは|こんばんは|おはよう|おやすみ|ようこそ|みなさん|みんな|友達|友だち|元気ですか|元気？)/) ||
+             // Chinese patterns
+             content.match(/^(你好|您好|大家好|早上好|下午好|晚上好|晚安|欢迎|朋友们|朋友们好|你好吗|怎么样)/) ||
+             // Russian patterns
+             content.match(/^(привет|здравствуйте|доброе утро|добрый день|добрый вечер|спокойной ночи|добро пожаловать|всем привет|друзья|как дела|как поживаете)/) ||
+             // Arabic patterns
+             content.match(/^(مرحبا|السلام عليكم|صباح الخير|مساء الخير|أهلا وسهلا|مرحبا بكم|أصدقاء|كيف حالك|كيف الحال)/) ||
+             // Korean patterns
+             content.match(/^(안녕하세요|안녕|좋은 아침|좋은 저녁|환영합니다|모두|친구들|어떻게 지내세요|어떻게 지내)/) ||
+             // Dutch patterns
+             content.match(/^(hallo|goedemorgen|goedemiddag|goedenavond|goedenacht|welkom|hoe gaat het)/) ||
+             // Swedish patterns
+             content.match(/^(hej|god morgon|god eftermiddag|god kväll|god natt|välkommen|hur mår du|hur är det)/) ||
+             // Norwegian patterns
+             content.match(/^(hei|god morgen|god ettermiddag|god kveld|god natt|velkommen|hvordan har du det|hvordan går det)/) ||
+             // Danish patterns
+             content.match(/^(hej|god morgen|god eftermiddag|god aften|god nat|velkommen|hvordan har du det|hvordan går det)/) ||
+             // Finnish patterns
+             content.match(/^(hei|terve|moi|hyvää huomenta|hyvää päivää|hyvää iltaa|hyvää yötä|tervetuloa|hei kaikki|hei kaverit|hei ystävät|miten menee|mitä kuuluu)/) ||
+             // Short message detection for common greetings
+             content.length < 20 && (content.includes('hi') || content.includes('hello') || content.includes('hey') || content.includes('welcome') || 
+                                    content.includes('hola') || content.includes('bonjour') || content.includes('hallo') || content.includes('ciao') ||
+                                    content.includes('olá') || content.includes('こんにちは') || content.includes('你好') || content.includes('привет') ||
+                                    content.includes('مرحبا') || content.includes('안녕하세요') || content.includes('hei') || content.includes('terve') || content.includes('moi'));
+    }).length;
+    
+    console.log(`[AI Debug] Reaction - User ${randomUser.nickname} greeting count in last 5 messages: ${userGreetingCount}`);
     
     const userLanguages = getAllLanguages(randomUser.languageSkills);
     const primaryLanguage = userLanguages[0] || 'English';
@@ -532,9 +835,16 @@ export const generateReactionToMessage = async (channel: Channel, userMessage: M
     // Enhanced reaction diversity and repetition prevention
     const repetitivePhrases = detectRepetitivePatterns(channel.messages);
     let reactionRepetitionAvoidance = '';
+    let reactionAntiGreetingSpam = '';
     
     if (repetitivePhrases.length > 0) {
       reactionRepetitionAvoidance = `CRITICAL: Avoid repeating these recent phrases: "${repetitivePhrases.join('", "')}". Be creative and use different wording.`;
+    }
+    
+    // Anti-greeting spam protection for reactions
+    if (userGreetingCount >= 2) {
+      reactionAntiGreetingSpam = `CRITICAL: You have been greeting too much recently (${userGreetingCount} greetings in last 5 messages). DO NOT greet anyone. Instead, contribute to the conversation with meaningful content, ask questions, share thoughts, or discuss topics. Avoid any form of greeting including "hi", "hello", "hey", "welcome", etc.`;
+      console.log(`[AI Debug] Reaction - Anti-greeting spam activated for ${randomUser.nickname}: ${userGreetingCount} greetings detected`);
     }
 
     const prompt = `
@@ -549,6 +859,8 @@ The last 20 messages were:
 ${formatMessageHistory(channel.messages)}
 
 ${reactionRepetitionAvoidance}
+
+${reactionAntiGreetingSpam}
 
 Generate a realistic and in-character reaction from ${randomUser.nickname}.
 The reaction should feel natural for the current time of day and social context.

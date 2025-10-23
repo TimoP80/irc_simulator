@@ -493,16 +493,133 @@ const App: React.FC = () => {
       return;
     }
     
-    // Skip messages that are likely greetings based on content
+    // Skip messages that are likely greetings based on content (multilingual)
     const content = message.content.toLowerCase();
     const greetingPhrases = [
+      // English greetings
       'welcome to', 'hello there', 'hi there', 'hey there', 'good to see', 'nice to meet',
       'welcome back', 'hello everyone', 'hi everyone', 'hey everyone', 'welcome new',
-      'glad to see', 'great to see', 'welcome aboard', 'hello new', 'hi new', 'hey new'
+      'glad to see', 'great to see', 'welcome aboard', 'hello new', 'hi new', 'hey new',
+      'welcome', 'hello', 'hi', 'hey', 'greetings', 'good morning', 'good afternoon',
+      'good evening', 'howdy', 'sup', 'what\'s up', 'how are you', 'how\'s it going',
+      'nice to see you', 'great to see you', 'good to see you', 'welcome back',
+      'welcome everyone', 'hello all', 'hi all', 'hey all', 'welcome friends',
+      'hello friends', 'hi friends', 'hey friends', 'welcome back everyone',
+      'welcome back all', 'welcome back friends', 'welcome back to', 'welcome to the',
+      'welcome to our', 'welcome to this', 'welcome to the channel', 'welcome to the room',
+      'welcome to the chat', 'welcome to the server', 'welcome to the community',
+      
+      // Spanish greetings
+      'hola', 'buenos días', 'buenas tardes', 'buenas noches', 'saludos', 'bienvenido',
+      'bienvenida', 'bienvenidos', 'bienvenidas', 'hola a todos', 'hola todos',
+      'hola amigos', 'hola amigas', 'qué tal', 'cómo estás', 'cómo están',
+      'bienvenido a', 'bienvenida a', 'bienvenidos a', 'bienvenidas a',
+      
+      // French greetings
+      'bonjour', 'bonsoir', 'salut', 'bonne journée', 'bonne soirée', 'bienvenue',
+      'bonjour à tous', 'salut tout le monde', 'bonjour les amis', 'salut les amis',
+      'comment allez-vous', 'comment ça va', 'bienvenue à', 'bienvenue dans',
+      
+      // German greetings
+      'hallo', 'guten tag', 'guten morgen', 'guten abend', 'gute nacht', 'willkommen',
+      'hallo alle', 'hallo zusammen', 'hallo freunde', 'wie geht es', 'wie geht\'s',
+      'willkommen zu', 'willkommen in', 'willkommen bei',
+      
+      // Italian greetings
+      'ciao', 'buongiorno', 'buonasera', 'buonanotte', 'salve', 'benvenuto',
+      'benvenuta', 'benvenuti', 'benvenute', 'ciao a tutti', 'ciao tutti',
+      'ciao amici', 'ciao amiche', 'come stai', 'come state', 'benvenuto a',
+      'benvenuta a', 'benvenuti a', 'benvenute a',
+      
+      // Portuguese greetings
+      'olá', 'bom dia', 'boa tarde', 'boa noite', 'saudações', 'bem-vindo',
+      'bem-vinda', 'bem-vindos', 'bem-vindas', 'olá a todos', 'olá todos',
+      'olá amigos', 'olá amigas', 'como está', 'como estão', 'bem-vindo a',
+      'bem-vinda a', 'bem-vindos a', 'bem-vindas a',
+      
+      // Japanese greetings
+      'こんにちは', 'こんばんは', 'おはよう', 'おやすみ', 'ようこそ', 'みなさん',
+      'みんな', '友達', '友だち', '元気ですか', '元気？', 'ようこそ',
+      
+      // Chinese greetings
+      '你好', '您好', '大家好', '早上好', '下午好', '晚上好', '晚安', '欢迎',
+      '朋友们', '朋友们好', '你好吗', '怎么样', '欢迎来到', '欢迎加入',
+      
+      // Russian greetings
+      'привет', 'здравствуйте', 'доброе утро', 'добрый день', 'добрый вечер',
+      'спокойной ночи', 'добро пожаловать', 'всем привет', 'друзья', 'как дела',
+      'как поживаете', 'добро пожаловать в',
+      
+      // Arabic greetings
+      'مرحبا', 'السلام عليكم', 'صباح الخير', 'مساء الخير', 'أهلا وسهلا',
+      'مرحبا بكم', 'أصدقاء', 'كيف حالك', 'كيف الحال', 'أهلا وسهلا بكم في',
+      
+      // Korean greetings
+      '안녕하세요', '안녕', '좋은 아침', '좋은 저녁', '환영합니다', '모두',
+      '친구들', '어떻게 지내세요', '어떻게 지내', '환영합니다',
+      
+      // Dutch greetings
+      'hallo', 'goedemorgen', 'goedemiddag', 'goedenavond', 'goedenacht', 'welkom',
+      'hallo allemaal', 'hallo vrienden', 'hoe gaat het', 'welkom bij', 'welkom in',
+      
+      // Swedish greetings
+      'hej', 'god morgon', 'god eftermiddag', 'god kväll', 'god natt', 'välkommen',
+      'hej alla', 'hej vänner', 'hur mår du', 'hur är det', 'välkommen till',
+      
+      // Norwegian greetings
+      'hei', 'god morgen', 'god ettermiddag', 'god kveld', 'god natt', 'velkommen',
+      'hei alle', 'hei venner', 'hvordan har du det', 'hvordan går det', 'velkommen til',
+      
+      // Danish greetings
+      'hej', 'god morgen', 'god eftermiddag', 'god aften', 'god nat', 'velkommen',
+      'hej alle', 'hej venner', 'hvordan har du det', 'hvordan går det', 'velkommen til',
+      
+      // Finnish greetings
+      'hei', 'terve', 'moi', 'hyvää huomenta', 'hyvää päivää', 'hyvää iltaa', 'hyvää yötä',
+      'tervetuloa', 'hei kaikki', 'hei kaverit', 'hei ystävät', 'miten menee', 'mitä kuuluu',
+      'tervetuloa tervetuloa', 'tervetuloa tänne', 'tervetuloa kanavalle', 'tervetuloa huoneeseen',
+      'tervetuloa chattiin', 'tervetuloa palvelimelle', 'tervetuloa yhteisöön'
     ];
     
     const isGreeting = greetingPhrases.some(phrase => content.includes(phrase)) ||
-                      content.match(/^(hi|hello|hey|welcome|greetings)/);
+                      // English patterns
+                      content.match(/^(hi|hello|hey|welcome|greetings|good morning|good afternoon|good evening|howdy|sup|what's up|how are you|how's it going)/) ||
+                      content.match(/\b(welcome|hello|hi|hey|greetings)\b/) ||
+                      // Spanish patterns
+                      content.match(/^(hola|buenos días|buenas tardes|buenas noches|saludos|bienvenido|bienvenida|bienvenidos|bienvenidas|qué tal|cómo estás|cómo están)/) ||
+                      // French patterns
+                      content.match(/^(bonjour|bonsoir|salut|bonne journée|bonne soirée|bienvenue|comment allez-vous|comment ça va)/) ||
+                      // German patterns
+                      content.match(/^(hallo|guten tag|guten morgen|guten abend|gute nacht|willkommen|wie geht es|wie geht's)/) ||
+                      // Italian patterns
+                      content.match(/^(ciao|buongiorno|buonasera|buonanotte|salve|benvenuto|benvenuta|benvenuti|benvenute|come stai|come state)/) ||
+                      // Portuguese patterns
+                      content.match(/^(olá|bom dia|boa tarde|boa noite|saudações|bem-vindo|bem-vinda|bem-vindos|bem-vindas|como está|como estão)/) ||
+                      // Japanese patterns
+                      content.match(/^(こんにちは|こんばんは|おはよう|おやすみ|ようこそ|みなさん|みんな|友達|友だち|元気ですか|元気？)/) ||
+                      // Chinese patterns
+                      content.match(/^(你好|您好|大家好|早上好|下午好|晚上好|晚安|欢迎|朋友们|朋友们好|你好吗|怎么样)/) ||
+                      // Russian patterns
+                      content.match(/^(привет|здравствуйте|доброе утро|добрый день|добрый вечер|спокойной ночи|добро пожаловать|всем привет|друзья|как дела|как поживаете)/) ||
+                      // Arabic patterns
+                      content.match(/^(مرحبا|السلام عليكم|صباح الخير|مساء الخير|أهلا وسهلا|مرحبا بكم|أصدقاء|كيف حالك|كيف الحال)/) ||
+                      // Korean patterns
+                      content.match(/^(안녕하세요|안녕|좋은 아침|좋은 저녁|환영합니다|모두|친구들|어떻게 지내세요|어떻게 지내)/) ||
+                      // Dutch patterns
+                      content.match(/^(hallo|goedemorgen|goedemiddag|goedenavond|goedenacht|welkom|hoe gaat het)/) ||
+                      // Swedish patterns
+                      content.match(/^(hej|god morgon|god eftermiddag|god kväll|god natt|välkommen|hur mår du|hur är det)/) ||
+                      // Norwegian patterns
+                      content.match(/^(hei|god morgen|god ettermiddag|god kveld|god natt|velkommen|hvordan har du det|hvordan går det)/) ||
+                      // Danish patterns
+                      content.match(/^(hej|god morgen|god eftermiddag|god aften|god nat|velkommen|hvordan har du det|hvordan går det)/) ||
+                      // Finnish patterns
+                      content.match(/^(hei|terve|moi|hyvää huomenta|hyvää päivää|hyvää iltaa|hyvää yötä|tervetuloa|hei kaikki|hei kaverit|hei ystävät|miten menee|mitä kuuluu)/) ||
+                      // Short message detection for common greetings
+                      content.length < 20 && (content.includes('hi') || content.includes('hello') || content.includes('hey') || content.includes('welcome') || 
+                                             content.includes('hola') || content.includes('bonjour') || content.includes('hallo') || content.includes('ciao') ||
+                                             content.includes('olá') || content.includes('こんにちは') || content.includes('你好') || content.includes('привет') ||
+                                             content.includes('مرحبا') || content.includes('안녕하세요') || content.includes('hei') || content.includes('terve') || content.includes('moi'));
     
     if (isGreeting) {
       return;
