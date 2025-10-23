@@ -39,6 +39,39 @@ const loadOperatorAssignments = (channels: Channel[]): Channel[] => {
   }
   return channels;
 };
+
+// Save user channel assignments
+const saveUserChannelAssignments = (users: User[]) => {
+  try {
+    const userChannelData = users.map(user => ({
+      nickname: user.nickname,
+      assignedChannels: user.assignedChannels || []
+    }));
+    localStorage.setItem('station_v_user_channels', JSON.stringify(userChannelData));
+  } catch (error) {
+    console.warn('Failed to save user channel assignments:', error);
+  }
+};
+
+// Load user channel assignments
+const loadUserChannelAssignments = (users: User[]): User[] => {
+  try {
+    const saved = localStorage.getItem('station_v_user_channels');
+    if (saved) {
+      const userChannelData = JSON.parse(saved);
+      return users.map(user => {
+        const savedUser = userChannelData.find((u: any) => u.nickname === user.nickname);
+        return {
+          ...user,
+          assignedChannels: savedUser?.assignedChannels || []
+        };
+      });
+    }
+  } catch (error) {
+    console.warn('Failed to load user channel assignments:', error);
+  }
+  return users;
+};
 import { aiLogger, simulationLogger, configLogger } from './utils/debugLogger';
 
 // Migration function to ensure all channels have operators property
@@ -109,18 +142,45 @@ const migrateChannelUsers = (channels: Channel[], virtualUsers: User[], currentU
 };
 
 const App: React.FC = () => {
-  const [currentUserNickname, setCurrentUserNickname] = useState<string>(DEFAULT_NICKNAME);
-  const [virtualUsers, setVirtualUsers] = useState<User[]>(DEFAULT_VIRTUAL_USERS);
-  const [channels, setChannels] = useState<Channel[]>(DEFAULT_CHANNELS);
+  // Initialize with saved config or defaults
+  const [currentUserNickname, setCurrentUserNickname] = useState<string>(() => {
+    const savedConfig = loadConfig();
+    return savedConfig?.currentUserNickname || DEFAULT_NICKNAME;
+  });
+  const [virtualUsers, setVirtualUsers] = useState<User[]>(() => {
+    const savedConfig = loadConfig();
+    if (savedConfig) {
+      const { virtualUsers: configUsers } = initializeStateFromConfig(savedConfig);
+      return loadUserChannelAssignments(configUsers);
+    }
+    return DEFAULT_VIRTUAL_USERS;
+  });
+  const [channels, setChannels] = useState<Channel[]>(() => {
+    const savedConfig = loadConfig();
+    if (savedConfig) {
+      const { channels: configChannels } = initializeStateFromConfig(savedConfig);
+      return loadOperatorAssignments(migrateChannels(configChannels));
+    }
+    return DEFAULT_CHANNELS;
+  });
   const [privateMessages, setPrivateMessages] = useState<Record<string, PrivateMessageConversation>>({});
   const [activeContext, setActiveContext] = useState<ActiveContext | null>(null);
-  const [simulationSpeed, setSimulationSpeed] = useState<AppConfig['simulationSpeed']>('normal');
-  const [aiModel, setAiModel] = useState<AppConfig['aiModel']>(DEFAULT_AI_MODEL);
+  const [simulationSpeed, setSimulationSpeed] = useState<AppConfig['simulationSpeed']>(() => {
+    const savedConfig = loadConfig();
+    return savedConfig?.simulationSpeed || 'normal';
+  });
+  const [aiModel, setAiModel] = useState<AppConfig['aiModel']>(() => {
+    const savedConfig = loadConfig();
+    return savedConfig?.aiModel || DEFAULT_AI_MODEL;
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isChatLogOpen, setIsChatLogOpen] = useState(false);
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
-  const [typingDelayConfig, setTypingDelayConfig] = useState(DEFAULT_TYPING_DELAY);
+  const [typingDelayConfig, setTypingDelayConfig] = useState(() => {
+    const savedConfig = loadConfig();
+    return savedConfig?.typingDelay || DEFAULT_TYPING_DELAY;
+  });
   
   // IRC Export state
   const [ircExportConfig, setIrcExportConfig] = useState<IRCExportConfig>(getDefaultIRCExportConfig());
@@ -157,40 +217,114 @@ const App: React.FC = () => {
     return Date.now() + messageIdCounterRef.current;
   }, []);
 
-  // Load configuration and channel logs from localStorage on initial render
+  // Auto-join users to channels that only have the current user
+  const autoJoinUsersToEmptyChannels = useCallback(() => {
+    const channelsToUpdate: Channel[] = [];
+    
+    channels.forEach(channel => {
+      // Check if channel only has the current user (no virtual users)
+      const virtualUsersInChannel = channel.users.filter(u => u.nickname !== currentUserNickname);
+      
+      if (virtualUsersInChannel.length === 0) {
+        simulationLogger.debug(`Channel ${channel.name} only has current user, auto-joining virtual users`);
+        
+        // Select 2-4 random virtual users to join this channel
+        const availableUsers = virtualUsers.filter(u => 
+          !channels.some(c => c.name !== channel.name && c.users.some(cu => cu.nickname === u.nickname))
+        );
+        
+        if (availableUsers.length > 0) {
+          const numUsersToJoin = Math.min(Math.floor(Math.random() * 3) + 2, availableUsers.length); // 2-4 users
+          const shuffledUsers = [...availableUsers].sort(() => Math.random() - 0.5);
+          const usersToJoin = shuffledUsers.slice(0, numUsersToJoin);
+          
+          const updatedChannel = {
+            ...channel,
+            users: [...channel.users, ...usersToJoin]
+          };
+          
+          channelsToUpdate.push(updatedChannel);
+          
+          // Add join messages for the new users
+          usersToJoin.forEach(user => {
+            const joinMessage: Message = {
+              id: generateUniqueMessageId(),
+              nickname: user.nickname,
+              content: `joined ${channel.name}`,
+              timestamp: new Date(),
+              type: 'join'
+            };
+            console.log(`[Auto-Join] Adding join message for ${user.nickname} to channel ${channel.name}`);
+            addMessageToContext(joinMessage, { type: 'channel', name: channel.name });
+          });
+          
+          // Update user channel assignments
+          const updatedUsers = virtualUsers.map(user => {
+            if (usersToJoin.some(u => u.nickname === user.nickname)) {
+              return {
+                ...user,
+                assignedChannels: [...(user.assignedChannels || []), channel.name]
+              };
+            }
+            return user;
+          });
+          setVirtualUsers(updatedUsers);
+          saveUserChannelAssignments(updatedUsers);
+          
+          simulationLogger.debug(`Auto-joined ${usersToJoin.length} users to ${channel.name}: ${usersToJoin.map(u => u.nickname).join(', ')}`);
+        }
+      }
+    });
+    
+    if (channelsToUpdate.length > 0) {
+      setChannels(prevChannels => 
+        prevChannels.map(channel => {
+          const updatedChannel = channelsToUpdate.find(c => c.name === channel.name);
+          return updatedChannel || channel;
+        })
+      );
+    }
+  }, [channels, virtualUsers, currentUserNickname, generateUniqueMessageId]);
+
+  // Update current user nickname in all channels when nickname changes
+  useEffect(() => {
+    setChannels(prevChannels => 
+      prevChannels.map(channel => ({
+        ...channel,
+        users: channel.users.map(user => 
+          user.nickname === DEFAULT_NICKNAME || user.nickname === 'YourNickname' ? {
+            ...user,
+            nickname: currentUserNickname
+          } : user
+        )
+      }))
+    );
+  }, [currentUserNickname]);
+
+  // Load channel logs from localStorage on initial render
   useEffect(() => {
     const savedConfig = loadConfig();
     const savedLogs = loadChannelLogs();
     
     configLogger.debug('useEffect running - savedConfig:', !!savedConfig, 'savedLogs:', savedLogs?.length || 0);
     
-    if (savedConfig) {
-      const { nickname, virtualUsers, channels, simulationSpeed, aiModel: savedAiModel, typingDelay } = initializeStateFromConfig(savedConfig);
-      configLogger.debug('Loaded configuration:', { 
-        nickname, 
-        virtualUsersCount: virtualUsers.length, 
-        channelsCount: channels.length,
-        channelNames: channels.map(c => c.name),
-        channelMessages: channels.map(c => ({ name: c.name, messageCount: c.messages?.length || 0 })),
-        aiModel: savedAiModel,
-        typingDelay
-      });
-      setCurrentUserNickname(nickname);
-      setVirtualUsers(virtualUsers);
-      setSimulationSpeed(simulationSpeed);
-      setAiModel(savedAiModel || DEFAULT_AI_MODEL);
-      setTypingDelayConfig(typingDelay || DEFAULT_TYPING_DELAY);
+    // If no saved config, open settings for the user to configure the app
+    if (!savedConfig) {
+      setIsSettingsOpen(true);
+      return;
+    }
+    
+    // Merge saved logs with current channels
+    if (savedLogs && savedLogs.length > 0) {
+      configLogger.debug('Saved logs details:', savedLogs.map(c => ({ 
+        name: c.name, 
+        messageCount: c.messages?.length || 0,
+        messages: c.messages?.slice(0, 2) // Show first 2 messages
+      })));
       
-      // Merge saved logs with configured channels
-      if (savedLogs && savedLogs.length > 0) {
-        configLogger.debug('Saved logs details:', savedLogs.map(c => ({ 
-          name: c.name, 
-          messageCount: c.messages?.length || 0,
-          messages: c.messages?.slice(0, 2) // Show first 2 messages
-        })));
-        
-        // Merge saved messages with configured channels
-        const mergedChannels = channels.map(configuredChannel => {
+      // Merge saved messages with current channels
+      setChannels(prevChannels => {
+        const mergedChannels = prevChannels.map(configuredChannel => {
           const savedChannel = savedLogs.find(saved => saved.name === configuredChannel.name);
           configLogger.debug(`Looking for saved channel ${configuredChannel.name}:`, {
             found: !!savedChannel,
@@ -214,37 +348,11 @@ const App: React.FC = () => {
           }
         });
         
-        
         configLogger.debug('Merged channels message counts:', mergedChannels.map(c => ({ name: c.name, messageCount: c.messages?.length || 0 })));
-        const channelsWithOperators = loadOperatorAssignments(migrateChannels(mergedChannels));
-        // Migrate channel users to fix channel-specific assignments
-        const channelsWithMigratedUsers = migrateChannelUsers(channelsWithOperators, virtualUsers, currentUserNickname);
-        // Ensure current user is an operator of all channels
-        const channelsWithUserAsOperator = channelsWithMigratedUsers.map(channel => {
-          if (!isChannelOperator(channel, currentUserNickname)) {
-            return addChannelOperator(channel, currentUserNickname);
-          }
-          return channel;
-        });
-        setChannels(channelsWithUserAsOperator);
-      } else {
-        configLogger.debug('No saved logs, using configured channels');
-        configLogger.debug('Configured channels message counts:', channels.map(c => ({ name: c.name, messageCount: c.messages?.length || 0 })));
-        const channelsWithOperators = loadOperatorAssignments(migrateChannels(channels));
-        // Migrate channel users to fix channel-specific assignments
-        const channelsWithMigratedUsers = migrateChannelUsers(channelsWithOperators, virtualUsers, currentUserNickname);
-        // Ensure current user is an operator of all channels
-        const channelsWithUserAsOperator = channelsWithMigratedUsers.map(channel => {
-          if (!isChannelOperator(channel, currentUserNickname)) {
-            return addChannelOperator(channel, currentUserNickname);
-          }
-          return channel;
-        });
-        setChannels(channelsWithUserAsOperator);
-      }
+        return mergedChannels;
+      });
     } else {
-      // If no config, open settings for the user to configure the app
-      setIsSettingsOpen(true);
+      configLogger.debug('No saved logs, using current channels');
     }
   }, []);
 
@@ -264,6 +372,13 @@ const App: React.FC = () => {
       saveOperatorAssignments(channels);
     }
   }, [channels]);
+
+  // Save user channel assignments whenever virtual users change
+  useEffect(() => {
+    if (virtualUsers.length > 0) {
+      saveUserChannelAssignments(virtualUsers);
+    }
+  }, [virtualUsers]);
 
   const handleSaveSettings = (config: AppConfig) => {
     saveConfig(config);
@@ -461,6 +576,7 @@ const App: React.FC = () => {
   const addMessageToContext = useCallback((message: Message, context: ActiveContext | null) => {
     if (!context) return;
     if (context.type === 'channel') {
+      console.log(`[addMessageToContext] Adding message to channel ${context.name}:`, message);
       setChannels(prev => {
         const updatedChannels = prev.map(c =>
           c.name === context.name
@@ -622,6 +738,260 @@ const App: React.FC = () => {
         return;
       }
       
+      // Handle /me command
+      if (cmd === '/me') {
+        if (activeContext?.type !== 'channel') {
+          addMessageToContext({
+            id: Date.now(),
+            nickname: 'system',
+            content: 'You can only use /me commands in channels',
+            timestamp: new Date(),
+            type: 'system'
+          }, activeContext);
+          return;
+        }
+        
+        if (parts.length < 2) {
+          addMessageToContext({
+            id: Date.now(),
+            nickname: 'system',
+            content: 'Usage: /me <action> (e.g., /me waves)',
+            timestamp: new Date(),
+            type: 'system'
+          }, activeContext);
+          return;
+        }
+        
+        const actionContent = parts.slice(1).join(' ');
+        const actionMessage: Message = {
+          id: Date.now(),
+          nickname: currentUserNickname,
+          content: actionContent,
+          timestamp: new Date(),
+          type: 'action',
+          command: 'me'
+        };
+        
+        addMessageToContext(actionMessage, activeContext);
+        
+        // Trigger AI reactions to the action
+        if (activeContext && activeContext.type === 'channel') {
+          const channel = channels.find(c => c.name === activeContext.name);
+          if (channel) {
+            setTimeout(async () => {
+              try {
+                const aiResponse = await generateReactionToMessage(channel, actionMessage, currentUserNickname, aiModel);
+                if (aiResponse) {
+                  const aiMessages = aiResponse.split('\n').filter(line => line.includes(':'));
+                  for (const msgLine of aiMessages) {
+                    const [nickname, ...contentParts] = msgLine.split(':');
+                    const content = contentParts.join(':').trim();
+                    if (nickname && content) {
+                      const aiMessage: Message = {
+                        id: Date.now() + Math.random(),
+                        nickname: nickname.trim(),
+                        content: content.trim(),
+                        timestamp: new Date(),
+                        type: 'ai'
+                      };
+                      addMessageToContext(aiMessage, activeContext);
+                    }
+                  }
+                }
+              } catch (error) {
+                console.error('Failed to generate AI reaction to action:', error);
+              }
+            }, 1000 + Math.random() * 2000);
+          }
+        }
+        
+        return;
+      }
+      
+      // Handle /join command
+      if (cmd === '/join') {
+        if (parts.length < 2) {
+          addMessageToContext({
+            id: Date.now(),
+            nickname: 'system',
+            content: 'Usage: /join <channel> (e.g., /join #newchannel)',
+            timestamp: new Date(),
+            type: 'system'
+          }, activeContext);
+          return;
+        }
+        
+        const channelName = parts[1].startsWith('#') ? parts[1] : `#${parts[1]}`;
+        
+        // Check if channel already exists
+        const existingChannel = channels.find(c => c.name === channelName);
+        if (existingChannel) {
+          setActiveContext({ type: 'channel', name: channelName });
+          addMessageToContext({
+            id: Date.now(),
+            nickname: 'system',
+            content: `Joined ${channelName}`,
+            timestamp: new Date(),
+            type: 'system'
+          }, { type: 'channel', name: channelName });
+          return;
+        }
+        
+        // Create new channel
+        const newChannel: Channel = {
+          name: channelName,
+          users: [{
+            nickname: currentUserNickname,
+            status: 'online' as const,
+            personality: 'The human user',
+            languageSkills: { 
+              languages: [{
+                language: 'English',
+                fluency: 'native' as const,
+                accent: ''
+              }]
+            },
+            writingStyle: { formality: 'informal' as const, verbosity: 'neutral' as const, humor: 'none' as const, emojiUsage: 'low' as const, punctuation: 'standard' as const }
+          }],
+          messages: [],
+          topic: '',
+          operators: [currentUserNickname]
+        };
+        
+        setChannels(prev => [...prev, newChannel]);
+        setActiveContext({ type: 'channel', name: channelName });
+        
+        addMessageToContext({
+          id: Date.now(),
+          nickname: 'system',
+          content: `Joined ${channelName}`,
+          timestamp: new Date(),
+          type: 'system'
+        }, { type: 'channel', name: channelName });
+        
+        return;
+      }
+      
+      // Handle /part command
+      if (cmd === '/part') {
+        if (activeContext?.type !== 'channel') {
+          addMessageToContext({
+            id: Date.now(),
+            nickname: 'system',
+            content: 'You can only part from channels',
+            timestamp: new Date(),
+            type: 'system'
+          }, activeContext);
+          return;
+        }
+        
+        const reason = parts.length > 1 ? parts.slice(1).join(' ') : 'Leaving';
+        
+        // Add part message
+        addMessageToContext({
+          id: Date.now(),
+          nickname: currentUserNickname,
+          content: `left ${activeContext.name}${reason ? `: ${reason}` : ''}`,
+          timestamp: new Date(),
+          type: 'part'
+        }, activeContext);
+        
+        // Remove user from channel
+        setChannels(prevChannels => 
+          prevChannels.map(channel => {
+            if (channel.name === activeContext.name) {
+              return {
+                ...channel,
+                users: channel.users.filter(u => u.nickname !== currentUserNickname),
+                operators: channel.operators.filter(op => op !== currentUserNickname)
+              };
+            }
+            return channel;
+          })
+        );
+        
+        // Switch to first available channel or general
+        const remainingChannels = channels.filter(c => c.name !== activeContext.name);
+        if (remainingChannels.length > 0) {
+          setActiveContext({ type: 'channel', name: remainingChannels[0].name });
+        } else {
+          setActiveContext(null);
+        }
+        
+        return;
+      }
+      
+      // Handle /nick command
+      if (cmd === '/nick') {
+        if (parts.length < 2) {
+          addMessageToContext({
+            id: Date.now(),
+            nickname: 'system',
+            content: 'Usage: /nick <newnickname>',
+            timestamp: new Date(),
+            type: 'system'
+          }, activeContext);
+          return;
+        }
+        
+        const newNickname = parts[1].trim();
+        if (newNickname.length < 2 || newNickname.length > 20) {
+          addMessageToContext({
+            id: Date.now(),
+            nickname: 'system',
+            content: 'Nickname must be between 2 and 20 characters',
+            timestamp: new Date(),
+            type: 'system'
+          }, activeContext);
+          return;
+        }
+        
+        // Check if nickname is already in use
+        const isNicknameInUse = channels.some(channel => 
+          channel.users.some(user => user.nickname === newNickname)
+        );
+        
+        if (isNicknameInUse) {
+          addMessageToContext({
+            id: Date.now(),
+            nickname: 'system',
+            content: `Nickname ${newNickname} is already in use`,
+            timestamp: new Date(),
+            type: 'system'
+          }, activeContext);
+          return;
+        }
+        
+        const oldNickname = currentUserNickname;
+        setCurrentUserNickname(newNickname);
+        
+        // Update nickname in all channels
+        setChannels(prevChannels => 
+          prevChannels.map(channel => ({
+            ...channel,
+            users: channel.users.map(user => 
+              user.nickname === oldNickname ? { ...user, nickname: newNickname } : user
+            ),
+            operators: channel.operators.map(op => 
+              op === oldNickname ? newNickname : op
+            )
+          }))
+        );
+        
+        // Add nickname change message to all channels
+        channels.forEach(channel => {
+          addMessageToContext({
+            id: Date.now(),
+            nickname: 'system',
+            content: `${oldNickname} is now known as ${newNickname}`,
+            timestamp: new Date(),
+            type: 'system'
+          }, { type: 'channel', name: channel.name });
+        });
+        
+        return;
+      }
+      
       // Handle /help command
       if (cmd === '/help') {
         addMessageToContext({
@@ -630,6 +1000,9 @@ const App: React.FC = () => {
           content: `Available commands:
 /topic [new topic] - View or change channel topic (operators only)
 /me <action> - Perform an action (e.g., /me waves)
+/join <channel> - Join a channel (e.g., /join #newchannel)
+/part [reason] - Leave current channel
+/nick <newnickname> - Change your nickname
 /help - Show this help message`,
           timestamp: new Date(),
           type: 'system'
@@ -742,65 +1115,6 @@ const App: React.FC = () => {
   const handleSendMessage = async (content: string) => {
     if (content.startsWith('/')) {
       handleCommand(content);
-      
-      // Trigger AI reactions for action commands (/me)
-      if (content.startsWith('/me ')) {
-        // Handle /me commands for web app
-        if (content.startsWith('/me ')) {
-          const actionContent = content.substring(4); // Remove '/me '
-          const userMessage: Message = {
-            id: Date.now(),
-            nickname: currentUserNickname,
-            content: actionContent,
-            timestamp: new Date(),
-            type: 'action',
-            command: 'me'
-          };
-          
-          // Track user message time for burst mode
-          lastUserMessageTimeRef.current = Date.now();
-          
-          // Trigger AI reaction to the action
-          if (activeContext && activeContext.type === 'channel') {
-            const channel = channels.find(c => c.name === activeContext.name);
-            if (channel) {
-              try {
-                const aiResponse = await generateReactionToMessage(channel, userMessage, currentUserNickname, aiModel);
-                if (aiResponse) {
-                  const aiMessages = aiResponse.split('\n').filter(line => line.includes(':'));
-                  for (let index = 0; index < aiMessages.length; index++) {
-                    const msgLine = aiMessages[index];
-                    const [nickname, ...contentParts] = msgLine.split(':');
-                    const content = contentParts.join(':').trim();
-                    if (nickname && content && nickname.trim()) {
-                      // Show typing indicator for reaction message
-                      setTyping(nickname.trim(), true);
-                      
-                      // Simulate typing delay for each reaction message
-                      simulationLogger.debug(`Simulating typing delay for reaction message: "${content}"`);
-                      await simulateTypingDelay(content.length, typingDelayConfig);
-                      
-                      // Hide typing indicator
-                      setTyping(nickname.trim(), false);
-                      
-                      const aiMessage: Message = {
-                        id: Date.now() + index + 1,
-                        nickname: nickname.trim(),
-                        content: content,
-                        timestamp: new Date(),
-                        type: 'ai'
-                      };
-                      addMessageToContext(aiMessage, activeContext);
-                    }
-                  }
-                }
-              } catch (error) {
-                console.error("Failed to get AI reaction to action:", error);
-              }
-            }
-          }
-        }
-      }
       return;
     }
     
@@ -945,6 +1259,8 @@ The response must be a single line in the format: "nickname: greeting message"
 
   // Enhanced user management with dynamic channel joining
   const handleUsersChange = useCallback((newUsers: User[]) => {
+    console.log(`[UserList Debug] handleUsersChange called with ${newUsers.length} users:`, newUsers.map(u => u.nickname));
+    
     const oldUsers = virtualUsers;
     const addedUsers = newUsers.filter(newUser => 
       !oldUsers.some(oldUser => oldUser.nickname === newUser.nickname)
@@ -953,13 +1269,16 @@ The response must be a single line in the format: "nickname: greeting message"
       !newUsers.some(newUser => newUser.nickname === oldUser.nickname)
     );
     
+    console.log(`[UserList Debug] Added users:`, addedUsers.map(u => u.nickname));
+    console.log(`[UserList Debug] Removed users:`, removedUsers.map(u => u.nickname));
+    
     // Update virtual users
     setVirtualUsers(newUsers);
     
     // Handle added users - add them to channels dynamically
     if (addedUsers.length > 0) {
-      setChannels(prevChannels => 
-        prevChannels.map(channel => {
+      setChannels(prevChannels => {
+        const updatedChannels = prevChannels.map(channel => {
           const updatedChannel = { ...channel };
           
           // Add new users to this channel
@@ -971,24 +1290,30 @@ The response must be a single line in the format: "nickname: greeting message"
           });
           
           return updatedChannel;
-        })
-      );
-      
-      // Add join messages for new users in all channels
-      addedUsers.forEach((newUser) => {
-        channels.forEach(channel => {
-          const wasInChannel = channel.users.some(u => u.nickname === newUser.nickname);
-          if (!wasInChannel) {
-            const joinMessage: Message = {
-              id: generateUniqueMessageId(),
-              nickname: newUser.nickname,
-              content: `joined ${channel.name}`,
-              timestamp: new Date(),
-              type: 'join'
-            };
-            addMessageToContext(joinMessage, { type: 'channel', name: channel.name });
-          }
         });
+        
+        // Add join messages for new users in all channels using updated channels
+        addedUsers.forEach((newUser) => {
+          updatedChannels.forEach(updatedChannel => {
+            // Check if user is now in this channel (was added)
+            const isNowInChannel = updatedChannel.users.some(u => u.nickname === newUser.nickname);
+            // Check if user was in this channel before (using original channel data)
+            const wasInChannelBefore = prevChannels.find(c => c.name === updatedChannel.name)?.users.some(u => u.nickname === newUser.nickname) || false;
+            
+            if (isNowInChannel && !wasInChannelBefore) {
+              const joinMessage: Message = {
+                id: generateUniqueMessageId(),
+                nickname: newUser.nickname,
+                content: `joined ${updatedChannel.name}`,
+                timestamp: new Date(),
+                type: 'join'
+              };
+              addMessageToContext(joinMessage, { type: 'channel', name: updatedChannel.name });
+            }
+          });
+        });
+        
+        return updatedChannels;
       });
       
       // Generate greetings for new users in active channel
@@ -1102,6 +1427,15 @@ The response must be a single line in the format: "nickname: greeting message"
       simulationLogger.debug('No channels available for simulation');
       return;
     }
+    
+    // Debug: Log current user nickname and channel users
+    console.log(`[Simulation Debug] Current user nickname: "${currentUserNickname}"`);
+    channels.forEach(channel => {
+      console.log(`[Simulation Debug] Channel ${channel.name} users:`, channel.users.map(u => u.nickname));
+    });
+    
+    // Auto-join users to channels that only have the current user
+    autoJoinUsersToEmptyChannels();
     
     // Check if we should enter burst mode (user recently sent a message)
     const now = Date.now();
@@ -1250,7 +1584,7 @@ The response must be a single line in the format: "nickname: greeting message"
         simulationLogger.debug(`Resuming simulation after API error pause`);
       }, 30000);
     }
-  }, [channels, activeContext, addMessageToContext, currentUserNickname, isSettingsOpen]);
+  }, [channels, activeContext, addMessageToContext, currentUserNickname, isSettingsOpen, autoJoinUsersToEmptyChannels]);
 
   useEffect(() => {
     simulationLogger.debug(`useEffect triggered - simulationSpeed: ${simulationSpeed}, isSettingsOpen: ${isSettingsOpen}`);
@@ -1305,7 +1639,12 @@ The response must be a single line in the format: "nickname: greeting message"
   );
   
   const usersInContext: User[] = useMemo(() => {
+    console.log(`[UserList Debug] Calculating usersInContext for activeContext:`, activeContext);
+    console.log(`[UserList Debug] activeChannel:`, activeChannel);
+    
     if (activeContext?.type === 'channel' && activeChannel) {
+      console.log(`[UserList Debug] Channel ${activeChannel.name} has ${activeChannel.users.length} users:`, activeChannel.users.map(u => u.nickname));
+      
       // Deduplicate users by nickname to prevent React key collisions
       const uniqueUsers = activeChannel.users.reduce((acc, user) => {
         if (!acc.find(u => u.nickname === user.nickname)) {
@@ -1320,10 +1659,12 @@ The response must be a single line in the format: "nickname: greeting message"
         console.warn('[UserList] Duplicate users:', activeChannel.users.map(u => u.nickname));
       }
       
+      console.log(`[UserList Debug] Returning ${uniqueUsers.length} unique users:`, uniqueUsers.map(u => u.nickname));
       return uniqueUsers;
     } else if (activeContext?.type === 'pm') {
       return [virtualUsers.find(u => u.nickname === activeContext.with)!, { nickname: currentUserNickname, status: 'online' }];
     }
+    console.log(`[UserList Debug] No active context or channel, returning empty array`);
     return [];
   }, [activeContext, activeChannel, virtualUsers, currentUserNickname]);
 

@@ -56,6 +56,20 @@ const formatWritingStyleValue = (value: string, type: 'formality' | 'verbosity' 
 };
 
 export const UserManagement: React.FC<UserManagementProps> = ({ users, onUsersChange, aiModel, channels, currentUserNickname, onChannelsChange }) => {
+  // Deduplicate users by nickname to prevent React key collisions
+  const uniqueUsers = users.reduce((acc, user) => {
+    if (!acc.find(u => u.nickname === user.nickname)) {
+      acc.push(user);
+    }
+    return acc;
+  }, [] as User[]);
+  
+  // Debug logging to help identify duplicate issues
+  if (users.length !== uniqueUsers.length) {
+    console.warn(`[UserManagement] Found duplicate users. Original: ${users.length}, Deduplicated: ${uniqueUsers.length}`);
+    console.warn('[UserManagement] Duplicate users:', users.map(u => u.nickname));
+  }
+
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
   const [isImportExportModalOpen, setIsImportExportModalOpen] = useState(false);
@@ -167,11 +181,11 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onUsersCh
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-white">Virtual Users</h3>
         <div className="flex items-center gap-2">
-          {users.length > 0 && (
+          {uniqueUsers.length > 0 && (
             <button
               type="button"
               onClick={() => {
-                if (window.confirm(`Are you sure you want to clear all ${users.length} users? This action cannot be undone.`)) {
+                if (window.confirm(`Are you sure you want to clear all ${uniqueUsers.length} users? This action cannot be undone.`)) {
                   onUsersChange([]);
                 }
               }}
@@ -219,7 +233,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onUsersCh
         </div>
       </div>
 
-      {users.length === 0 ? (
+      {uniqueUsers.length === 0 ? (
         <div className="text-center py-8 text-gray-400">
           <svg className="w-12 h-12 mx-auto mb-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
@@ -229,7 +243,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onUsersCh
         </div>
       ) : (
         <div className="space-y-3 max-h-64 overflow-y-auto">
-          {users.map((user, index) => (
+          {uniqueUsers.map((user, index) => (
             <div
               key={`${user.nickname}-${index}`}
               className="bg-gray-700 rounded-lg p-4 border border-gray-600 hover:border-gray-500 transition-colors"

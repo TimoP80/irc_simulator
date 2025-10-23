@@ -242,7 +242,9 @@ export const saveChannelLogs = (channels: Channel[]) => {
       ...channel,
       messages: channel.messages.map(message => ({
         ...message,
-        timestamp: message.timestamp.toISOString()
+        timestamp: message.timestamp instanceof Date 
+          ? message.timestamp.toISOString() 
+          : new Date(message.timestamp).toISOString()
       }))
     }));
     
