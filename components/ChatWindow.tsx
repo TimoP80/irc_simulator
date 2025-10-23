@@ -43,7 +43,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ title, messages, onSendM
             <div className="flex items-center gap-2 ml-2">
               <span className="text-xs text-gray-400 hidden sm:inline">Ops:</span>
               <div className="flex gap-1 flex-wrap">
-                {(channel.operators || []).map(op => (
+                {[...new Set(channel.operators || [])].map(op => (
                   <span key={op} className="text-xs bg-yellow-600 text-yellow-100 px-2 py-1 rounded">
                     @{op}
                   </span>

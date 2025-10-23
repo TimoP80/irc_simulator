@@ -13,6 +13,8 @@ const ai = new GoogleGenAI({ apiKey: API_KEY });
 
 // Validate and clean model ID
 const validateModelId = (model: string): string => {
+  console.log(`[AI Debug] validateModelId called with: "${model}" (type: ${typeof model}, length: ${model.length})`);
+  
   // If model contains spaces or looks like a display name, extract the actual model ID
   if (model.includes(' ') || model.includes('-') && model.length > 20) {
     // Try to extract model ID from display name
@@ -25,6 +27,7 @@ const validateModelId = (model: string): string => {
   
   // If it looks like a valid model ID, return as is
   if (model.match(/^gemini-[0-9.]+-[a-z]+$/i)) {
+    console.log(`[AI Debug] Model ID "${model}" is valid, returning as-is`);
     return model;
   }
   
@@ -40,13 +43,66 @@ const formatMessageHistory = (messages: Message[]): string => {
     .join('\n');
 };
 
-// Helper function to detect repetitive patterns in recent messages
-const detectRepetitivePatterns = (messages: Message[]): string[] => {
-  const recentMessages = messages.slice(-10); // Look at last 10 messages
-  const phrases: { [key: string]: number } = {};
+// Extract links and images from message content
+const extractLinksAndImages = (content: string): { links: string[], images: string[] } => {
+  const urlRegex = /(https?:\/\/[^\s]+)/gi;
+  const imageRegex = /(https?:\/\/[^\s]+\.(jpg|jpeg|png|gif|webp|svg)(\?[^\s]*)?)/gi;
   
-  // Common greeting phrases that should be excluded from repetition detection (multilingual)
-  const greetingPhrases = [
+  const allUrls = content.match(urlRegex) || [];
+  const imageUrls = content.match(imageRegex) || [];
+  const linkUrls = allUrls.filter(url => !imageUrls.includes(url));
+  
+  return {
+    links: linkUrls,
+    images: imageUrls
+  };
+};
+
+// Fallback responses when AI API fails
+const getFallbackResponse = (user: User, context: 'activity' | 'reaction', originalMessage?: string): string => {
+  const responses = {
+    activity: [
+      "hmm, interesting",
+      "that's cool",
+      "nice!",
+      "I see",
+      "makes sense",
+      "good point",
+      "yeah, I agree",
+      "sounds good",
+      "that's true",
+      "I think so too"
+    ],
+    reaction: [
+      "haha, nice one!",
+      "lol",
+      "that's funny",
+      "good one!",
+      "haha",
+      "lol, true",
+      "exactly!",
+      "I know right?",
+      "totally",
+      "for real"
+    ]
+  };
+  
+  const contextResponses = responses[context];
+  const randomResponse = contextResponses[Math.floor(Math.random() * contextResponses.length)];
+  
+  // Add some personality-based variation
+  if (user.writingStyle.verbosity === 'very_verbose') {
+    return `${randomResponse} ${randomResponse} ${randomResponse}`;
+  } else if (user.writingStyle.verbosity === 'very_terse') {
+    return randomResponse.split(' ')[0];
+  }
+  
+  return randomResponse;
+};
+
+// Helper function to get greeting phrases for detection
+const getGreetingPhrases = (): string[] => {
+  return [
     // English greetings
     'welcome to', 'hello there', 'hi there', 'hey there', 'good to see', 'nice to meet',
     'welcome back', 'hello everyone', 'hi everyone', 'hey everyone', 'welcome new',
@@ -131,6 +187,15 @@ const detectRepetitivePatterns = (messages: Message[]): string[] => {
     'tervetuloa tervetuloa', 'tervetuloa tänne', 'tervetuloa kanavalle', 'tervetuloa huoneeseen',
     'tervetuloa chattiin', 'tervetuloa palvelimelle', 'tervetuloa yhteisöön'
   ];
+};
+
+// Helper function to detect repetitive patterns in recent messages
+const detectRepetitivePatterns = (messages: Message[]): string[] => {
+  const recentMessages = messages.slice(-10); // Look at last 10 messages
+  const phrases: { [key: string]: number } = {};
+  
+  // Get greeting phrases from shared function
+  const greetingPhrases = getGreetingPhrases();
   
   // Extract common phrases and count occurrences
   recentMessages.forEach(msg => {
@@ -356,6 +421,48 @@ The human user's nickname is '${currentUserNickname}'.
 IMPORTANT: Always respond in the user's primary language as specified in their language skills. 
 If a user only speaks Finnish, respond in Finnish. If they only speak English, respond in English.
 Match the language to the user's language configuration exactly.
+
+LINK AND IMAGE SUPPORT:
+- You SHOULD include links to websites and images in your messages when relevant. This makes conversations more engaging and realistic.
+- Use realistic, relevant URLs that fit the conversation context.
+- Share images by including image URLs from common hosting services.
+- When sharing links or images, make them contextually relevant to the conversation.
+- Examples of good link sharing: "Check this out: https://example.com" or "Found this interesting: https://github.com/user/repo"
+- Examples of good image sharing: "Here's a screenshot: https://gyazo.com/abc123.jpg" or "Look at this: https://prnt.sc/xyz.png"
+- Be proactive about sharing relevant content - don't wait for perfect opportunities, create them naturally.
+- SAFE image hosting services (use these): gyazo.com, prnt.sc, imgbb.com, postimg.cc, imgbox.com, imgchest.com, freeimage.host
+- AVOID these problematic services: 3lift.com, ads.assemblyexchange.com, imgur.com, or any ad/tracking services
+- NEVER use Imgur URLs (imgur.com, i.imgur.com) as they cause JavaScript errors and audio/video issues
+- Use complete, working URLs like: https://gyazo.com/abc123.jpg, https://prnt.sc/xyz.png, https://imgbb.com/abc123.jpg
+- ALWAYS include file extensions (.jpg, .png, .gif, .webp) for direct image links
+- Preferred services: gyazo.com, prnt.sc, imgbb.com (these are reliable and don't cause JavaScript issues)
+- Common link types: GitHub repos, news articles, tutorials, memes, screenshots, documentation, YouTube videos
+- YouTube link diversity: Share varied YouTube content - music, tutorials, documentaries, comedy, gaming, tech reviews, cooking, travel, etc.
+- AVOID repetitive YouTube links: Don't post the same YouTube video multiple times, vary the content and creators
+- NEVER use URLs that contain tracking parameters, ads, or redirect through ad networks
+- CRITICAL: Only share REAL, EXISTING links that actually work - never make up fake URLs or non-existent content
+- For YouTube links: Only reference well-known, real videos that actually exist on YouTube
+- Avoid generating fake video IDs or made-up YouTube URLs - these will not work for users
+- If unsure about a link's existence, don't share it - better to share no link than a fake one
+- YouTube examples: Reference real, popular videos from well-known creators, music videos, tutorials, or documentaries
+- NEVER create fake video IDs or made-up URLs - these will not work for users
+- When in doubt about a YouTube link, don't share it - focus on other types of content instead
+- AVOID posting the same YouTube video multiple times - vary the content and creators
+- NEVER post Rick Astley's "Never Gonna Give You Up" or similar overused memes - these are cliché and repetitive
+- Focus on diverse, fresh content from different creators and genres
+- CRITICAL: Only share YouTube links that are CURRENT and AVAILABLE - avoid old, deleted, or outdated videos
+- Prefer recent content (from the last few years) over old videos that may no longer be available
+- If you're not certain a YouTube video is still available, don't share it - better to share no link than a broken one
+- Consider sharing other types of content (GitHub repos, news articles, tutorials) instead of potentially outdated YouTube links
+
+REALISTIC IRC CONVERSATION PATTERNS:
+- Reply to ONE person at a time, not multiple people in the same message
+- Use natural IRC conversation flow - respond to the most recent or most relevant message
+- Avoid addressing multiple users in one sentence (e.g., "Alice and Bob, you're both wrong" - this is unrealistic)
+- Instead, reply to one person, then let others respond naturally
+- Use IRC-style responses: direct, conversational, and focused on one topic or person
+- If you need to respond to multiple people, do it in separate messages or focus on the most relevant response
+- Keep messages natural and realistic - real IRC users don't give speeches to multiple people at once
 `;
 
 export const generateChannelActivity = async (channel: Channel, currentUserNickname: string, model: string = 'gemini-2.5-flash'): Promise<string> => {
@@ -503,6 +610,7 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
   const userRecentMessages = channel.messages.slice(-5).filter(msg => msg.nickname === randomUser.nickname);
   const userGreetingCount = userRecentMessages.filter(msg => {
     const content = msg.content.toLowerCase();
+    const greetingPhrases = getGreetingPhrases();
     return greetingPhrases.some(phrase => content.includes(phrase)) ||
            // English patterns
            content.match(/^(hi|hello|hey|welcome|greetings|good morning|good afternoon|good evening|howdy|sup|what's up|how are you|how's it going)/) ||
@@ -582,11 +690,14 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
   } else if (conversationVariety < 0.75) {
     // 15% chance: Change the mood or tone
     diversityPrompt = 'IMPORTANT: Change the mood or tone of the conversation - be more lighthearted, serious, or different from recent messages.';
-  } else if (conversationVariety < 0.9) {
+  } else if (conversationVariety < 0.85) {
     // 15% chance: Introduce humor or wit
     diversityPrompt = 'IMPORTANT: Add some humor, wit, or clever wordplay to the conversation.';
+  } else if (conversationVariety < 0.95) {
+    // 10% chance: Share a link or image
+    diversityPrompt = 'IMPORTANT: Share a relevant link or image that adds value to the conversation. Use complete, working URLs like https://gyazo.com/abc123.jpg or https://github.com/user/repo. Always include file extensions for images. Avoid ad networks, tracking services, and Imgur URLs. For YouTube links, share diverse content - different genres, creators, and topics. Avoid posting the same video multiple times. CRITICAL: Only share REAL, EXISTING links that actually work - never make up fake URLs or non-existent content. If unsure about a link\'s existence, don\'t share it. For YouTube links, prefer recent content over old videos that may no longer be available. NEVER post Rick Astley\'s "Never Gonna Give You Up" or similar overused memes - these are cliché and repetitive.';
   } else {
-    // 10% chance: Be more conversational and natural
+    // 5% chance: Be more conversational and natural
     diversityPrompt = 'IMPORTANT: Be more conversational and natural - like you\'re talking to friends in a relaxed setting.';
   }
   
@@ -594,6 +705,45 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
   let topicEvolution = '';
   if (recentTopics.length > 3) {
     topicEvolution = 'IMPORTANT: The conversation has been focused on similar topics recently. Try to bring up something fresh or unexpected.';
+  }
+
+  // Add link/image encouragement based on conversation context
+  let linkImagePrompt = '';
+  const hasRecentLinks = channel.messages.slice(-10).some(msg => 
+    msg.content.includes('http') || msg.content.includes('www.')
+  );
+  
+  // Check for recent YouTube links to avoid repetition
+  const recentYouTubeLinks = channel.messages.slice(-10).filter(msg => 
+    msg.content.includes('youtube.com/') || msg.content.includes('youtu.be/')
+  );
+  
+  const hasRecentYouTubeLinks = recentYouTubeLinks.length > 0;
+  
+  // Always include anti-Rick Astley measures in link sharing prompts
+  const antiRickAstleyPrompt = 'CRITICAL: NEVER post Rick Astley\'s "Never Gonna Give You Up" or similar overused memes. These are cliché and repetitive. Share fresh, diverse content instead.';
+  
+  if (!hasRecentLinks && Math.random() < 0.3) {
+    // 30% chance to encourage link/image sharing if none recently
+    linkImagePrompt = `IMPORTANT: Consider sharing a relevant link or image to make the conversation more engaging. Use complete, working URLs like https://gyazo.com/abc123.jpg or https://github.com/user/repo. Always include file extensions for images. Avoid ad networks, tracking services, and Imgur URLs. For YouTube links, share diverse content - different genres, creators, and topics. Avoid posting the same video multiple times. ${antiRickAstleyPrompt}`;
+  } else if (hasRecentYouTubeLinks && Math.random() < 0.4) {
+    // 40% chance to discourage repetitive YouTube links
+    linkImagePrompt = `IMPORTANT: Avoid posting repetitive YouTube links. Share diverse content - different genres, creators, and topics. Consider sharing other types of links (GitHub, news articles, tutorials) or images instead of more YouTube videos. CRITICAL: Only share REAL, EXISTING links that actually work - never make up fake URLs or non-existent content. ${antiRickAstleyPrompt}`;
+  } else if (Math.random() < 0.3) {
+    // 30% chance to emphasize real content only
+    linkImagePrompt = `IMPORTANT: If sharing links, only share REAL, EXISTING content that actually works. Never make up fake URLs, video IDs, or non-existent content. Better to share no link than a fake one. ${antiRickAstleyPrompt}`;
+  } else if (Math.random() < 0.2) {
+    // 20% chance to encourage well-known content
+    linkImagePrompt = `IMPORTANT: If sharing YouTube links, reference well-known, real videos that actually exist. Examples: popular music videos, famous tutorials, or well-known documentaries. Never create fake video IDs or made-up URLs. ${antiRickAstleyPrompt}`;
+  } else if (Math.random() < 0.15) {
+    // 15% chance to discourage repetitive content
+    linkImagePrompt = `IMPORTANT: Avoid posting repetitive YouTube links. Share diverse content from different creators and genres. Don\'t post the same video multiple times. ${antiRickAstleyPrompt}`;
+  } else if (Math.random() < 0.08) {
+    // 8% chance to discourage outdated YouTube content
+    linkImagePrompt = `IMPORTANT: Avoid sharing old or potentially outdated YouTube videos that may no longer be available. Prefer recent content or consider sharing other types of links (GitHub, news articles, tutorials) instead. ${antiRickAstleyPrompt}`;
+  } else {
+    // Default prompt with anti-Rick Astley measures
+    linkImagePrompt = `IMPORTANT: If sharing links, only share REAL, EXISTING content that actually works. Never make up fake URLs, video IDs, or non-existent content. Better to share no link than a fake one. ${antiRickAstleyPrompt}`;
   }
 
   // Get time-of-day context
@@ -617,6 +767,10 @@ ${antiGreetingSpam}
 ${diversityPrompt}
 
 ${topicEvolution}
+
+${linkImagePrompt}
+
+IMPORTANT: Reply to ONE person at a time, not multiple people. Focus on the most recent or most relevant message. Avoid addressing multiple users in one sentence - this is unrealistic IRC behavior. Keep your response natural and conversational, like a real IRC user would.
 
 Generate a new, single, in-character message from ${randomUser.nickname} that is relevant to the topic or the recent conversation.
 The message should feel natural for the current time of day and social context.
@@ -650,22 +804,29 @@ ${isChannelOperator(channel, randomUser.nickname) ? `- Role: Channel operator (c
     
     console.log(`[AI Debug] Using temperature: ${finalTemperature.toFixed(2)} for ${randomUser.nickname}`);
     
-    const response = await withRateLimitAndRetries(() => 
-      ai.models.generateContent({
-          model: validatedModel,
-          contents: prompt,
-          config: {
-              systemInstruction: getBaseSystemInstruction(currentUserNickname),
-              temperature: finalTemperature,
-              maxOutputTokens: tokenLimit,
-              thinkingConfig: { thinkingBudget: 0 },
-          },
-      })
-    );
-    
-    const result = extractTextFromResponse(response);
-    console.log(`[AI Debug] Successfully generated channel activity: "${result}"`);
-    return result;
+    try {
+      const response = await withRateLimitAndRetries(() => 
+        ai.models.generateContent({
+            model: validatedModel,
+            contents: prompt,
+            config: {
+                systemInstruction: getBaseSystemInstruction(currentUserNickname),
+                temperature: finalTemperature,
+                maxOutputTokens: tokenLimit,
+                thinkingConfig: { thinkingBudget: 0 },
+            },
+        })
+      );
+      
+      const result = extractTextFromResponse(response);
+      console.log(`[AI Debug] Successfully generated channel activity: "${result}"`);
+      return result;
+    } catch (error) {
+      console.warn(`[AI Debug] API call failed, using fallback response for ${randomUser.nickname}:`, error);
+      const fallbackResponse = getFallbackResponse(randomUser, 'activity');
+      console.log(`[AI Debug] Using fallback response: "${fallbackResponse}"`);
+      return fallbackResponse;
+    }
   } catch (error) {
     console.error(`[AI Debug] Error generating channel activity for ${channel.name}:`, {
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -767,6 +928,7 @@ export const generateReactionToMessage = async (channel: Channel, userMessage: M
     const userRecentMessages = channel.messages.slice(-5).filter(msg => msg.nickname === randomUser.nickname);
     const userGreetingCount = userRecentMessages.filter(msg => {
       const content = msg.content.toLowerCase();
+      const greetingPhrases = getGreetingPhrases();
       return greetingPhrases.some(phrase => content.includes(phrase)) ||
              // English patterns
              content.match(/^(hi|hello|hey|welcome|greetings|good morning|good afternoon|good evening|howdy|sup|what's up|how are you|how's it going)/) ||
@@ -858,11 +1020,15 @@ Channel operators (who can kick/ban users): ${channel.operators.join(', ') || 'N
 The last 20 messages were:
 ${formatMessageHistory(channel.messages)}
 
-${reactionRepetitionAvoidance}
+    ${reactionRepetitionAvoidance}
 
-${reactionAntiGreetingSpam}
+    ${reactionAntiGreetingSpam}
 
-Generate a realistic and in-character reaction from ${randomUser.nickname}.
+    ${Math.random() < 0.2 ? 'IMPORTANT: Consider sharing a relevant link or image in your reaction to make it more engaging. Use complete, working URLs like https://gyazo.com/abc123.jpg or https://github.com/user/repo. Always include file extensions for images. Avoid ad networks, tracking services, and Imgur URLs. For YouTube links, share diverse content - different genres, creators, and topics. Avoid posting the same video multiple times. CRITICAL: Only share REAL, EXISTING links that actually work - never make up fake URLs or non-existent content. If unsure about a link\'s existence, don\'t share it. For YouTube links, prefer recent content over old videos that may no longer be available. NEVER post Rick Astley\'s "Never Gonna Give You Up" or similar overused memes - these are cliché and repetitive.' : ''}
+
+    IMPORTANT: Reply to ONE person at a time, not multiple people. Focus on the most recent or most relevant message. Avoid addressing multiple users in one sentence - this is unrealistic IRC behavior. Keep your response natural and conversational, like a real IRC user would.
+
+    Generate a realistic and in-character reaction from ${randomUser.nickname}.
 The reaction should feel natural for the current time of day and social context.
 The reaction must be a single line in the format: "nickname: message"
 ${randomUser.writingStyle.verbosity === 'very_verbose' ? 'IMPORTANT: This user is very verbose - write a long, detailed reaction with multiple sentences and thorough explanations. Do not cut off the message.' : randomUser.writingStyle.verbosity === 'verbose' ? 'IMPORTANT: This user is verbose - write a moderately detailed reaction with several sentences.' : ''}
@@ -892,22 +1058,29 @@ ${isChannelOperator(channel, randomUser.nickname) ? `- Role: Channel operator (c
         
         console.log(`[AI Debug] Using temperature: ${finalTemperature.toFixed(2)} for reaction from ${randomUser.nickname}`);
         
-        const response = await withRateLimitAndRetries(() => 
-            ai.models.generateContent({
-                model: validatedModel,
-                contents: prompt,
-                config: {
-                    systemInstruction: getBaseSystemInstruction(currentUserNickname),
-                    temperature: finalTemperature,
-                    maxOutputTokens: tokenLimit,
-                    thinkingConfig: { thinkingBudget: 0 },
-                },
-            })
-        );
-        
-        const result = extractTextFromResponse(response);
-        console.log(`[AI Debug] Successfully generated reaction: "${result}"`);
-        return result;
+        try {
+          const response = await withRateLimitAndRetries(() => 
+              ai.models.generateContent({
+                  model: validatedModel,
+                  contents: prompt,
+                  config: {
+                      systemInstruction: getBaseSystemInstruction(currentUserNickname),
+                      temperature: finalTemperature,
+                      maxOutputTokens: tokenLimit,
+                      thinkingConfig: { thinkingBudget: 0 },
+                  },
+              })
+          );
+          
+          const result = extractTextFromResponse(response);
+          console.log(`[AI Debug] Successfully generated reaction: "${result}"`);
+          return result;
+        } catch (apiError) {
+          console.warn(`[AI Debug] API call failed, using fallback response for reaction from ${randomUser.nickname}:`, apiError);
+          const fallbackResponse = getFallbackResponse(randomUser, 'reaction', userMessage.content);
+          console.log(`[AI Debug] Using fallback reaction: "${fallbackResponse}"`);
+          return fallbackResponse;
+        }
     } catch (error) {
         console.error(`[AI Debug] Error generating reaction for ${channel.name}:`, {
             error: error instanceof Error ? error.message : 'Unknown error',

@@ -385,6 +385,7 @@ const App: React.FC = () => {
     
     // Initialize state from the new config
     const { nickname, virtualUsers, channels: newChannels, simulationSpeed, aiModel: savedAiModel, typingDelay } = initializeStateFromConfig(config);
+    console.log('[Settings Debug] Saving settings with aiModel:', savedAiModel);
     setCurrentUserNickname(nickname);
     setVirtualUsers(virtualUsers);
     
@@ -394,6 +395,7 @@ const App: React.FC = () => {
     
     setSimulationSpeed(simulationSpeed);
     setAiModel(savedAiModel || DEFAULT_AI_MODEL);
+    console.log('[Settings Debug] Set aiModel to:', savedAiModel || DEFAULT_AI_MODEL);
     setTypingDelayConfig(typingDelay || DEFAULT_TYPING_DELAY);
     setPrivateMessages({});
 
@@ -658,6 +660,54 @@ const App: React.FC = () => {
       phraseCounts[phrase] = (phraseCounts[phrase] || 0) + 1;
     });
     
+    // Track YouTube link repetition
+    const youtubeLinks = recentMessages.filter(msg => 
+      msg.type === 'ai' && 
+      msg.content && 
+      (msg.content.includes('youtube.com/') || msg.content.includes('youtu.be/'))
+    );
+    
+    if (youtubeLinks.length > 2) {
+      console.log(`[YouTube Repetition] Multiple YouTube links detected in recent messages:`, youtubeLinks.map(msg => msg.content.substring(0, 50)));
+    }
+    
+    // Track Rick Astley link repetition specifically
+    const rickAstleyLinks = recentMessages.filter(msg => 
+      msg.type === 'ai' && 
+      msg.content && 
+      (msg.content.includes('rick astley') || msg.content.includes('never gonna give you up') || msg.content.includes('dQw4w9WgXcQ'))
+    );
+    
+    if (rickAstleyLinks.length > 0) {
+      console.log(`[Rick Astley Spam] Rick Astley links detected in recent messages:`, rickAstleyLinks.map(msg => msg.content.substring(0, 50)));
+    }
+    
+    // Track potentially outdated YouTube links
+    const potentiallyOutdatedLinks = recentMessages.filter(msg => 
+      msg.type === 'ai' && 
+      msg.content && 
+      (msg.content.includes('youtube.com/') || msg.content.includes('youtu.be/')) &&
+      (msg.content.includes('2010') || msg.content.includes('2011') || msg.content.includes('2012') || 
+       msg.content.includes('2013') || msg.content.includes('2014') || msg.content.includes('2015') ||
+       msg.content.includes('old') || msg.content.includes('classic') || msg.content.includes('vintage'))
+    );
+    
+    if (potentiallyOutdatedLinks.length > 0) {
+      console.log(`[Outdated YouTube Links] Potentially outdated YouTube links detected:`, potentiallyOutdatedLinks.map(msg => msg.content.substring(0, 50)));
+    }
+    
+    // Track multi-user replies (unrealistic IRC behavior)
+    const multiUserReplies = recentMessages.filter(msg => 
+      msg.type === 'ai' && 
+      msg.content && 
+      (msg.content.includes(' and ') && (msg.content.includes(' you ') || msg.content.includes(' both ') || msg.content.includes(' all '))) ||
+      (msg.content.match(/\b\w+ and \w+,?\s+you\b/) || msg.content.match(/\b\w+ and \w+,?\s+both\b/))
+    );
+    
+    if (multiUserReplies.length > 0) {
+      console.log(`[IRC Realism] Multi-user replies detected (unrealistic IRC behavior):`, multiUserReplies.map(msg => msg.content.substring(0, 50)));
+    }
+    
     const repetitivePhrases = Object.entries(phraseCounts)
       .filter(([_, count]) => count > 2)
       .map(([phrase, _]) => phrase);
@@ -680,7 +730,7 @@ const App: React.FC = () => {
       // Add a system message suggesting topic change
       setTimeout(() => {
         addMessageToContext({
-          id: Date.now(),
+          id: generateUniqueMessageId(),
           nickname: 'system',
           content: suggestion,
           timestamp: new Date(),
@@ -690,14 +740,167 @@ const App: React.FC = () => {
     }
   };
 
+  // Global error handler to suppress audio/video play errors
+  useEffect(() => {
+    const handleError = (event: ErrorEvent) => {
+      if (event.message.includes('play method is not allowed') || 
+          event.message.includes('The play method is not allowed')) {
+        console.warn('[Audio/Video Error Suppressed]:', event.message);
+        event.preventDefault();
+        event.stopPropagation();
+        return false;
+      }
+    };
+
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      if (event.reason && event.reason.message && 
+          event.reason.message.includes('play method is not allowed')) {
+        console.warn('[Audio/Video Promise Error Suppressed]:', event.reason.message);
+        event.preventDefault();
+        return false;
+      }
+    };
+
+    window.addEventListener('error', handleError);
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+
+    return () => {
+      window.removeEventListener('error', handleError);
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+    };
+  }, []);
+
+  // Extract links and images from message content
+  const extractLinksAndImages = useCallback((content: string): { links: string[], images: string[] } => {
+    const urlRegex = /(https?:\/\/[^\s]+)/gi;
+    const imageRegex = /(https?:\/\/[^\s]+\.(jpg|jpeg|png|gif|webp|svg)(\?[^\s]*)?)/gi;
+    
+    // List of unsafe domains to filter out
+    const unsafeDomains = [
+      '3lift.com',
+      'ads.assemblyexchange.com',
+      'doubleclick.net',
+      'googlesyndication.com',
+      'amazon-adsystem.com',
+      'facebook.com/tr',
+      'google-analytics.com',
+      'googletagmanager.com',
+      'imgur.com' // Block all imgur.com URLs to prevent JavaScript loading
+    ];
+    
+    const isUnsafeUrl = (url: string): boolean => {
+      return unsafeDomains.some(domain => url.toLowerCase().includes(domain.toLowerCase()));
+    };
+    
+    // Function to fix common Imgur URL issues
+    const fixImgurUrl = (url: string): string => {
+      // Fix incomplete Imgur URLs that redirect to front page
+      if (url.includes('imgur.com/') && !url.includes('i.imgur.com/') && !url.includes('/a/')) {
+        // Convert imgur.com/ID to i.imgur.com/ID.jpg for direct images
+        const match = url.match(/imgur\.com\/([a-zA-Z0-9]+)(?:\?.*)?$/);
+        if (match) {
+          return `https://i.imgur.com/${match[1]}.jpg`;
+        }
+      }
+      
+      // Fix Imgur URLs that might load the full page
+      if (url.includes('imgur.com/') && !url.includes('i.imgur.com/')) {
+        // Handle various Imgur URL patterns
+        const patterns = [
+          /imgur\.com\/([a-zA-Z0-9]+)(?:\?.*)?$/,  // imgur.com/ID
+          /imgur\.com\/gallery\/([a-zA-Z0-9]+)(?:\?.*)?$/,  // imgur.com/gallery/ID
+          /imgur\.com\/a\/([a-zA-Z0-9]+)(?:\?.*)?$/  // imgur.com/a/ID
+        ];
+        
+        for (const pattern of patterns) {
+          const match = url.match(pattern);
+          if (match) {
+            // For gallery/album URLs, we'll skip them as they're not direct images
+            if (url.includes('/gallery/') || url.includes('/a/')) {
+              return url; // Keep album URLs as-is, they're not direct images
+            }
+            // For direct image URLs, convert to i.imgur.com format
+            return `https://i.imgur.com/${match[1]}.jpg`;
+          }
+        }
+      }
+      
+      return url;
+    };
+    
+    // Function to validate if URL is a direct image
+    const isDirectImageUrl = (url: string): boolean => {
+      // Check if it's a direct image URL (i.imgur.com with file extension)
+      if (url.includes('i.imgur.com/') && /\.(jpg|jpeg|png|gif|webp|svg)(\?.*)?$/i.test(url)) {
+        return true;
+      }
+      // Check other direct image hosting services (more flexible patterns)
+      const directImagePatterns = [
+        /gyazo\.com\/[a-zA-Z0-9]+(\.[a-zA-Z0-9]+)?(\?.*)?$/i,  // gyazo.com/ID or gyazo.com/ID.jpg
+        /prnt\.sc\/[a-zA-Z0-9]+(\.[a-zA-Z0-9]+)?(\?.*)?$/i,   // prnt.sc/ID or prnt.sc/ID.jpg
+        /imgbb\.com\/[a-zA-Z0-9]+(\.[a-zA-Z0-9]+)?(\?.*)?$/i, // imgbb.com/ID or imgbb.com/ID.jpg
+        /postimg\.cc\/[a-zA-Z0-9]+(\.[a-zA-Z0-9]+)?(\?.*)?$/i, // postimg.cc/ID or postimg.cc/ID.jpg
+        /imgbox\.com\/[a-zA-Z0-9]+(\.[a-zA-Z0-9]+)?(\?.*)?$/i, // imgbox.com/ID or imgbox.com/ID.jpg
+        /imgchest\.com\/[a-zA-Z0-9]+(\.[a-zA-Z0-9]+)?(\?.*)?$/i, // imgchest.com/ID or imgchest.com/ID.jpg
+        /freeimage\.host\/[a-zA-Z0-9]+(\.[a-zA-Z0-9]+)?(\?.*)?$/i // freeimage.host/ID or freeimage.host/ID.jpg
+      ];
+      
+      return directImagePatterns.some(pattern => pattern.test(url));
+    };
+    
+    const allUrls = content.match(urlRegex) || [];
+    const imageUrls = content.match(imageRegex) || [];
+    
+    // Filter out unsafe URLs, fix Imgur URLs, and only keep direct image URLs
+    const safeImageUrls = imageUrls
+      .filter(url => {
+        const isUnsafe = isUnsafeUrl(url);
+        if (isUnsafe) {
+          console.log('[URL Filter] Blocked unsafe URL:', url);
+        }
+        return !isUnsafe;
+      })
+      .map(url => fixImgurUrl(url))
+      .filter(url => {
+        const isDirect = isDirectImageUrl(url);
+        if (!isDirect) {
+          console.log('[URL Filter] Blocked non-direct image URL:', url);
+        }
+        return isDirect;
+      }); // Only keep direct image URLs
+    const safeLinkUrls = allUrls
+      .filter(url => !imageUrls.includes(url) && !isUnsafeUrl(url))
+      .map(url => fixImgurUrl(url));
+    
+    console.log('[URL Filter] Processed URLs:', {
+      allUrls: allUrls.length,
+      imageUrls: imageUrls.length,
+      safeImageUrls: safeImageUrls.length,
+      safeLinkUrls: safeLinkUrls.length
+    });
+    
+    return {
+      links: safeLinkUrls,
+      images: safeImageUrls
+    };
+  }, []);
+
   const addMessageToContext = useCallback((message: Message, context: ActiveContext | null) => {
     if (!context) return;
+    
+    // Extract links and images from the message content
+    const { links, images } = extractLinksAndImages(message.content);
+    const processedMessage = {
+      ...message,
+      links: links.length > 0 ? links : undefined,
+      images: images.length > 0 ? images : undefined
+    };
     if (context.type === 'channel') {
-      console.log(`[addMessageToContext] Adding message to channel ${context.name}:`, message);
+      console.log(`[addMessageToContext] Adding message to channel ${context.name}:`, processedMessage);
       setChannels(prev => {
         const updatedChannels = prev.map(c =>
           c.name === context.name
-            ? { ...c, messages: [...(c.messages || []), message].slice(-100) }
+            ? { ...c, messages: [...(c.messages || []), processedMessage].slice(-1000) }
             : c
         );
         simulationLogger.debug(`Message added to channel ${context.name}. Updated channel messages count: ${updatedChannels.find(c => c.name === context.name)?.messages?.length || 0}`);
@@ -711,7 +914,7 @@ const App: React.FC = () => {
           ...prev,
           [context.with]: {
             ...conversation,
-            messages: [...conversation.messages, message].slice(-100),
+            messages: [...conversation.messages, processedMessage].slice(-1000),
           },
         };
       });
@@ -746,7 +949,7 @@ const App: React.FC = () => {
           if (message.type === 'import') {
             // Add message from IRC to Station V
             const ircMessage: Message = {
-              id: Date.now(),
+              id: generateUniqueMessageId(),
               nickname: message.nickname,
               content: message.content,
               timestamp: message.timestamp,
@@ -774,7 +977,7 @@ const App: React.FC = () => {
       if (cmd === '/topic') {
         if (activeContext?.type !== 'channel') {
           addMessageToContext({
-            id: Date.now(),
+            id: generateUniqueMessageId(),
             nickname: 'system',
             content: 'You can only change topics in channels',
             timestamp: new Date(),
@@ -789,7 +992,7 @@ const App: React.FC = () => {
         // Check if user is a channel operator
         if (!isChannelOperator(activeChannel, currentUserNickname)) {
           addMessageToContext({
-            id: Date.now(),
+            id: generateUniqueMessageId(),
             nickname: 'system',
             content: 'You must be a channel operator to change the topic',
             timestamp: new Date(),
@@ -801,7 +1004,7 @@ const App: React.FC = () => {
         // If no new topic provided, show current topic
         if (parts.length === 1) {
           addMessageToContext({
-            id: Date.now(),
+            id: generateUniqueMessageId(),
             nickname: 'system',
             content: `Current topic for ${activeChannel.name}: ${activeChannel.topic || 'No topic set'}`,
             timestamp: new Date(),
@@ -822,7 +1025,7 @@ const App: React.FC = () => {
         
         // Add topic change message
         addMessageToContext({
-          id: Date.now(),
+          id: generateUniqueMessageId(),
           nickname: currentUserNickname,
           content: newTopic,
           timestamp: new Date(),
@@ -835,7 +1038,7 @@ const App: React.FC = () => {
           setTimeout(async () => {
             try {
               const reaction = await generateReactionToMessage(activeChannel, {
-                id: Date.now(),
+                id: generateUniqueMessageId(),
                 nickname: currentUserNickname,
                 content: newTopic,
                 timestamp: new Date(),
@@ -859,7 +1062,7 @@ const App: React.FC = () => {
       if (cmd === '/me') {
         if (activeContext?.type !== 'channel') {
           addMessageToContext({
-            id: Date.now(),
+            id: generateUniqueMessageId(),
             nickname: 'system',
             content: 'You can only use /me commands in channels',
             timestamp: new Date(),
@@ -870,7 +1073,7 @@ const App: React.FC = () => {
         
         if (parts.length < 2) {
           addMessageToContext({
-            id: Date.now(),
+            id: generateUniqueMessageId(),
             nickname: 'system',
             content: 'Usage: /me <action> (e.g., /me waves)',
             timestamp: new Date(),
@@ -881,7 +1084,7 @@ const App: React.FC = () => {
         
         const actionContent = parts.slice(1).join(' ');
         const actionMessage: Message = {
-          id: Date.now(),
+          id: generateUniqueMessageId(),
           nickname: currentUserNickname,
           content: actionContent,
           timestamp: new Date(),
@@ -929,7 +1132,7 @@ const App: React.FC = () => {
       if (cmd === '/join') {
         if (parts.length < 2) {
           addMessageToContext({
-            id: Date.now(),
+            id: generateUniqueMessageId(),
             nickname: 'system',
             content: 'Usage: /join <channel> (e.g., /join #newchannel)',
             timestamp: new Date(),
@@ -945,7 +1148,7 @@ const App: React.FC = () => {
         if (existingChannel) {
           setActiveContext({ type: 'channel', name: channelName });
           addMessageToContext({
-            id: Date.now(),
+            id: generateUniqueMessageId(),
             nickname: 'system',
             content: `Joined ${channelName}`,
             timestamp: new Date(),
@@ -972,14 +1175,14 @@ const App: React.FC = () => {
           }],
           messages: [],
           topic: '',
-          operators: [currentUserNickname]
+          operators: [...new Set([currentUserNickname])]
         };
         
         setChannels(prev => [...prev, newChannel]);
         setActiveContext({ type: 'channel', name: channelName });
         
         addMessageToContext({
-          id: Date.now(),
+          id: generateUniqueMessageId(),
           nickname: 'system',
           content: `Joined ${channelName}`,
           timestamp: new Date(),
@@ -993,7 +1196,7 @@ const App: React.FC = () => {
       if (cmd === '/part') {
         if (activeContext?.type !== 'channel') {
           addMessageToContext({
-            id: Date.now(),
+            id: generateUniqueMessageId(),
             nickname: 'system',
             content: 'You can only part from channels',
             timestamp: new Date(),
@@ -1006,7 +1209,7 @@ const App: React.FC = () => {
         
         // Add part message
         addMessageToContext({
-          id: Date.now(),
+          id: generateUniqueMessageId(),
           nickname: currentUserNickname,
           content: `left ${activeContext.name}${reason ? `: ${reason}` : ''}`,
           timestamp: new Date(),
@@ -1042,7 +1245,7 @@ const App: React.FC = () => {
       if (cmd === '/nick') {
         if (parts.length < 2) {
           addMessageToContext({
-            id: Date.now(),
+            id: generateUniqueMessageId(),
             nickname: 'system',
             content: 'Usage: /nick <newnickname>',
             timestamp: new Date(),
@@ -1054,7 +1257,7 @@ const App: React.FC = () => {
         const newNickname = parts[1].trim();
         if (newNickname.length < 2 || newNickname.length > 20) {
           addMessageToContext({
-            id: Date.now(),
+            id: generateUniqueMessageId(),
             nickname: 'system',
             content: 'Nickname must be between 2 and 20 characters',
             timestamp: new Date(),
@@ -1070,7 +1273,7 @@ const App: React.FC = () => {
         
         if (isNicknameInUse) {
           addMessageToContext({
-            id: Date.now(),
+            id: generateUniqueMessageId(),
             nickname: 'system',
             content: `Nickname ${newNickname} is already in use`,
             timestamp: new Date(),
@@ -1098,7 +1301,7 @@ const App: React.FC = () => {
         // Add nickname change message to all channels
         channels.forEach(channel => {
           addMessageToContext({
-            id: Date.now(),
+            id: generateUniqueMessageId(),
             nickname: 'system',
             content: `${oldNickname} is now known as ${newNickname}`,
             timestamp: new Date(),
@@ -1112,7 +1315,7 @@ const App: React.FC = () => {
       // Handle /help command
       if (cmd === '/help') {
         addMessageToContext({
-          id: Date.now(),
+          id: generateUniqueMessageId(),
           nickname: 'system',
           content: `Available commands:
 /topic [new topic] - View or change channel topic (operators only)
@@ -1302,6 +1505,8 @@ const App: React.FC = () => {
           content = `Error: API rate limit exceeded. Try reducing simulation speed or disabling typing delays in Settings.`;
         } else if (error.message.includes("PERMISSION_DENIED") || error.message.includes("403")) {
           content = `Error: API key permission denied. Please check your API key is valid and has proper permissions.`;
+        } else if (error.message.includes("CORS") || error.message.includes("NetworkError") || error.message.includes("fetch")) {
+          content = `Error: Network/CORS error. This may be due to browser security policies. The simulation will continue with fallback responses.`;
         } else if (error.message.includes("INVALID_ARGUMENT") || error.message.includes("400")) {
           content = `Error: Invalid API request. This might be a temporary issue with the API service.`;
         } else if (error.message.includes("UNAVAILABLE") || error.message.includes("503")) {
@@ -1340,6 +1545,7 @@ The greeting should be friendly, brief, and in-character for the user who is gre
 The response must be a single line in the format: "nickname: greeting message"
 `;
 
+      console.log('[Simulation Debug] Using aiModel for auto-join:', aiModel);
       const response = await generateChannelActivity(channel, newUserNickname, aiModel);
       if (response) {
         const greetingMessages = response.split('\n').filter(line => line.includes(':'));
@@ -1421,10 +1627,12 @@ The response must be a single line in the format: "nickname: greeting message"
               const joinMessage: Message = {
                 id: generateUniqueMessageId(),
                 nickname: newUser.nickname,
-                content: `joined ${updatedChannel.name}`,
+                content: updatedChannel.name,
                 timestamp: new Date(),
                 type: 'join'
               };
+              console.log(`[Join Debug] Creating join message for ${newUser.nickname} in ${updatedChannel.name}:`, joinMessage);
+              console.log(`[Join Debug] Calling addMessageToContext with context:`, { type: 'channel', name: updatedChannel.name });
               addMessageToContext(joinMessage, { type: 'channel', name: updatedChannel.name });
             }
           });
@@ -1585,7 +1793,7 @@ The response must be a single line in the format: "nickname: greeting message"
       // Keep the last 100 messages to maintain conversation history while preventing staleness
       const updatedChannels = channels.map(channel => 
         channel.name === targetChannel.name 
-          ? { ...channel, messages: channel.messages.slice(-100) }
+          ? { ...channel, messages: channel.messages.slice(-1000) }
           : channel
       );
       setChannels(updatedChannels);
@@ -1593,6 +1801,7 @@ The response must be a single line in the format: "nickname: greeting message"
 
     try {
       simulationLogger.debug(`Generating channel activity for ${targetChannel.name}`);
+      console.log('[Simulation Debug] Using aiModel for channel activity:', aiModel);
       const response = await generateChannelActivity(targetChannel, currentUserNickname, aiModel);
       if (response) {
         const [nickname, ...contentParts] = response.split(':');
@@ -1612,7 +1821,7 @@ The response must be a single line in the format: "nickname: greeting message"
           setTyping(nickname.trim(), false);
           
           const aiMessage: Message = {
-            id: Date.now(),
+            id: generateUniqueMessageId(),
             nickname: nickname.trim(),
             content,
             timestamp: new Date(),
@@ -1633,6 +1842,7 @@ The response must be a single line in the format: "nickname: greeting message"
         simulationLogger.debug(`Burst mode: generating second message for ${targetChannel.name}`);
         setTimeout(async () => {
           try {
+            console.log('[Simulation Debug] Using aiModel for second response:', aiModel);
             const secondResponse = await generateChannelActivity(targetChannel, currentUserNickname, aiModel);
             if (secondResponse) {
               const [nickname, ...contentParts] = secondResponse.split(':');

@@ -16,158 +16,118 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
   - **Flexible Generation**: Users can still have additional languages with random fluency levels
 
 ### Fixed
-- **User Channel Removal Bug**: Fixed issue where users could not be removed from their first assigned channel
-  - **Root Cause**: UserManagement component was not properly propagating channel changes back to the main App state
-  - **Solution**: Updated SettingsModal to properly forward channel changes through the onChannelsChange callback
-  - **Impact**: Users can now be removed from any channel, including their first assigned channel
-- **User List Update Bug**: Fixed issue where user list did not update when users were removed from channels
-  - **Root Cause**: React state calculations were not properly memoized, causing stale references
-  - **Solution**: Wrapped activeChannel, usersInContext, and messagesInContext calculations in useMemo hooks
-  - **Impact**: User list now updates immediately when users are added or removed from channels
-- **React Key Collision Bug**: Fixed "Encountered two children with the same key" error when removing users from channels
-  - **Root Cause**: Potential duplicate users in channel users array causing React key conflicts
-  - **Solution**: Added deduplication logic in usersInContext calculation and improved key generation in UserList
-  - **Impact**: Eliminates React warnings and ensures stable component rendering during user management
-- **Channel-Specific User Lists**: Fixed user list showing all users globally instead of channel-specific users
-  - **Root Cause**: parseChannels function was adding all virtual users to every channel by default
-  - **Solution**: Modified parseChannels to start with empty channels (only current user), allowing proper channel-specific user management
-  - **Impact**: User lists now correctly show only users assigned to the current channel, enabling proper channel-specific conversations
-- **User List Update on Channel Click**: Fixed user list not updating when clicking on different channels
-  - **Root Cause**: Existing saved configuration still had old behavior with all users in every channel
-  - **Solution**: Added migration function to detect and fix old channel data, resetting to proper channel-specific user assignments
-  - **Impact**: User lists now update correctly when switching between channels, showing only relevant users for each channel
-- **Channel User Assignments Reset on Save**: Fixed user channel assignments being reset when pressing save in settings
-  - **Root Cause**: Save process only stored basic channel info (name, topic) but not user assignments
-  - **Solution**: Added channelObjects to AppConfig to store full channel data including user assignments
-  - **Impact**: User channel assignments are now preserved when saving and reloading the application
-- **Chat Log Viewer UI Buttons Disappearing**: Fixed UI buttons disappearing when clearing a channel in chat log viewer
-  - **Root Cause**: `clearChannel` function was completely removing channel metadata, causing channels to disappear from the list
-  - **Solution**: Modified `clearChannel` to keep channel metadata but update it to reflect empty state (0 messages)
-  - **Impact**: UI buttons remain visible and functional after clearing channels, providing better user experience
-- **Chat Log Viewer Buttons Flickering**: Fixed buttons appearing and quickly disappearing when entering chat log viewer
-  - **Root Cause**: Race condition during data loading where buttons were briefly enabled before proper channel selection
-  - **Solution**: Clear channel selection immediately when loading starts and disable buttons during loading state
-  - **Impact**: Buttons now have consistent disabled state during loading, preventing flickering behavior
-- **AI Greeting Repetition Bug**: Fixed users repeating greetings after running simulation for a long time
-  - **Root Cause**: Repetition detection system was treating greeting phrases as repetitive content, causing AI to avoid them and then generate more greetings
-  - **Solution**: Excluded greeting-related messages and phrases from repetition detection in both `detectRepetitivePatterns` and `trackConversationPatterns`
-  - **Impact**: Greetings are now properly excluded from anti-repetition logic, preventing the greeting loop bug
-- **Missing Join/Part Notifications**: Fixed user join and leave notifications not appearing in channels
-  - **Root Cause**: Join/part messages were being added directly to channel messages array instead of using `addMessageToContext` function
-  - **Solution**: Modified `handleUsersChange` to use `addMessageToContext` for join/part messages, ensuring proper message handling and chat log saving
-  - **Impact**: Join/part notifications now appear correctly in channels and are properly saved to chat logs
-- **AI Generating Messages as End User**: Fixed AI system generating messages from the end user when they're the only one on a channel
-  - **Root Cause**: Potential edge case where current user filtering wasn't working properly or current user was included in virtual users
-  - **Solution**: Added enhanced debugging and additional safety checks to prevent AI generation when only current user is in channel
-  - **Impact**: AI will never generate messages from the human user, ensuring proper separation between human and AI interactions
-- **Channel Operators Showing 'you'**: Fixed channel operators list showing 'you' as operator instead of actual human username
-  - **Root Cause**: Default nickname was set to "you" which appeared in operators list when user hadn't configured a proper nickname
-  - **Solution**: Changed default nickname from "you" to "YourNickname" to make it clear this is a placeholder that should be changed
-  - **Impact**: Users now see a clear placeholder nickname that encourages them to set their actual nickname
-- **Auto-Join Users to Empty Channels**: Added automatic user joining when channels only have the end user
-  - **Feature**: Virtual users now automatically join channels that only contain the current user
-  - **Implementation**: Added `autoJoinUsersToEmptyChannels` function that runs during simulation
-  - **User Selection**: Randomly selects 2-4 users from the available user pool to join empty channels
-  - **Channel State Tracking**: Added `assignedChannels` field to User interface to track channel assignments
-  - **Persistence**: User channel assignments are saved to localStorage and restored on app restart
-  - **Impact**: Channels never stay empty for long, ensuring continuous conversation activity
-- **Timestamp Serialization Error**: Fixed "message.timestamp.toISOString is not a function" error when saving channel logs
-  - **Root Cause**: Some messages had timestamps that weren't proper Date objects, causing serialization to fail
-  - **Solution**: Added safety check in `saveChannelLogs` to handle both Date objects and other timestamp formats
-  - **Implementation**: Uses `instanceof Date` check and converts non-Date timestamps to Date objects before serialization
-  - **Impact**: Channel logs now save reliably regardless of timestamp format, preventing runtime errors
-- **Join Notifications Not Visible**: Fixed join notifications not appearing in the selected channel
-  - **Root Cause**: Join messages were being added using stale channel data in `handleUsersChange` function
-  - **Solution**: Modified `handleUsersChange` to use updated channels array when adding join messages
-  - **Implementation**: Moved join message creation inside the `setChannels` callback to ensure fresh channel data
-  - **Debug Logging**: Added console logging to track join message creation and channel updates
-  - **Impact**: Join notifications now appear correctly in the selected channel when users are added
-- **Enhanced Chat Log Export**: Improved chat log export functionality with multiple formats and better UI
-  - **Multiple Export Options**: Added separate buttons for exporting specific channels vs all channels
-  - **CSV Export Support**: Added CSV export format for better data analysis and spreadsheet compatibility
-  - **Export Formats**: JSON (structured data) and CSV (spreadsheet-friendly) formats available
-  - **Improved UI**: Clear button labels and better organization of export options
-  - **File Naming**: Exports include channel name and date in filename for easy identification
-  - **Impact**: Users can now export chat logs in multiple formats for different use cases
-- **Default Nickname Flash Fix**: Fixed default nickname appearing briefly when page loads even with saved configuration
-  - **Root Cause**: State was initialized with DEFAULT_NICKNAME before configuration was loaded asynchronously
-  - **Solution**: Changed state initialization to load saved configuration synchronously using useState initializer functions
-  - **Implementation**: All state variables now check for saved config during initialization instead of after render
-  - **Impact**: No more flash of default nickname - saved nickname appears immediately on page load
-- **AI Generating Messages from Current User**: Fixed AI generating messages from "YourNickname" when it shouldn't exist
-  - **Root Cause**: Channels contained users with old nickname "YourNickname" instead of the actual saved nickname
-  - **Solution**: Added useEffect to update current user nickname in all channels when nickname changes
-  - **Implementation**: Automatically replaces DEFAULT_NICKNAME and "YourNickname" with actual currentUserNickname in channel users
-  - **Debug Logging**: Added console logging to track current user nickname and channel users during simulation
-  - **Impact**: AI will never generate messages from the current user, ensuring proper separation between human and AI interactions
-- **IRC Commands Support**: Fixed and enhanced common IRC command support
-  - **Fixed /me Command**: Moved /me command handling from handleSendMessage to handleCommand for proper structure
-  - **Added /join Command**: Join existing channels or create new ones with /join #channelname
-  - **Added /part Command**: Leave current channel with optional reason using /part [reason]
-  - **Added /nick Command**: Change nickname with /nick newnickname, includes validation and conflict checking
-  - **Enhanced /help Command**: Updated help to show all available commands with usage examples
-  - **Command Structure**: All commands now properly handled in handleCommand function with consistent error messages
-  - **Impact**: Full IRC-like command experience with proper validation and user feedback
-- **User List Update Timing**: Fixed user list not updating immediately when users are added/removed
-  - **Root Cause**: Join message creation logic was using old channel data instead of updated channel data
-  - **Solution**: Fixed handleUsersChange to properly compare old vs new channel state for join messages
-  - **Implementation**: Updated join message logic to check if user is now in channel but wasn't before
-  - **Debug Logging**: Added comprehensive debug logging to track user list updates and channel changes
-  - **Impact**: User list now updates immediately when users are added or removed from channels
-- **React Key Collision Error**: Fixed "Encountered two children with the same key" error when opening configuration window
-  - **Root Cause**: UserManagement component was receiving duplicate users with same nickname, causing React key collisions
-  - **Solution**: Added deduplication logic in UserManagement to filter out duplicate users before rendering
-  - **Implementation**: Created uniqueUsers array by filtering duplicates based on nickname, used for display only
-  - **Debug Logging**: Added console warnings to detect and log duplicate user issues
-  - **Impact**: Configuration window opens without React errors, user list displays correctly without duplicates
-- **Simulation User Selection Bug**: Fixed same user generating multiple messages in a row
-  - **Root Cause**: User selection logic had low probability (30%) of avoiding recent speakers, allowing same user to be selected repeatedly
-  - **Solution**: Improved user selection algorithm with stronger avoidance of recent speakers and last message author
-  - **Implementation**: Increased probability to 80% for less active users, added last speaker avoidance, reduced recent speaker window to 3 messages
-  - **Debug Logging**: Added comprehensive logging to track user selection patterns and recent speakers
-  - **Impact**: More natural conversation flow with better user rotation, prevents single user from dominating the conversation
-- **Simulation User Participation Balance**: Fixed issue where only a few users were talking by rebalancing user selection algorithm
-  - **Root Cause**: Previous fix was too restrictive (80% probability for less active users), preventing many users from participating
-  - **Solution**: Rebalanced user selection with layered approach prioritizing long-term inactive users while allowing all users to participate
-  - **Implementation**: Added long-term inactive users filter (last 10 messages), reduced short-term probability to 50%, added 70% priority for long-term inactive users
-  - **Debug Logging**: Enhanced logging to show long-term inactive users and selection reasoning
-  - **Impact**: More balanced participation with all users getting opportunities to speak while still preventing immediate repetition
-- **Chat Log Manager Button Visibility**: Fixed buttons disappearing when chat log window opens
-  - **Root Cause**: Buttons were being disabled when no channel was selected or during loading, appearing to "disappear" when grayed out
-  - **Solution**: Enhanced button state management and added proper tooltips to explain disabled states
-  - **Implementation**: Added debug logging for button rendering, improved disabled state logic, added tooltips for user feedback
-  - **Debug Logging**: Added comprehensive logging to track button rendering state and channel selection
-  - **Impact**: Buttons remain visible and provide clear feedback about their state, improving user experience
-- **Chat Log Manager Button Flashing**: Fixed buttons flashing and disappearing when selecting channels
-  - **Root Cause**: `loadMessages` function was setting `isLoading` to true every time a channel was selected, causing buttons to be disabled and appear to flash
-  - **Solution**: Removed unnecessary loading state from message loading to prevent button flashing during channel selection
-  - **Implementation**: Modified `loadMessages` to not set `isLoading` state, added debug logging to track message loading
-  - **Debug Logging**: Enhanced logging to show message loading progress and button state changes
-  - **Impact**: Smooth channel selection without button flashing, better user experience
-- **Chat Log Manager Button Visibility**: Fixed buttons remaining hidden after initial load
-  - **Root Cause**: Buttons were dependent on `isLoading` state which could get stuck or have timing issues, causing buttons to remain disabled
-  - **Solution**: Added `isInitialized` state to track when initial data loading is complete, separate from ongoing loading operations
-  - **Implementation**: Added `isInitialized` state, updated button disabled logic to use `!isInitialized` instead of `isLoading`, improved tooltips
-  - **Debug Logging**: Enhanced logging to show initialization state and button rendering conditions
-  - **Impact**: Buttons are visible and functional once data is loaded, better state management
-- **Simulation Greeting Spam Bug**: Fixed users getting stuck spamming greetings
-  - **Root Cause**: Greeting detection was too restrictive, allowing users to repeatedly generate greeting messages without being caught by repetition detection
-  - **Solution**: Enhanced greeting detection with comprehensive patterns and added anti-greeting spam protection
-  - **Implementation**: Expanded greeting phrase detection, added user-specific greeting count tracking, implemented anti-greeting spam prompts for both channel activity and reactions
-  - **Debug Logging**: Added logging to track user greeting counts and anti-spam activation
-  - **Impact**: Prevents users from getting stuck in greeting loops, more natural conversation flow
-- **Multilingual Greeting Detection**: Enhanced greeting spam protection to work with multiple languages
-  - **Root Cause**: Greeting detection only worked for English greetings, allowing users speaking other languages to spam greetings without detection
-  - **Solution**: Added comprehensive multilingual greeting detection covering 16+ languages
-  - **Implementation**: Expanded greeting phrase lists and regex patterns for Spanish, French, German, Italian, Portuguese, Japanese, Chinese, Russian, Arabic, Korean, Dutch, Swedish, Norwegian, Danish, and Finnish
-  - **Languages Supported**: English, Spanish, French, German, Italian, Portuguese, Japanese, Chinese, Russian, Arabic, Korean, Dutch, Swedish, Norwegian, Danish, Finnish
-  - **Impact**: Prevents greeting spam in any supported language, more natural multilingual conversations
-- **Enhanced AI Time Awareness**: Made AI more contextually aware of current season, date, month, and year
-  - **Root Cause**: AI conversations lacked seasonal and temporal context, making them feel disconnected from real-world timing
-  - **Solution**: Enhanced time context system with comprehensive seasonal, date, and holiday awareness
-  - **Implementation**: Enhanced `getTimeOfDayContext` function with season detection, date awareness, holiday recognition, and seasonal topic suggestions
-  - **Features**: Season-based context (spring, summer, autumn, winter), holiday awareness (Christmas, New Year, Valentine's Day, etc.), seasonal topics, and date-specific social context
-  - **Impact**: More realistic and contextually relevant conversations that reflect current time, season, and special occasions
+- **Comprehensive Bug Fixes**: Resolved numerous issues across user management, chat functionality, simulation behavior, and UI components
+  - **User Management**: Fixed user channel removal, user list updates, React key collisions, channel-specific user lists, and user assignment persistence
+  - **Chat Log System**: Fixed UI button visibility, flickering, scrolling issues, message storage limits, and export functionality
+  - **Simulation Behavior**: Fixed AI greeting repetition, user selection balance, greeting spam protection, and multilingual support
+  - **IRC Commands**: Enhanced /me, /join, /part, /nick, /help commands with proper validation and error handling
+  - **Message Handling**: Fixed join/part notifications, timestamp serialization, message ID generation, and current user separation
+  - **UI/UX Improvements**: Fixed button visibility, loading states, nickname flashing, and channel operator display
+  - **AI Context**: Enhanced time awareness, seasonal context, and model selection debugging
+  - **Data Persistence**: Improved channel state tracking, user assignments, and configuration loading
+  - **Performance**: Optimized user selection algorithms, conversation patterns, and state management
+  - **Impact**: Significantly improved stability, user experience, and conversation quality across all features
+- **Enhanced Model Validation Debugging**: Added detailed logging to identify model ID validation issues
+  - **Root Cause**: Model validation function may be incorrectly processing model IDs, causing fallback to default model
+  - **Solution**: Added comprehensive debug logging in `validateModelId` function and model selection handling
+  - **Implementation**: Added logs to show input model ID, validation steps, and final result in `validateModelId` and `handleChange`
+  - **Features**: Debug logs show model ID format, validation process, and available models list
+  - **Impact**: Clear visibility into why model selection might be failing, easier identification of model ID format issues
+- **Fixed User Join Notifications Display**: Resolved issue where user join notifications were not appearing in chat window
+  - **Root Cause**: Join message content format was causing redundant display text, and join messages may not have been properly added to channels
+  - **Solution**: Fixed join message content format and added comprehensive debug logging to track join message creation and addition
+  - **Implementation**: Changed join message content from "joined channelname" to just "channelname", added debug logs in `handleUsersChange` and `addMessageToContext`
+  - **Features**: Join messages now display as "nickname joined channelname" instead of "nickname joined joined channelname", debug logs show join message creation flow
+  - **Impact**: User join notifications now properly appear in chat window when users are added to channels
+- **Fixed AI Model Selector Not Updating**: Resolved issue where AI model selection was not updating the display when changed
+  - **Root Cause**: useEffect dependency array included `config.aiModel`, causing validation logic to run every time the model changed and reset it back to the first available model
+  - **Solution**: Removed `config.aiModel` from useEffect dependency array and added comprehensive debug logging to track model selection changes
+  - **Implementation**: Fixed useEffect dependency to only depend on `availableModels`, added debug logs in `handleChange` and `useEffect` to track model selection flow
+  - **Features**: Model selector now properly updates display when changed, debug logs show model selection process and state changes
+  - **Impact**: AI model selection now works correctly, users can see the selected model ID update in real-time
+- **Fixed Chat Log Statistics Invalid Date Display**: Resolved issue where chat log statistics showed "Invalid Date" for oldest and newest timestamps
+  - **Root Cause**: IndexedDB stores Date objects as strings, and when retrieved, they weren't being properly converted back to Date objects, causing invalid date calculations
+  - **Solution**: Added robust timestamp conversion and validation in `getStats` function and improved date formatting in ChatLogManager
+  - **Implementation**: Enhanced timestamp processing to handle both Date objects and string timestamps, added validation with fallback to current time, improved `formatDate` function with invalid date detection
+  - **Features**: Statistics now show proper dates for oldest and newest messages, debug logging shows timestamp processing details, graceful handling of invalid timestamps
+  - **Impact**: Chat log statistics now display correct date information instead of "Invalid Date"
+- **Added AI Link and Image Support**: Enhanced AI capabilities to post links to websites and images in chat messages
+  - **Root Cause**: AI was limited to text-only messages, missing the ability to share links and images like real chat users
+  - **Solution**: Enhanced AI prompts to include link and image generation, updated message types to support links and images, improved message rendering
+  - **Implementation**: Added `links` and `images` fields to Message interface, enhanced AI system instruction with link/image examples, added URL extraction functions, updated Message component with link/image rendering
+  - **Features**: AI can now share realistic website links and image URLs, links are clickable and open in new tabs, images are displayed inline with fallback to links, proper URL detection for both links and images
+  - **Impact**: More realistic chat simulation with AI users sharing relevant links and images, enhanced user experience with interactive content
+- **Fixed CORS and Network Error Handling**: Resolved CORS (Cross-Origin Resource Sharing) errors when AI API calls fail
+  - **Root Cause**: Browser security policies block direct API calls to external services, causing CORS errors and network failures
+  - **Solution**: Added comprehensive error handling for CORS/network errors, implemented fallback response system, enhanced error messages
+  - **Implementation**: Added `isNetworkError` detection in `utils/config.ts`, enhanced `withRateLimitAndRetries` to handle network errors, created `getFallbackResponse` function for graceful degradation, updated error messages in App.tsx
+  - **Features**: Simulation continues with fallback responses when API fails, user-friendly error messages explain CORS issues, personality-based fallback responses maintain user characteristics
+  - **Impact**: Chat simulation remains functional even when AI API is unavailable, better user experience with clear error explanations
+- **Enhanced AI Link and Image Sharing**: Improved AI prompts to encourage more frequent sharing of links and images
+  - **Root Cause**: AI was too conservative and not naturally inclined to share links and images, making conversations less engaging
+  - **Solution**: Enhanced AI system instructions and prompt construction to actively encourage link and image sharing
+  - **Implementation**: Updated system instruction to be more proactive about sharing content, added 10% chance for explicit link/image sharing in diversity prompts, added 30% chance for link/image encouragement when none shared recently, added 20% chance for link/image sharing in reactions
+  - **Features**: AI now more actively shares relevant links and images, better conversation engagement with multimedia content, realistic URL generation from common hosting services
+  - **Impact**: More engaging and realistic chat simulation with AI users actively sharing relevant content
+- **Enhanced HTML Export with Images**: Added HTML export functionality that preserves images and links in exported chat logs
+  - **Root Cause**: Existing JSON and CSV exports didn't preserve the visual content (images and links) that AI users were sharing
+  - **Solution**: Created comprehensive HTML export system with embedded CSS styling and image rendering
+  - **Implementation**: Updated ChatLogEntry interface to include links and images fields, added handleExportHTML function with image rendering, created responsive HTML template with dark theme styling, added HTML export buttons to UI
+  - **Features**: Images are displayed inline with hover effects and click-to-open functionality, links are clickable and open in new tabs, responsive design with channel grouping, color-coded message types, fallback handling for broken images
+  - **Impact**: Exported chat logs now preserve the full multimedia experience with images and interactive links
+- **Fixed Image Posting Security Issues**: Resolved CORS errors and audio/video play permission errors when AI users post images
+  - **Root Cause**: AI was generating URLs from ad networks and tracking services that triggered CORS errors and audio/video auto-play issues
+  - **Solution**: Enhanced AI prompts to use safer image hosting services, added URL filtering to block unsafe domains, improved error handling for image loading
+  - **Implementation**: Updated AI system instruction to specify safe image hosting services and avoid ad networks, added unsafe URL detection in Message component with warning display, enhanced extractLinksAndImages function to filter out problematic domains, added crossOrigin and loading attributes to images
+  - **Features**: AI now uses safe image hosting services (imgur.com, i.imgur.com, gyazo.com, etc.), unsafe URLs are blocked with warning messages, images load with proper security attributes, audio/video auto-play issues are prevented
+  - **Impact**: Eliminated CORS errors and security warnings, improved user experience with safe image sharing, prevented unwanted audio/video content
+- **Fixed Imgur URL Redirect Issues**: Resolved Imgur links that redirected to front page instead of showing images
+  - **Root Cause**: AI was generating incomplete Imgur URLs (like imgur.com/abc123) that redirect to Imgur's front page instead of displaying the actual image
+  - **Solution**: Enhanced AI prompts with complete URL examples, added automatic URL fixing for incomplete Imgur URLs, improved URL validation
+  - **Implementation**: Updated AI system instruction with proper Imgur URL format examples (i.imgur.com/ID.jpg), added fixImgurUrl function to convert incomplete URLs to direct image links, enhanced Message component to detect and fix incomplete Imgur URLs with user feedback
+  - **Features**: AI now generates complete Imgur URLs with file extensions, automatic URL fixing converts imgur.com/ID to i.imgur.com/ID.jpg, users see feedback when URLs are fixed, proper validation prevents front page redirects
+  - **Impact**: Imgur images now display correctly instead of redirecting to front page, better user experience with working image links, automatic fixing of common URL issues
+- **Enhanced Imgur URL Filtering**: Added comprehensive filtering to prevent Imgur URLs from loading full JavaScript applications
+  - **Root Cause**: Some Imgur URLs were still loading Imgur's full desktop application (main.js) instead of just the image, causing JavaScript errors and audio/video play issues
+  - **Solution**: Added strict URL validation to only allow direct image URLs, enhanced URL fixing to handle more Imgur patterns, added blocking for problematic Imgur URLs
+  - **Implementation**: Added isDirectImageUrl function to validate direct image URLs, enhanced fixImgurUrl to handle gallery/album URLs, added problematic Imgur URL detection with user warnings, added referrerPolicy="no-referrer" to prevent tracking
+  - **Features**: Only direct image URLs (i.imgur.com/ID.jpg) are now processed, problematic Imgur URLs are blocked with warnings, enhanced URL validation prevents JavaScript loading, better error handling for audio/video issues
+  - **Impact**: Eliminated Imgur JavaScript loading errors, prevented audio/video auto-play issues, improved performance by only loading direct images
+- **Complete Imgur URL Blocking**: Implemented comprehensive blocking of all Imgur URLs to prevent JavaScript and audio/video errors
+  - **Root Cause**: Even with filtering, some Imgur URLs were still causing "The play method is not allowed" errors and JavaScript loading issues
+  - **Solution**: Completely blocked all Imgur URLs (imgur.com and i.imgur.com), redirected AI to use alternative image hosting services, added global error handlers to suppress audio/video errors
+  - **Implementation**: Added imgur.com to unsafe domains list, updated AI prompts to use gyazo.com, prnt.sc, imgbb.com instead of Imgur, added global error handlers for audio/video play errors, enhanced Message component to block all Imgur URLs with user warnings
+  - **Features**: All Imgur URLs are now blocked with warning messages, AI uses alternative image hosting services (gyazo.com, prnt.sc, imgbb.com), global error handlers suppress audio/video play errors, users get clear feedback about blocked URLs
+  - **Impact**: Completely eliminated Imgur-related JavaScript and audio/video errors, improved reliability with alternative image hosting services, better user experience with clear error messages
+- **Fixed AI Image Blocking**: Resolved issue where AI-generated images from alternative hosting services were being blocked
+  - **Root Cause**: URL filtering logic was too restrictive, only allowing URLs with file extensions in the path, but many image hosting services (gyazo.com, prnt.sc, imgbb.com) use URLs without file extensions
+  - **Solution**: Updated URL validation patterns to be more flexible, enhanced image detection in Message component, added debug logging to track URL filtering
+  - **Implementation**: Modified isDirectImageUrl function to accept URLs without file extensions from trusted hosting services, updated Message component to detect image hosting services by domain, added comprehensive debug logging for URL processing
+  - **Features**: Alternative image hosting services now work correctly (gyazo.com, prnt.sc, imgbb.com, postimg.cc, imgbox.com, imgchest.com, freeimage.host), flexible URL patterns support both with and without file extensions, debug logging helps identify blocked URLs
+  - **Impact**: AI-generated images now display correctly instead of being blocked, better support for various image hosting URL formats, improved debugging capabilities for URL filtering issues
+- **Enhanced IRC Realism**: Fixed unrealistic conversation patterns where AI users reply to multiple people in the same sentence
+  - **Root Cause**: AI users were generating unrealistic IRC behavior by addressing multiple users in one message (e.g., "Alice and Bob, you're both wrong"), which real IRC users don't do
+  - **Solution**: Enhanced AI prompts to encourage single-user replies, added conversation pattern detection for multi-user replies, implemented IRC realism guidelines
+  - **Implementation**: Added comprehensive IRC conversation pattern guidelines to AI system instructions, enhanced both channel activity and reaction generation prompts with single-user reply instructions, added multi-user reply detection in trackConversationPatterns function, implemented specific warnings against addressing multiple users in one sentence
+  - **Features**: AI now replies to one person at a time like real IRC users, conversation pattern detection identifies unrealistic multi-user replies, enhanced prompts encourage natural IRC conversation flow, specific guidelines prevent addressing multiple users in one message
+  - **Impact**: Improved IRC realism with authentic conversation patterns, eliminated unrealistic multi-user addressing, better user experience with natural IRC behavior, enhanced authenticity of AI-generated conversations
+- **Comprehensive YouTube Link Quality Improvements**: Fixed multiple issues with AI-generated YouTube links including fake URLs, repetitive content, outdated videos, and overused memes
+  - **Root Cause**: AI users were posting various types of problematic YouTube links including fake URLs, repetitive Rick Astley links, outdated videos, and non-existent content
+  - **Solution**: Implemented comprehensive link validation system with anti-repetition measures, real content validation, and anti-meme protection
+  - **Implementation**: 
+    - **Fake Link Prevention**: Added guidelines emphasizing real, existing content only, enhanced prompts with anti-fake content measures, implemented fallback mechanisms for real content
+    - **Anti-Repetition System**: Added YouTube link tracking, implemented anti-repetition measures, enhanced prompts to encourage diverse content across genres and creators
+    - **Rick Astley Spam Prevention**: Removed specific video examples, created dedicated `antiRickAstleyPrompt` variable included in 100% of link sharing prompts, restructured prompt chain for consistent application
+    - **Outdated Content Prevention**: Added guidelines for recent content preference, implemented tracking for potentially outdated links, enhanced prompts to discourage old videos
+    - **Content Quality Enhancement**: Added comprehensive validation guidelines, implemented multiple anti-repetition measures, created fallback options for alternative content types
+  - **Features**: AI now only shares real, existing, current YouTube links, comprehensive anti-repetition system prevents overused content, 100% coverage of anti-Rick Astley measures, enhanced content diversity with fresh, relevant links
+  - **Impact**: Eliminated all problematic YouTube link types (fake, repetitive, outdated, overused), improved user experience with working, diverse content, enhanced conversation quality with relevant, fresh links, better AI behavior consistency
+
+## 1.14.0 - 2025-01-23
+
+### Enhanced
+- **IRC Conversation Realism**: Improved AI conversation patterns to match real IRC behavior
+- **YouTube Link Quality**: Comprehensive improvements to AI-generated YouTube link sharing
 
 ## 1.13.16 - 2025-01-23
 
@@ -237,34 +197,12 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
   - **Perfect Alignment**: All user cards now have identical 2x2 field layout
   - **Better UX**: Predictable field positions regardless of data presence
 
-- **Very Terse Message Truncation**: Fixed AI messages being cut off for terse users
-  - **Increased Token Limits**: Doubled token limits for all verbosity levels
-    - `very_terse`: 50 → 100 tokens
-    - `terse`: 75 → 150 tokens  
-    - `neutral`: 100 → 200 tokens
-    - `verbose`: 300 → 400 tokens
-    - `very_verbose`: 500 → 600 tokens
-  - **Improved Prompts**: Enhanced AI instructions for complete but brief messages
-  - **Better Balance**: Ensures terse users generate complete, meaningful responses
-
-- **Mass Add Users Language Skills Display**: Fixed "object Object" showing in language skills
-  - **Format Conversion**: Fixed legacy format to per-language format conversion in batch generation
-  - **Template Compatibility**: All personality templates now use correct per-language format
-  - **Randomization Fix**: Language and accent randomization now uses proper format structure
-  - **Type Safety**: Added proper type guards and format detection
-  - **Display Accuracy**: Language skills now show correctly (e.g., "English (native), Finnish (intermediate)")
-
-- **React Key Collision Error**: Fixed duplicate message IDs when adding users dynamically
-  - **Unique ID Generator**: Implemented counter-based unique message ID generation
-  - **Collision Prevention**: Eliminated duplicate keys that caused React runtime errors
-  - **Join/Part Messages**: Fixed ID generation for user join and part messages
-  - **Thread Safety**: Used useRef for consistent counter state across renders
-  - **React Compliance**: All message keys now guaranteed unique for proper component identity
-
-- **Build Configuration Error**: Fixed missing file reference in vite.config.ts
-  - **Removed Invalid Reference**: Removed reference to non-existent `ircCommands.ts` file
-  - **Build Success**: Production builds now complete without errors
-  - **Chunk Optimization**: Maintained proper code splitting configuration
+- **Additional Bug Fixes**: Resolved various issues with message truncation, language display, React keys, and build configuration
+  - **Message Truncation**: Fixed AI messages being cut off for terse users by doubling token limits for all verbosity levels
+  - **Language Skills Display**: Fixed "object Object" showing in language skills by correcting format conversion in batch generation
+  - **React Key Collisions**: Fixed duplicate message IDs when adding users dynamically with counter-based unique ID generation
+  - **Build Configuration**: Fixed missing file reference in vite.config.ts causing build failures
+  - **Impact**: Improved message quality, better language display, stable React rendering, and successful production builds
 
 ### Enhanced
 - **Chat Simulation Anti-Repetition System**: Comprehensive conversation diversity improvements
@@ -562,21 +500,13 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 ## 1.11.2 - 2025-01-20
 
 ### Fixed
-- **Export Window Error**: Resolved critical bug where export window would show "an error occurred while opening export window" message
-  - **TypeScript Errors**: Fixed multiple TypeScript compilation errors that were preventing React components from rendering properly
-  - **BatchUserModal**: Fixed `usedNicknames` type from `Set<unknown>` to `Set<string>` for proper type safety
-  - **GeminiService**: Added missing `User` type import that was causing compilation failures
-  - **UsernameGeneration**: Fixed invalid style type `'abstract'` to `'mixed'` in username generation options
+- **Export and UI Stability Fixes**: Resolved critical issues with export functionality and UI components
+  - **Export Window**: Fixed "an error occurred while opening export window" message by resolving TypeScript compilation errors
+  - **Type Safety**: Fixed type issues in BatchUserModal, GeminiService, and UsernameGeneration components
   - **Component Rendering**: All modal components now render correctly without falling back to error boundaries
-  - **Export Functionality**: Users can now successfully access and use all export features (CSV, JSON, HTML)
-- **Typing Indicator Bug**: Fixed issue where typing indicator sometimes showed "AI is typing" instead of specific nickname
-  - **Duplicate Indicators**: Removed generic "AI is typing" message that conflicted with specific nickname indicators
-  - **Nickname Validation**: Enhanced nickname parsing to properly validate non-empty nicknames
-  - **Consistent Behavior**: All message types now use consistent nickname validation logic
-  - **Better Error Handling**: Invalid AI responses no longer cause incorrect typing indicators
-- **Hydration Error**: Fixed React hydration error caused by invalid HTML structure in AI model selector
-  - **Invalid HTML**: Removed `<span>` element inside `<option>` element in model selector
-  - **Valid Structure**: Replaced with template literal for proper HTML compliance
+  - **Typing Indicators**: Fixed generic "AI is typing" messages conflicting with specific nickname indicators
+  - **HTML Structure**: Fixed React hydration error caused by invalid HTML structure in AI model selector
+  - **Impact**: Export functionality now works reliably, UI components render properly, and typing indicators are accurate
 
 ### Enhanced
 - **Type Safety**: Improved overall TypeScript type safety across the application
@@ -591,13 +521,11 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 ## 1.11.1 - 2025-01-20
 
 ### Fixed
-- **Settings Modal Blank Screen Bug**: Resolved critical issue where the screen would go blank when trying to access settings during background simulation
-  - **Simulation Pause**: Background simulation now automatically pauses when settings modal is opened
-  - **Immediate Stop**: Added immediate simulation stop when opening settings to prevent interference
-  - **Safety Checks**: Added multiple safety checks to prevent simulation from running during modal operations
-  - **Error Boundaries**: Added error handling to SettingsModal and ImportExportModal to prevent crashes
-  - **Graceful Recovery**: If modal rendering fails, users now see a helpful error message instead of blank screen
-  - **Simulation Resume**: Simulation automatically resumes when settings modal is closed (unless manually disabled)
+- **Settings Modal Stability**: Fixed blank screen issue when accessing settings during simulation
+  - **Simulation Pause**: Background simulation automatically pauses when settings modal is opened
+  - **Safety Checks**: Added multiple safety checks to prevent simulation interference during modal operations
+  - **Error Handling**: Added error boundaries to prevent crashes and provide graceful recovery
+  - **Impact**: Users can now safely access settings during simulation without blank screens or crashes
 
 ### Enhanced
 - **Modal Stability**: Improved overall stability of modal interfaces during active simulation
@@ -628,26 +556,12 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 ## 1.10.2 - 2025-01-20
 
 ### Fixed
-- **AI Model ID Validation**: Resolved critical API errors caused by invalid model names
-  - **Model ID Extraction**: Added intelligent model ID validation that extracts proper model IDs from display names
-  - **Display Name Handling**: Fixed issue where model selector was passing display names instead of model IDs to API
-  - **Regex Pattern Matching**: Implemented robust pattern matching to extract `gemini-2.5-flash` from complex display names
-  - **Fallback System**: Added automatic fallback to `gemini-2.5-flash` when model ID cannot be determined
-  - **Enhanced Debugging**: Added comprehensive logging to track model ID validation process
-  - **API Call Validation**: Applied model ID validation to all AI generation functions:
-    - `generateChannelActivity()`
-    - `generateReactionToMessage()`
-    - `generatePrivateMessageResponse()`
-    - `generateBatchUsers()`
-    - `generateRandomWorldConfiguration()`
-  - **Settings UI Debugging**: Added model ID display in Settings modal for troubleshooting
-
-### Fixed
-- **Build Asset Reference**: Removed incorrect reference to non-existent `/index.css` in built HTML files
-  - **Root Cause**: `index.html` contained a link to `/index.css` which is not generated by the build process
-  - **Impact**: Eliminated 404 errors and MIME type issues when serving the built application
-  - **Files Updated**: Both `index.html` and `dist/index.html` cleaned up
-  - **Result**: Cleaner build output without missing asset references
+- **AI Model and Build Fixes**: Resolved API errors and build issues
+  - **Model ID Validation**: Fixed API errors by properly extracting model IDs from display names with regex pattern matching
+  - **API Call Validation**: Applied model ID validation to all AI generation functions with automatic fallback system
+  - **Build Asset References**: Removed incorrect reference to non-existent `/index.css` in built HTML files
+  - **Enhanced Debugging**: Added comprehensive logging for model ID validation and troubleshooting
+  - **Impact**: Eliminated API errors, 404 errors, and improved build output quality
 
 ### Enhanced
 - **Error Prevention**: Proactive validation prevents "unexpected model name format" API errors
@@ -925,11 +839,11 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 - **Button Layout**: Reorganized button groups to show Clear All buttons alongside Add buttons for better workflow
 
 ### Fixed
-- **Modal Form Conflicts**: Resolved issue where Add User/Channel buttons were closing the settings window:
-  - Removed form wrapper that was causing submission conflicts
-  - Restructured SettingsModal to use button-based actions instead of form submission
-  - Fixed z-index layering for proper modal stacking
-  - Simplified event handling for better reliability
+- **Modal Form Conflicts**: Resolved issue where Add User/Channel buttons were closing the settings window
+  - **Form Structure**: Removed form wrapper that was causing submission conflicts
+  - **Event Handling**: Restructured SettingsModal to use button-based actions instead of form submission
+  - **Modal Stacking**: Fixed z-index layering for proper modal stacking
+  - **Reliability**: Simplified event handling for better reliability
 
 ## 1.4.0 - 2025-10-20
 
@@ -989,8 +903,11 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 ## 1.2.0 - 2025-10-20
 
 ### Changed
-- **Enhanced API Resilience**: Implemented an automatic retry mechanism with exponential backoff for all API calls. The application will now gracefully handle temporary API rate limit errors (`429 RESOURCE_EXHAUSTED`) by retrying the request a few times before failing, significantly reducing visible errors and improving the simulation's stability.
-- **Smarter Error Feedback**: If the background simulation repeatedly fails even after retries, a single, non-spammy system message will now appear in the affected channel to inform the user. This prevents silent failures without flooding the chat with error messages.
+- **API Resilience and Error Handling**: Enhanced API stability and user feedback
+  - **Retry Mechanism**: Implemented automatic retry with exponential backoff for all API calls
+  - **Rate Limit Handling**: Gracefully handles `429 RESOURCE_EXHAUSTED` errors with intelligent retries
+  - **Error Feedback**: Single, non-spammy system messages inform users of persistent failures
+  - **Impact**: Significantly reduced visible errors and improved simulation stability
 
 ## 1.1.0 - 2025-10-19
 
@@ -998,8 +915,11 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 - **Simulation Speed Control**: Users can now adjust the speed of background AI chatter ('Fast', 'Normal', 'Slow') or turn it 'Off' completely via the Settings modal. This provides granular control over API usage.
 
 ### Changed
-- **Improved API Quota Management**: The simulation now automatically pauses when the application's browser tab is not visible. This, combined with the speed controls, significantly reduces the likelihood of hitting per-minute API rate limits and helps conserve overall quota.
-- **Default Simulation Speed**: The default 'Normal' simulation interval has been increased to 30 seconds to lower the default rate of API requests.
+- **API Quota Management**: Enhanced quota management with automatic pausing when browser tab is not visible
+  - **Tab Visibility**: Simulation automatically pauses when application tab is not visible
+  - **Speed Controls**: Combined with speed controls to reduce API rate limit likelihood
+  - **Default Speed**: Increased default 'Normal' simulation interval to 30 seconds
+  - **Impact**: Significantly reduces API usage and helps conserve overall quota
 
 ## 1.0.0 - 2025-10-19
 
