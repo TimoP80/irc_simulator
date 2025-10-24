@@ -363,9 +363,11 @@ export const generateRandomUser = (): User => {
     status: 'online',
     personality: `${personality}, interested in ${interest}`,
     languageSkills: {
-      fluency: fluencyLevels[Math.floor(Math.random() * fluencyLevels.length)],
-      languages: languages,
-      accent: accent
+      languages: languages.map(lang => ({
+        language: lang,
+        fluency: fluencyLevels[Math.floor(Math.random() * fluencyLevels.length)],
+        accent: Math.random() > 0.7 ? accent : ''
+      }))
     },
     writingStyle: {
       formality: formalityLevels[Math.floor(Math.random() * formalityLevels.length)],

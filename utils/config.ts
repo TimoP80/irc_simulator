@@ -5,6 +5,34 @@ const CONFIG_STORAGE_KEY = 'gemini-irc-simulator-config';
 const CHANNEL_LOGS_STORAGE_KEY = 'station-v-channel-logs';
 
 /**
+ * Checks localStorage quota and estimates available space
+ */
+const checkLocalStorageQuota = (): { available: number; used: number; total: number } => {
+  try {
+    // Estimate total localStorage size
+    let totalSize = 0;
+    for (let key in localStorage) {
+      if (localStorage.hasOwnProperty(key)) {
+        totalSize += localStorage[key].length;
+      }
+    }
+    
+    // Most browsers have 5-10MB limit, we'll assume 5MB for safety
+    const estimatedTotal = 5 * 1024 * 1024; // 5MB
+    const available = estimatedTotal - totalSize;
+    
+    return {
+      available,
+      used: totalSize,
+      total: estimatedTotal
+    };
+  } catch (error) {
+    console.warn('Could not check localStorage quota:', error);
+    return { available: 0, used: 0, total: 0 };
+  }
+};
+
+/**
  * Loads the application configuration from localStorage.
  * @returns The saved AppConfig or null if none is found.
  */
@@ -41,7 +69,11 @@ const INITIAL_BACKOFF_MS = 2000; // 2 seconds
 
 const isRateLimitError = (error: unknown): boolean => {
   if (error instanceof Error) {
-    return error.message.includes("429") || error.message.includes("RESOURCE_EXHAUSTED");
+    return error.message.includes("429") || 
+           error.message.includes("RESOURCE_EXHAUSTED") ||
+           error.message.includes("quota") ||
+           error.message.includes("rate limit") ||
+           error.message.includes("too many requests");
   }
   return false;
 };
@@ -62,13 +94,13 @@ const isNetworkError = (error: unknown): boolean => {
  * @returns The result of the API call.
  * @throws Throws an error if retries are exhausted or a non-rate-limit error occurs.
  */
-export const withRateLimitAndRetries = async <T>(apiCall: () => Promise<T>): Promise<T> => {
+export const withRateLimitAndRetries = async <T>(apiCall: () => Promise<T>, context?: string): Promise<T> => {
   let attempt = 0;
   while (attempt <= MAX_RETRIES) {
     try {
       return await apiCall();
     } catch (error) {
-      console.error(`[API Error] Attempt ${attempt + 1}/${MAX_RETRIES + 1} failed:`, error);
+      console.error(`[API Error] Attempt ${attempt + 1}/${MAX_RETRIES + 1} failed${context ? ` for ${context}` : ''}:`, error);
       
       if (isNetworkError(error)) {
         console.warn(`[API Error] Network/CORS error detected. This may be due to browser security policies.`);
@@ -82,6 +114,16 @@ export const withRateLimitAndRetries = async <T>(apiCall: () => Promise<T>): Pro
         console.warn(`Rate limit hit. Retrying in ${Math.round(delay / 1000)}s... (Attempt ${attempt}/${MAX_RETRIES})`);
         await new Promise(resolve => setTimeout(resolve, delay));
       } else {
+        // Provide specific error messages for different types of errors
+        if (error instanceof Error) {
+          if (error.message.includes("RESOURCE_EXHAUSTED")) {
+            throw new Error(`AI service quota exhausted. Please try again later or check your API key limits.`);
+          } else if (error.message.includes("quota")) {
+            throw new Error(`AI service quota exceeded. Please try again later.`);
+          } else if (error.message.includes("429")) {
+            throw new Error(`Rate limit exceeded. Please wait a moment and try again.`);
+          }
+        }
         throw error;
       }
     }
@@ -255,6 +297,10 @@ export const initializeStateFromConfig = (config: AppConfig) => {
  */
 export const saveChannelLogs = (channels: Channel[]) => {
   try {
+    // Check quota before attempting to save
+    const quota = checkLocalStorageQuota();
+    console.log(`[Config Debug] localStorage quota: ${Math.round(quota.used / 1024)}KB used, ${Math.round(quota.available / 1024)}KB available`);
+    
     // Convert Date objects to strings for JSON serialization
     const serializedChannels = channels.map(channel => ({
       ...channel,
@@ -278,9 +324,100 @@ export const saveChannelLogs = (channels: Channel[]) => {
       }))
     }));
     
-    localStorage.setItem(CHANNEL_LOGS_STORAGE_KEY, JSON.stringify(serializedChannels));
+    const dataToSave = JSON.stringify(serializedChannels);
+    const dataSize = new Blob([dataToSave]).size;
+    
+    // Check if data is too large for localStorage
+    const maxSize = 4 * 1024 * 1024; // 4MB limit (leave 1MB buffer)
+    
+    if (dataSize > maxSize || dataSize > quota.available) {
+      console.warn(`Channel logs data is too large (${Math.round(dataSize / 1024)}KB), compressing...`);
+      
+      // Clean up old logs first
+      cleanupOldLogs();
+      
+      // Compress data by limiting message history
+      const compressedChannels = channels.map(channel => ({
+        ...channel,
+        messages: channel.messages.slice(-500) // Keep only last 500 messages per channel
+      }));
+      
+      const compressedData = JSON.stringify(compressedChannels.map(channel => ({
+        ...channel,
+        messages: channel.messages.map(message => ({
+          ...message,
+          timestamp: message.timestamp instanceof Date 
+            ? message.timestamp.toISOString() 
+            : new Date(message.timestamp).toISOString()
+        }))
+      })));
+      
+      const compressedSize = new Blob([compressedData]).size;
+      console.log(`Compressed data size: ${Math.round(compressedSize / 1024)}KB`);
+      
+      if (compressedSize > maxSize) {
+        console.warn('Data still too large after compression, using ultra-compression...');
+        
+        // Try with even more aggressive compression
+        const ultraCompressedChannels = channels.map(channel => ({
+          ...channel,
+          messages: channel.messages.slice(-100) // Keep only last 100 messages per channel
+        }));
+        
+        const ultraCompressedData = JSON.stringify(ultraCompressedChannels.map(channel => ({
+          ...channel,
+          messages: channel.messages.map(message => ({
+            ...message,
+            timestamp: message.timestamp instanceof Date 
+              ? message.timestamp.toISOString() 
+              : new Date(message.timestamp).toISOString()
+          }))
+        })));
+        
+        localStorage.setItem(CHANNEL_LOGS_STORAGE_KEY, ultraCompressedData);
+        console.log('Saved ultra-compressed channel logs');
+        return;
+      }
+      
+      localStorage.setItem(CHANNEL_LOGS_STORAGE_KEY, compressedData);
+      console.log('Saved compressed channel logs');
+      return;
+    }
+    
+    localStorage.setItem(CHANNEL_LOGS_STORAGE_KEY, dataToSave);
+    console.log(`Successfully saved channel logs (${Math.round(dataSize / 1024)}KB)`);
   } catch (error) {
-    console.error("Failed to save channel logs to localStorage:", error);
+    if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+      console.warn('localStorage quota exceeded, attempting to clear old data and retry...');
+      
+      // Clear old logs and try again with compressed data
+      clearChannelLogs();
+      
+      try {
+        // Try with compressed data
+        const compressedChannels = channels.map(channel => ({
+          ...channel,
+          messages: channel.messages.slice(-200) // Keep only last 200 messages per channel
+        }));
+        
+        const compressedData = JSON.stringify(compressedChannels.map(channel => ({
+          ...channel,
+          messages: channel.messages.map(message => ({
+            ...message,
+            timestamp: message.timestamp instanceof Date 
+              ? message.timestamp.toISOString() 
+              : new Date(message.timestamp).toISOString()
+          }))
+        })));
+        
+        localStorage.setItem(CHANNEL_LOGS_STORAGE_KEY, compressedData);
+        console.log('Successfully saved compressed channel logs after quota exceeded');
+      } catch (retryError) {
+        console.error("Failed to save channel logs even after compression:", retryError);
+      }
+    } else {
+      console.error("Failed to save channel logs to localStorage:", error);
+    }
   }
 };
 
@@ -317,6 +454,38 @@ export const clearChannelLogs = () => {
     localStorage.removeItem(CHANNEL_LOGS_STORAGE_KEY);
   } catch (error) {
     console.error("Failed to clear channel logs from localStorage:", error);
+  }
+};
+
+/**
+ * Automatically cleans up old channel logs to prevent quota exceeded errors
+ */
+export const cleanupOldLogs = () => {
+  try {
+    const quota = checkLocalStorageQuota();
+    const quotaThreshold = 0.8; // Clean up when 80% full
+    
+    if (quota.used / quota.total > quotaThreshold) {
+      console.log('localStorage quota is getting full, cleaning up old logs...');
+      
+      const savedLogs = localStorage.getItem(CHANNEL_LOGS_STORAGE_KEY);
+      if (savedLogs) {
+        const channels = JSON.parse(savedLogs);
+        
+        // Keep only recent messages (last 200 per channel)
+        const cleanedChannels = channels.map((channel: any) => ({
+          ...channel,
+          messages: channel.messages.slice(-200)
+        }));
+        
+        const cleanedData = JSON.stringify(cleanedChannels);
+        localStorage.setItem(CHANNEL_LOGS_STORAGE_KEY, cleanedData);
+        
+        console.log(`Cleaned up old logs, reduced from ${Math.round(quota.used / 1024)}KB to ${Math.round(new Blob([cleanedData]).size / 1024)}KB`);
+      }
+    }
+  } catch (error) {
+    console.error("Failed to cleanup old logs:", error);
   }
 };
 

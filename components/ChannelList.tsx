@@ -10,9 +10,10 @@ interface ChannelListProps {
   onSelectContext: (context: ActiveContext) => void;
   onOpenSettings: () => void;
   onOpenChatLogs?: () => void;
+  onResetSpeakers?: () => void;
 }
 
-export const ChannelList: React.FC<ChannelListProps> = ({ channels, privateMessageUsers, activeContext, onSelectContext, onOpenSettings, onOpenChatLogs }) => {
+export const ChannelList: React.FC<ChannelListProps> = ({ channels, privateMessageUsers, activeContext, onSelectContext, onOpenSettings, onOpenChatLogs, onResetSpeakers }) => {
   const getButtonClass = (isActive: boolean) => 
     `w-full text-left px-4 py-2 text-sm truncate flex items-center gap-2 rounded-md transition-colors duration-150 ${
       isActive ? 'bg-indigo-500 text-white' : 'text-gray-300 hover:bg-gray-700'
@@ -77,6 +78,18 @@ export const ChannelList: React.FC<ChannelListProps> = ({ channels, privateMessa
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
             <span>Chat Logs</span>
+          </button>
+        )}
+        {onResetSpeakers && (
+          <button 
+            onClick={onResetSpeakers} 
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm rounded-md transition-colors duration-150 bg-orange-700 text-orange-300 hover:bg-orange-600"
+            aria-label="Reset user selection to force more diverse conversations"
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span>Reset Speakers</span>
           </button>
         )}
       </div>

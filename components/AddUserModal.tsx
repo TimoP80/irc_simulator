@@ -180,12 +180,18 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
       return;
     }
 
+    const filteredLanguages = (languageSkills || []).filter(lang => lang && lang.language && lang.language.trim() !== '');
+    
     const newUser: User = {
       nickname: nickname.trim(),
       status: 'online',
       personality: personality.trim(),
       languageSkills: {
-        languages: (languageSkills || []).filter(lang => lang && lang.language && lang.language.trim() !== '')
+        languages: filteredLanguages.length > 0 ? filteredLanguages : [{ 
+          language: 'English', 
+          fluency: 'native', 
+          accent: '' 
+        }]
       },
       writingStyle
     };

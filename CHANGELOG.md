@@ -71,6 +71,358 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
   - **Timing Improvements**: Added random delays (2-7 seconds) for additional activity to simulate natural conversation patterns
   - **Impact**: Much more diverse and balanced conversations with multiple users participating regularly
 
+- **Critical Duplicate User Fix**: Fixed React key collision error caused by duplicate users in channels
+  - **Problem**: "Encountered two children with the same key, `CircuitSynth`" error due to duplicate users in channel user lists
+  - **Root Cause**: `autoJoinUsersToEmptyChannels` function was adding users to channels without checking for existing duplicates
+  - **Solution**: Implemented comprehensive duplicate prevention system with filtering and deduplication
+  - **Duplicate Prevention**: Added filtering in `autoJoinUsersToEmptyChannels` to exclude users already in channels
+  - **Deduplication Function**: Created `deduplicateChannelUsers` helper function to remove duplicates from channel user lists
+  - **Applied Everywhere**: Added deduplication to all channel update operations (`autoJoinUsersToEmptyChannels`, `handleUsersChange`)
+  - **Debug Logging**: Added warning messages when duplicates are detected and removed
+  - **Impact**: Eliminated React key collision errors and ensured unique user keys across all components
+
+- **Enhanced User Selection & Reset System**: Improved conversation diversity with manual reset option and better user rotation
+  - **Problem**: Single virtual users still dominating conversations despite previous fixes, with other users not reacting
+  - **Solution**: Implemented comprehensive user selection improvements and manual reset functionality
+  - **Reset Speakers Button**: Added "Reset Speakers" button in the sidebar to manually reset user selection tracking
+  - **Reset Function**: Created `resetLastSpeakers` function that clears recent message history to reset speaker tracking
+  - **Less Restrictive Selection**: Reduced inactive user preference from 60% to 40% and less active user preference from 50% to 30%
+  - **Shorter Tracking Windows**: Reduced recent speaker tracking from 5 to 3 messages and long-term from 10 to 7 messages
+  - **Overactive User Detection**: Added logic to detect users who have spoken 3+ times in last 5 messages and force rotation
+  - **Time-Based Balance**: Reduced introspective user preference from 60% to 40% for more balanced selection
+  - **Force Rotation**: When overactive users are detected, system automatically filters them out and forces other users to speak
+  - **Debug Logging**: Added detailed logging for overactive user detection and rotation forcing
+  - **Impact**: Much more diverse conversations with automatic user rotation and manual reset capability
+
+- **Critical User Selection Safety Fix**: Fixed undefined user error in user selection algorithm
+  - **Problem**: "can't access property 'nickname', randomUser is undefined" error when user selection algorithm failed
+  - **Root Cause**: Overactive user detection could filter out all users, leaving empty `candidateUsers` array
+  - **Solution**: Added comprehensive safety checks and fallback logic to prevent undefined user selection
+  - **Safety Checks**: Added validation to ensure users have valid `nickname` properties before processing
+  - **Fallback Logic**: Enhanced overactive user filtering with multiple fallback levels to prevent empty candidate arrays
+  - **Error Handling**: Added detailed error logging when no valid users are found, including candidate arrays and overactive users
+  - **Robust Selection**: System now guarantees a valid user selection even when all users are filtered out
+  - **Debug Information**: Enhanced logging shows candidate users, shuffled users, and overactive users for debugging
+  - **Impact**: Eliminated undefined user errors and ensured reliable user selection in all scenarios
+
+- **Major User Selection Algorithm Overhaul**: Completely redesigned user selection to ensure diverse conversations
+  - **Problem**: User selection logic was still too restrictive, causing same users to dominate conversations
+  - **Solution**: Implemented much more balanced and less restrictive user selection algorithm
+  - **Random Selection**: Added 30% chance for completely random user selection to ensure diversity
+  - **Reduced Probabilities**: Significantly reduced inactive user preference from 40% to 20% and less active from 30% to 15%
+  - **Shorter Tracking Windows**: Reduced recent speaker tracking from 3 to 2 messages and long-term from 7 to 5 messages
+  - **Gentle Overactive Detection**: Increased overactive user threshold from 3 to 4 messages in last 6 messages
+  - **Time-Based Balance**: Reduced introspective user preference from 40% to 20% for more balanced selection
+  - **Natural Flow**: Algorithm now allows much more natural conversation flow with less artificial restrictions
+  - **Debug Logging**: Added logging for random selection usage to track diversity improvements
+  - **Impact**: Much more diverse conversations with all users participating regularly and naturally
+
+- **Language Skills Format Consistency Fix**: Fixed imported users defaulting to English despite language settings
+  - **Problem**: Imported users were defaulting to English with native fluency regardless of their language skill settings
+  - **Root Cause**: Multiple functions were using legacy language skills format instead of per-language format
+  - **Solution**: Updated all user generation and parsing functions to use consistent per-language format
+  - **parseUsersFromText**: Fixed to use per-language format with languages array structure
+  - **generateRandomUser**: Updated to use per-language format instead of legacy format
+  - **generateRandomWorldConfiguration**: Fixed AI schema to use per-language format for language skills
+  - **Format Consistency**: All user generation functions now use the same per-language format structure
+  - **Language Preservation**: User language settings are now properly preserved during import and generation
+  - **Impact**: Imported users now maintain their correct language skills instead of defaulting to English
+
+- **AI Language Override Fix**: Fixed AI system ignoring user language skills when personality descriptions are in English
+  - **Problem**: Users with English personality descriptions were defaulting to English communication regardless of their language skills
+  - **Root Cause**: AI system was being influenced by personality description language instead of respecting user language skills
+  - **Solution**: Enhanced AI prompts with explicit language instructions to prioritize language skills over personality description language
+  - **Language Instruction**: Added explicit "LANGUAGE INSTRUCTION" to all AI prompts emphasizing use of language skills over personality description language
+  - **Debug Logging**: Added detailed logging to track user language skills, languages, and primary language determination
+  - **Prompt Enhancement**: Updated `generateChannelActivity`, `generateReactionToMessage`, and `generatePrivateMessageResponse` with language override instructions
+  - **Language Priority**: AI now explicitly instructed to ignore personality description language and use language skills instead
+  - **Impact**: Users now communicate in their configured language skills regardless of personality description language
+
+- **Missing Import Fix**: Fixed "isLegacyFormat is not defined" error in AI service
+  - **Problem**: "isLegacyFormat is not defined" error when running simulation
+  - **Root Cause**: Missing import of `isLegacyFormat` function in `services/geminiService.ts`
+  - **Solution**: Added `isLegacyFormat` to the import statement from `../types`
+  - **Import Statement**: Updated import to include `isLegacyFormat` alongside other type utility functions
+  - **Impact**: Simulation now runs without import errors and language format detection works correctly
+
+- **Undefined Language Skills Fix**: Fixed users with undefined languageSkills causing simulation failures
+  - **Problem**: Users with undefined `languageSkills` were causing "No languageSkills, returning English" errors
+  - **Root Cause**: Some users were being created without proper `languageSkills` property or with empty language arrays
+  - **Solution**: Added comprehensive safety checks and fallback mechanisms for undefined or empty language skills
+  - **Safety Check in AI Service**: Added check in `generateChannelActivity` to detect and fix undefined `languageSkills`
+  - **User Creation Fix**: Updated `AddUserModal.tsx` to ensure users always have at least one language (defaults to English)
+  - **getAllLanguages Enhancement**: Added safety checks to handle empty language arrays and return English as fallback
+  - **Debug Logging**: Enhanced logging to show when users have undefined language skills for easier debugging
+  - **Impact**: Simulation now handles users with missing or malformed language skills gracefully
+
+- **Language Skills Debug Enhancement**: Added comprehensive debug logging to track user data persistence
+  - **Problem**: Users with defined language skills were still showing as undefined in simulation
+  - **Root Cause**: Potential mismatch between saved user objects and loaded user objects
+  - **Solution**: Added detailed debug logging to track user data flow from settings to simulation
+  - **Settings Debug**: Added logging in `SettingsModal.tsx` to show what user data is being saved
+  - **Config Debug**: Added logging in `utils/config.ts` to show how user data is being loaded
+  - **Data Flow Tracking**: Debug logs now show userObjects availability, count, and languageSkills status
+  - **Impact**: Easier debugging of user data persistence issues and language skills problems
+
+- **User Management Language Skills Display Fix**: Fixed "unknown" text showing in user management interface
+  - **Problem**: User management interface showed "unknown" next to "AI User" for all users
+  - **Root Cause**: Code was trying to access old legacy format `user.languageSkills.fluency` instead of new format `user.languageSkills.languages[0].fluency`
+  - **Solution**: Updated `UserManagement.tsx` to use correct language skills format
+  - **Code Change**: Changed `user.languageSkills?.fluency` to `user.languageSkills?.languages?.[0]?.fluency`
+  - **Impact**: User management interface now correctly displays language fluency levels (native, advanced, intermediate, beginner)
+
+- **Simulation Language Skills Debug Enhancement**: Added comprehensive debug logging to track user data flow from settings to simulation
+  - **Problem**: Simulation was returning no language skills despite users having them defined in configuration
+  - **Root Cause**: Potential data loss between settings save and simulation execution
+  - **Solution**: Added detailed debug logging throughout the user data flow pipeline
+  - **Settings Save Debug**: Added logging in `App.tsx` handleSaveSettings to show what user data is being received
+  - **Config Loading Debug**: Enhanced logging in `utils/config.ts` to show userObjects vs text parsing usage
+  - **Simulation Debug**: Added logging in `App.tsx` runSimulation to show user language skills in channels
+  - **Data Flow Tracking**: Debug logs now show userObjects availability, language skills status, and channel user data
+  - **Impact**: Easier identification of where user language skills are being lost in the data flow
+
+- **Auto-Join Language Skills Debug Enhancement**: Added debug logging to track user language skills during channel auto-join process
+  - **Problem**: Users were losing language skills when being auto-joined to channels
+  - **Root Cause**: Language skills data was being lost during the `autoJoinUsersToEmptyChannels` process
+  - **Solution**: Added comprehensive debug logging to track language skills at each step of the auto-join process
+  - **Available Users Debug**: Added logging to show language skills of available users before selection
+  - **Users to Join Debug**: Added logging to show language skills of users being selected to join channels
+  - **Channel Addition Debug**: Added logging to show language skills of users being added to channels
+  - **Data Integrity Tracking**: Debug logs now show language skills status throughout the auto-join pipeline
+  - **Impact**: Easier identification of where language skills are being lost during channel user assignment
+
+- **Settings Modal Language Skills Debug Enhancement**: Added debug logging to track user language skills during settings modal initialization
+  - **Problem**: Users were being loaded with English language skills instead of their configured Finnish language skills
+  - **Root Cause**: Settings modal was falling back to text parsing which defaults to English instead of using saved userObjects
+  - **Solution**: Added comprehensive debug logging to track user data source during settings modal initialization
+  - **Initialization Debug**: Added logging to show whether currentUsers, userObjects, or text parsing is being used
+  - **Data Source Tracking**: Debug logs now show which data source is being used and the resulting language skills
+  - **Fallback Detection**: Debug logs show when the system falls back to text parsing (which defaults to English)
+  - **Impact**: Easier identification of why users are being loaded with English instead of their configured language skills
+
+- **Config Loading Language Skills Debug Enhancement**: Added detailed debug logging to track user language skills during config loading and app initialization
+  - **Problem**: Users were being loaded with English language skills despite having Finnish language skills in saved config
+  - **Root Cause**: Language skills data was being lost during the config loading or app initialization process
+  - **Solution**: Added comprehensive debug logging to track language skills at each step of the loading process
+  - **Config Loading Debug**: Added logging to show actual language and fluency values during config loading
+  - **App Initialization Debug**: Added logging to show language skills when users are loaded in the main app
+  - **Language Content Tracking**: Debug logs now show the actual language and fluency values, not just presence
+  - **Impact**: Easier identification of where Finnish language skills are being lost in the loading pipeline
+
+- **User Mismatch Debug Enhancement**: Added debug logging to track user mismatch between config window and simulation
+  - **Problem**: Users shown in configuration window did not match users loaded in simulation, causing React key errors
+  - **Root Cause**: Mismatch between users in config window and users actually used in simulation
+  - **Solution**: Added comprehensive debug logging to track user data flow and identify mismatches
+  - **Settings Save Debug**: Added logging to show user nicknames and language skills when settings are saved
+  - **Simulation Debug**: Added logging to show virtualUsers count, nicknames, and language skills during simulation
+  - **User Comparison**: Debug logs now show user nicknames and language skills at each step for comparison
+  - **Impact**: Easier identification of user data mismatches between config window and simulation
+
+- **Debug Logging Cleanup**: Removed excessive debug logging after resolving language skills issue
+  - **Problem**: Console was cluttered with extensive debug logging used for troubleshooting
+  - **Root Cause**: Debug logging was added to troubleshoot language skills issue, but is no longer needed
+  - **Solution**: Removed excessive debug logging while keeping essential logging for normal operation
+  - **Cleaned Up**: Removed debug logs from config loading, app initialization, settings modal, and auto-join processes
+  - **Kept Essential**: Maintained important logging for simulation, AI model selection, and error handling
+  - **Impact**: Cleaner console output while maintaining debugging capability for future issues
+
+- **Image URL Consistency Fix**: Fixed issue where rendered images differed from actual URLs
+  - **Problem**: Virtual users posted images that showed different content in chat vs. when clicking the URL
+  - **Root Cause**: AI was using random image services (picsum.photos, httpbin.org) that return different images each time
+  - **Solution**: Switched to via.placeholder.com for consistent, static placeholder images
+  - **AI Prompt Updates**: Updated all AI prompts to use via.placeholder.com instead of random image services
+  - **URL Filtering**: Updated URL filtering to allow via.placeholder.com and block random image services
+  - **Impact**: Images now show consistent content both in chat and when clicking the URL
+
+- **Input Field Freezing Fix**: Fixed issue where user text field would freeze during simulation
+  - **Problem**: User text input field would become unresponsive and unable to send messages during simulation
+  - **Root Cause**: AI API calls could hang or fail, leaving `isLoading` state stuck at `true`, disabling the input field
+  - **Solution**: Added comprehensive input protection mechanisms
+  - **Duplicate Request Prevention**: Added check to prevent multiple simultaneous message sends
+  - **Timeout Protection**: Added 30-second timeout to automatically reset loading state if AI calls hang
+  - **Global Error Handling**: Added error handlers to reset loading state on unhandled errors or page unload
+  - **Manual Reset Function**: Added `resetLoadingState` function for manual recovery if needed
+  - **Impact**: Input field now remains responsive even when AI calls fail or hang
+
+- **IRC Bot Behavior Simulation**: Added comprehensive bot support with AI image generation and informational features
+  - **Bot User Type**: Added `userType: 'bot'` to distinguish bots from virtual users
+  - **Bot Commands**: Implemented 12 bot commands for various functionalities
+  - **AI Image Generation**: Added `!image` command for AI-generated image descriptions and placeholders
+  - **Informational Features**: Added weather (`!weather`), time (`!time`), info (`!info`), and help (`!help`) commands
+  - **Entertainment Features**: Added quote (`!quote`), joke (`!joke`), and fact (`!fact`) commands
+  - **Utility Features**: Added translation (`!translate`), calculation (`!calc`), and search (`!search`) commands
+  - **Bot Service**: Created comprehensive `botService.ts` with command handlers and AI integration
+  - **Default Bot Users**: Added 4 default bot users (ImageBot, InfoBot, FunBot, UtilBot) with specialized capabilities
+  - **Bot Message Styling**: Added special visual styling for bot messages with indicators and command badges
+  - **Security**: Implemented safe math evaluation for calculator commands
+  - **Bot Management UI**: Added comprehensive bot configuration interface in settings
+  - **Bot Creation Form**: Added `AddBotModal` with bot-specific fields and templates
+  - **Bot Templates**: Added 4 pre-configured bot templates (ImageBot, InfoBot, FunBot, UtilBot)
+  - **Bot Management Interface**: Added `BotManagement` component for creating, editing, and deleting bots
+  - **AI Bot Generation**: Added AI-powered bot personality generation using Gemini
+  - **Impact**: Users can now interact with AI-powered bots for images, information, entertainment, and utilities
+
+- **Image Generation Service Integration**: Fixed bot image generation to use proper image generation APIs
+  - **Problem**: Bot image generation was failing with "ai.getGenerativeModel is not a function" error
+  - **Root Cause**: Gemini API doesn't support image generation, was incorrectly trying to use it for image creation
+  - **Solution**: Created dedicated `imageGenerationService.ts` with support for multiple providers
+  - **Nano Banana Integration**: Added support for Nano Banana Stable Diffusion API
+  - **Placeholder Service**: Added safe placeholder image generation for testing
+  - **Configuration UI**: Added image generation settings to the settings modal
+  - **Provider Selection**: Users can choose between placeholder, Nano Banana, Imagen, and DALLE
+  - **API Key Management**: Secure API key configuration for image generation services
+  - **Error Handling**: Proper error handling and fallback for image generation failures
+  - **Impact**: Bot image generation now works correctly with proper image generation services
+
+- **CORS Error Handling for Image Generation**: Fixed CORS errors and improved error handling for image generation services
+  - **Problem**: Image generation was failing with CORS errors when using external APIs like Nano Banana
+  - **Root Cause**: External image generation APIs may not allow cross-origin requests from browser applications
+  - **Solution**: Enhanced error handling and user guidance for CORS issues
+  - **Error Detection**: Added specific error detection for CORS, network, and 404 errors
+  - **User Guidance**: Added helpful error messages that guide users to use placeholder service
+  - **Settings Warnings**: Added CORS warnings in settings modal to inform users about potential issues
+  - **Fallback Service**: Placeholder service works without CORS issues for testing and development
+  - **Impact**: Users get clear guidance when CORS issues occur and can fall back to working alternatives
+
+- **Nano Banana API Endpoint Correction**: Fixed incorrect API endpoint and improved CORS error handling
+  - **Problem**: Nano Banana API was using incorrect endpoint `/generate` instead of `/v1/generate`
+  - **Root Cause**: API endpoint mismatch causing 404 errors and network failures
+  - **Solution**: Updated default base URL to use correct `/v1/generate` endpoint
+  - **Error Handling**: Enhanced error messages to guide users about CORS limitations
+  - **User Guidance**: Added clear warnings about browser CORS limitations and proxy server requirements
+  - **Settings UI**: Updated default base URL in settings to use correct endpoint
+  - **Fallback Service**: Placeholder service remains as reliable fallback for testing
+  - **Impact**: Users get correct API endpoints and clear guidance about CORS limitations
+
+- **Nano Banana Correct Implementation**: Fixed Nano Banana to use Google GenAI SDK instead of incorrect API endpoints
+  - **Problem**: Nano Banana was implemented as a separate API service, but it actually uses Google GenAI SDK
+  - **Root Cause**: Misunderstanding of Nano Banana architecture - it's a Google GenAI model, not a separate API
+  - **Solution**: Updated implementation to use Google GenAI SDK with `gemini-2.5-flash-image-preview` model
+  - **Correct Usage**: Based on [official Nano Banana JavaScript guide](https://gist.github.com/patrickloeber/0f46c39d86e83c9c9cb16440b2655353)
+  - **Dynamic Import**: Added dynamic import of Google GenAI SDK to avoid browser issues
+  - **Data URL Conversion**: Convert base64 image data to data URLs for browser display
+  - **Settings UI**: Updated settings to reflect that Nano Banana uses Google GenAI SDK directly
+  - **No Base URL**: Removed base URL configuration since Nano Banana uses Google's infrastructure
+  - **Impact**: Nano Banana now works correctly using the proper Google GenAI SDK implementation
+
+- **Data URL Image Display Fix**: Fixed base64 image data to display as actual images instead of text
+  - **Problem**: Generated images were showing as base64 text strings instead of displaying as images
+  - **Root Cause**: Message component's `renderContent` function only handled `https?://` URLs, not `data:` URLs
+  - **Solution**: Updated `renderContent` function to properly handle data URLs (base64 images)
+  - **Data URL Detection**: Added regex pattern to detect `data:[^;]+;base64,` URLs
+  - **Content Rendering**: Data URLs now show as "[Generated Image]" placeholder in content
+  - **Image Display**: Images are properly displayed through the `renderImages()` function
+  - **Combined Regex**: Updated URL splitting to handle both HTTP URLs and data URLs
+  - **Impact**: Generated images now display as actual images instead of base64 text strings
+
+- **Duplicate Generated Image Text Fix**: Fixed duplicate "[Generated Image]" text appearing in bot messages
+  - **Problem**: Bot messages showed "[Generated Image][Generated Image]" instead of clean content
+  - **Root Cause**: Data URL was being detected in both content text and images array, causing duplicate placeholders
+  - **Solution**: Updated bot service to not include data URL in content text when it's in images array
+  - **Content Cleanup**: Bot messages now show clean content without data URL strings
+  - **Smart Detection**: Message component checks if data URL is already in images array before showing placeholder
+  - **Duplicate Prevention**: Prevents duplicate "[Generated Image]" text from appearing
+  - **Impact**: Bot messages now display cleanly with proper image display and no duplicate text
+
+- **Images Array Preservation Fix**: Fixed images array being overridden in addMessageToContext function
+  - **Problem**: Bot messages had `images: undefined` instead of the generated image URL
+  - **Root Cause**: `addMessageToContext` function was overriding the `images` array from bot service with extracted images from content
+  - **Solution**: Updated `addMessageToContext` to preserve existing `images` array if it exists
+  - **Priority Logic**: `message.images || (extracted images)` - preserves bot-generated images over content-extracted images
+  - **Data URL Handling**: Bot service sets `images: [dataUrl]` which is now preserved
+  - **Content Cleanup**: Data URL is not included in content text, preventing duplicate detection
+  - **Impact**: Generated images now display properly with correct images array and clean content
+
+- **AI Service Error Handling Enhancement**: Improved handling of RESOURCE_EXHAUSTED and rate limit errors
+  - **Problem**: AI service was experiencing RESOURCE_EXHAUSTED errors, preventing message generation
+  - **Root Cause**: Insufficient error handling for quota exhaustion and rate limiting
+  - **Solution**: Enhanced error detection and user-friendly error messages
+  - **Error Detection**: Added detection for quota, rate limit, and resource exhaustion errors
+  - **User Feedback**: Specific error messages for different types of AI service failures
+  - **Context Information**: Added context to API calls for better error reporting
+  - **Fallback Responses**: Existing fallback responses continue to work when AI service fails
+  - **Rate Limiting**: Improved rate limiting with exponential backoff and jitter
+  - **Impact**: Users get clear feedback when AI service issues occur and fallback responses maintain functionality
+
+- **Link Processing Optimization**: Fixed duplicate and truncated links in virtual user messages
+  - **Problem**: Virtual users were generating duplicate links in messages, sometimes truncated
+  - **Root Cause**: URL extraction logic was processing URLs multiple times and regex was truncating at punctuation
+  - **Solution**: Optimized URL extraction to process URLs once and avoid duplicates
+  - **Improved Regex**: Updated URL regex to handle more edge cases and not truncate at common punctuation
+  - **Duplicate Prevention**: Added Set-based deduplication to remove duplicate URLs
+  - **Single Pass Processing**: URLs are now processed once and categorized efficiently
+  - **Better Categorization**: Improved logic to distinguish between image URLs and regular links
+  - **Performance**: Reduced processing overhead by eliminating redundant operations
+  - **Impact**: Virtual user messages now have clean, non-duplicate links that are properly formatted
+
+- **Bot Command API Syntax Fix**: Fixed bot commands using outdated Google GenAI API syntax
+  - **Problem**: Some bot commands were returning error messages due to incorrect API syntax
+  - **Root Cause**: Bot commands were using old `ai.getGenerativeModel({ model }).generateContent([...])` syntax
+  - **Solution**: Updated all bot commands to use correct `ai.models.generateContent({...})` syntax
+  - **Fixed Commands**: Updated `!weather`, `!quote`, `!joke`, `!fact`, `!translate`, `!search` commands
+  - **API Response Handling**: Updated response parsing from `response.response.text()` to `response.candidates[0].content.parts[0].text`
+  - **Error Prevention**: Commands now use proper API structure preventing runtime errors
+  - **Consistency**: All bot commands now use the same modern API syntax
+  - **Impact**: Bot commands now work correctly without returning error messages
+
+- **Fully Resizable Chat Window**: Added complete resizable functionality to chat window for better readability
+  - **Problem**: Long messages tend to fill the space and make chat hard to read
+  - **Solution**: Implemented fully resizable chat window with multiple drag handles
+  - **Resize Handles**: Added visual resize handles for height (bottom) and width (left/right sides)
+  - **Mouse Interaction**: Users can drag handles to resize chat height and width
+  - **Height Constraints**: Minimum height (200px) and maximum height (window height - 100px)
+  - **Width Constraints**: Minimum width (300px) and maximum width (window width - 200px)
+  - **Position Control**: Left handle adjusts both width and position for flexible layout
+  - **Visual Feedback**: Handles change color when resizing and show appropriate resize cursors
+  - **Smooth Resizing**: Real-time height and width adjustment during drag
+  - **User Experience**: Better readability for long messages and optimal chat window sizing
+  - **Impact**: Users can now adjust chat window dimensions in all directions for optimal readability
+
+- **CORS-Free Placeholder Images**: Fixed CORS errors in placeholder image generation
+  - **Problem**: Placeholder images using via.placeholder.com caused CORS errors
+  - **Solution**: Replaced external placeholder service with local SVG data URLs
+  - **Local Generation**: Created SVG placeholder images as base64 data URLs
+  - **No External Requests**: Eliminates CORS issues completely
+  - **Custom Design**: Blue background with white text showing the prompt
+  - **HTML Escaping**: Properly escapes special characters in SVG text
+  - **Consistent Styling**: Maintains visual consistency with previous placeholder design
+  - **Performance**: Faster loading since no external network requests
+  - **Reliability**: Works offline and doesn't depend on external services
+  - **Impact**: Placeholder images now work without CORS errors
+
+- **Fixed Duplicate Link Display**: Resolved issue where links appeared multiple times in messages
+  - **Problem**: Links were being displayed both in message content and in dedicated links section
+  - **Root Cause**: renderContent function was rendering URLs as plain text when already handled by links array
+  - **Solution**: Updated renderContent to skip URLs that are already handled by dedicated arrays
+  - **Empty Span Rendering**: URLs handled by links/images arrays now render as empty spans
+  - **Prevents Duplication**: Eliminates duplicate link display in message content
+  - **Clean Display**: Links now appear only once in the dedicated links section
+  - **Impact**: Messages no longer show duplicate links on separate lines
+
+- **Updated Personality Generator Constants**: Synchronized personality generator with valid simulator engine constants
+  - **Problem**: Personality generator was using incorrect enum values that didn't match the user editor options
+  - **Solution**: Updated all personality generation functions to use correct enum values from types.ts
+  - **Formality Levels**: Updated from ['casual', 'formal', 'mixed'] to ['very_informal', 'informal', 'neutral', 'formal', 'very_formal']
+  - **Verbosity Levels**: Updated from ['concise', 'moderate', 'verbose'] to ['very_terse', 'terse', 'neutral', 'verbose', 'very_verbose']
+  - **Humor Levels**: Updated from ['none', 'light', 'heavy'] to ['none', 'dry', 'sarcastic', 'witty', 'slapstick']
+  - **Emoji Usage**: Updated from ['none', 'minimal', 'frequent'] to ['none', 'low', 'medium', 'high', 'excessive']
+  - **Punctuation Styles**: Updated from ['minimal', 'standard', 'excessive'] to ['minimal', 'standard', 'creative', 'excessive']
+  - **Schema Consistency**: Updated both generateBatchUsers and generateIRCWorld functions
+  - **User Editor Sync**: Personality generator now matches exactly what's available in the user editor
+  - **Impact**: Generated personalities now use valid constants that work with the user interface
+
+- **Fixed localStorage Quota Exceeded Error**: Implemented comprehensive quota management for channel logs
+  - **Problem**: localStorage quota exceeded when saving large channel logs, causing save failures
+  - **Solution**: Added intelligent quota management with data compression and automatic cleanup
+  - **Quota Monitoring**: Added checkLocalStorageQuota function to monitor available space
+  - **Data Compression**: Automatic compression by limiting message history (500 → 200 → 100 messages)
+  - **Proactive Cleanup**: cleanupOldLogs function automatically cleans when 80% quota used
+  - **Size Limits**: 4MB limit with 1MB buffer to prevent quota exceeded errors
+  - **Error Recovery**: Automatic retry with compressed data when quota exceeded
+  - **Logging**: Detailed logging of quota usage and compression actions
+  - **Graceful Degradation**: Falls back to ultra-compression if needed
+  - **Impact**: Channel logs now save reliably without quota exceeded errors
+
 ## 1.16.0 - 2025-01-23
 
 ### Added

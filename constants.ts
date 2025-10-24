@@ -53,60 +53,116 @@ export const DEFAULT_TYPING_DELAY = {
 export const DEFAULT_VIRTUAL_USERS: User[] = [
   { 
     nickname: 'nova', 
-    status: 'online', 
+    status: 'online',
+    userType: 'virtual',
     personality: 'A very curious and tech-savvy individual, loves discussing new gadgets and programming.',
     languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
     writingStyle: { formality: 'informal', verbosity: 'neutral', humor: 'none', emojiUsage: 'low', punctuation: 'standard' }
   },
   { 
     nickname: 'seraph', 
-    status: 'online', 
+    status: 'online',
+    userType: 'virtual',
     personality: 'Calm, wise, and often speaks in philosophical or poetic terms.',
     languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
     writingStyle: { formality: 'formal', verbosity: 'verbose', humor: 'none', emojiUsage: 'none', punctuation: 'standard' }
   },
   { 
     nickname: 'jinx', 
-    status: 'online', 
+    status: 'online',
+    userType: 'virtual',
     personality: 'A chaotic, funny, and unpredictable prankster who loves jokes and memes.',
     languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
     writingStyle: { formality: 'informal', verbosity: 'neutral', humor: 'slapstick', emojiUsage: 'high', punctuation: 'excessive' }
   },
   { 
     nickname: 'rex', 
-    status: 'online', 
+    status: 'online',
+    userType: 'virtual',
     personality: 'Gruff but helpful, an expert in system administration and network security.',
     languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
     writingStyle: { formality: 'neutral', verbosity: 'terse', humor: 'none', emojiUsage: 'none', punctuation: 'minimal' }
   },
   { 
     nickname: 'luna', 
-    status: 'online', 
+    status: 'online',
+    userType: 'virtual',
     personality: 'An artist who is dreamy, creative, and talks about music, art, and nature.',
     languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
     writingStyle: { formality: 'informal', verbosity: 'verbose', humor: 'none', emojiUsage: 'high', punctuation: 'standard' }
   },
   { 
     nickname: 'cypher', 
-    status: 'online', 
+    status: 'online',
+    userType: 'virtual',
     personality: 'Mysterious and speaks in cryptic messages, interested in privacy and cryptography.',
     languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
     writingStyle: { formality: 'formal', verbosity: 'terse', humor: 'none', emojiUsage: 'none', punctuation: 'minimal' }
   },
   { 
     nickname: 'glitch', 
-    status: 'online', 
+    status: 'online',
+    userType: 'virtual',
     personality: 'Excitable and easily distracted, often making typos and using internet slang.',
     languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
     writingStyle: { formality: 'informal', verbosity: 'neutral', humor: 'slapstick', emojiUsage: 'high', punctuation: 'excessive' }
   },
   { 
     nickname: 'root', 
-    status: 'online', 
+    status: 'online',
+    userType: 'virtual',
     personality: 'The silent observer, only speaks when something is very important.',
     languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
     writingStyle: { formality: 'formal', verbosity: 'terse', humor: 'none', emojiUsage: 'none', punctuation: 'standard' }
   },
+];
+
+// Default bot users for the simulation.
+export const DEFAULT_BOT_USERS: User[] = [
+  {
+    nickname: 'ImageBot',
+    status: 'online',
+    userType: 'bot',
+    personality: 'A helpful bot that generates AI images and provides visual content.',
+    languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
+    writingStyle: { formality: 'neutral', verbosity: 'neutral', humor: 'none', emojiUsage: 'medium', punctuation: 'standard' },
+    botCommands: ['!image', '!img'],
+    botDescription: 'Generates AI images based on text prompts',
+    botCapabilities: ['image_generation', 'visual_content']
+  },
+  {
+    nickname: 'InfoBot',
+    status: 'online',
+    userType: 'bot',
+    personality: 'An informative bot that provides weather, time, and general information.',
+    languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
+    writingStyle: { formality: 'formal', verbosity: 'neutral', humor: 'none', emojiUsage: 'low', punctuation: 'standard' },
+    botCommands: ['!weather', '!time', '!info', '!help'],
+    botDescription: 'Provides weather, time, and informational services',
+    botCapabilities: ['weather', 'time', 'information', 'help']
+  },
+  {
+    nickname: 'FunBot',
+    status: 'online',
+    userType: 'bot',
+    personality: 'A fun and entertaining bot that tells jokes, shares quotes, and provides amusement.',
+    languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
+    writingStyle: { formality: 'informal', verbosity: 'neutral', humor: 'witty', emojiUsage: 'high', punctuation: 'standard' },
+    botCommands: ['!quote', '!joke', '!fact'],
+    botDescription: 'Provides entertainment with quotes, jokes, and interesting facts',
+    botCapabilities: ['quotes', 'jokes', 'facts', 'entertainment']
+  },
+  {
+    nickname: 'UtilBot',
+    status: 'online',
+    userType: 'bot',
+    personality: 'A utility bot that helps with calculations, translations, and searches.',
+    languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
+    writingStyle: { formality: 'neutral', verbosity: 'terse', humor: 'none', emojiUsage: 'low', punctuation: 'standard' },
+    botCommands: ['!translate', '!calc', '!search'],
+    botDescription: 'Provides utility functions like translation, calculation, and search',
+    botCapabilities: ['translation', 'calculation', 'search', 'utilities']
+  }
 ];
 
 // Default channels for the simulation.
@@ -118,6 +174,7 @@ export const DEFAULT_CHANNELS: Channel[] = [
       { 
         nickname: DEFAULT_NICKNAME, 
         status: 'online',
+        userType: 'virtual',
         personality: 'The human user',
         languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
         writingStyle: { formality: 'informal', verbosity: 'neutral', humor: 'none', emojiUsage: 'low', punctuation: 'standard' }
@@ -137,6 +194,7 @@ export const DEFAULT_CHANNELS: Channel[] = [
       { 
         nickname: DEFAULT_NICKNAME, 
         status: 'online',
+        userType: 'virtual',
         personality: 'The human user',
         languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
         writingStyle: { formality: 'informal', verbosity: 'neutral', humor: 'none', emojiUsage: 'low', punctuation: 'standard' }
@@ -159,6 +217,7 @@ export const DEFAULT_CHANNELS: Channel[] = [
       { 
         nickname: DEFAULT_NICKNAME, 
         status: 'online',
+        userType: 'virtual',
         personality: 'The human user',
         languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
         writingStyle: { formality: 'informal', verbosity: 'neutral', humor: 'none', emojiUsage: 'low', punctuation: 'standard' }

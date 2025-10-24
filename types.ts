@@ -1,6 +1,7 @@
 export interface User {
   nickname: string;
   status: 'online' | 'away';
+  userType: 'virtual' | 'bot'; // Distinguish between virtual users and bots
   personality: string;
   languageSkills: {
     fluency: 'beginner' | 'intermediate' | 'advanced' | 'native';
@@ -22,9 +23,16 @@ export interface User {
     punctuation: 'minimal' | 'standard' | 'creative' | 'excessive';
   };
   assignedChannels?: string[]; // Track which channels this user is assigned to
+  // Bot-specific properties
+  botCommands?: string[]; // Available bot commands
+  botDescription?: string; // Description of what the bot does
+  botCapabilities?: string[]; // What the bot can do (image generation, weather, etc.)
 }
 
-export type MessageType = 'system' | 'user' | 'ai' | 'pm' | 'action' | 'notice' | 'topic' | 'kick' | 'ban' | 'join' | 'part' | 'quit';
+export type MessageType = 'system' | 'user' | 'ai' | 'pm' | 'action' | 'notice' | 'topic' | 'kick' | 'ban' | 'join' | 'part' | 'quit' | 'bot';
+
+// Bot command types
+export type BotCommandType = 'image' | 'weather' | 'time' | 'info' | 'help' | 'quote' | 'joke' | 'fact' | 'translate' | 'calc' | 'search';
 
 export interface Message {
   id: number;
@@ -36,6 +44,9 @@ export interface Message {
   target?: string; // For commands that target specific users or channels
   links?: string[]; // Array of URLs that were mentioned in the message
   images?: string[]; // Array of image URLs that were mentioned in the message
+  // Bot-specific message properties
+  botCommand?: BotCommandType; // Type of bot command that generated this message
+  botResponse?: any; // Bot response data (image URL, weather data, etc.)
 }
 
 export interface Channel {
@@ -76,6 +87,13 @@ export interface AppConfig {
   userObjects?: User[];
   // Store full channel objects for proper persistence of user assignments
   channelObjects?: Channel[];
+  // Image generation configuration
+  imageGeneration?: {
+    provider: 'nano-banana' | 'imagen' | 'placeholder' | 'dalle';
+    apiKey?: string;
+    model?: string;
+    baseUrl?: string;
+  };
   // IRC Export configuration
   ircExport?: {
     enabled: boolean;
@@ -143,22 +161,36 @@ export const getLanguageFluency = (languageSkills: User['languageSkills'], langu
 };
 
 export const getAllLanguages = (languageSkills: User['languageSkills']): string[] => {
+  console.log(`[getAllLanguages] Input languageSkills:`, languageSkills);
+  
   if (!languageSkills) {
+    console.log(`[getAllLanguages] No languageSkills, returning English`);
     return ['English'];
   }
   
   if (isPerLanguageFormat(languageSkills)) {
-    return languageSkills.languages.map(l => l.language);
+    const languages = languageSkills.languages.map(l => l.language);
+    console.log(`[getAllLanguages] Per-language format detected, languages:`, languages);
+    // Safety check: if no languages, return English
+    return languages.length > 0 ? languages : ['English'];
   } else if (isLegacyFormat(languageSkills)) {
-    return languageSkills.languages;
+    console.log(`[getAllLanguages] Legacy format detected, languages:`, languageSkills.languages);
+    // Safety check: if no languages, return English
+    return languageSkills.languages.length > 0 ? languageSkills.languages : ['English'];
   }
+  
+  console.log(`[getAllLanguages] Neither format detected, trying fallback`);
   // Fallback for malformed data - try to extract languages if possible
   if (languageSkills && typeof languageSkills === 'object' && 'languages' in languageSkills) {
     const languages = (languageSkills as any).languages;
     if (Array.isArray(languages)) {
-      return languages.filter(lang => typeof lang === 'string');
+      const filtered = languages.filter(lang => typeof lang === 'string');
+      console.log(`[getAllLanguages] Fallback extracted languages:`, filtered);
+      return filtered;
     }
   }
+  
+  console.log(`[getAllLanguages] All fallbacks failed, returning English`);
   return ['English'];
 };
 
