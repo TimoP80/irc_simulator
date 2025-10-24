@@ -130,7 +130,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ title, messages, onSendM
     >
       <header className="px-4 lg:px-6 py-2 lg:py-3 border-b border-gray-700 bg-gray-900 flex-shrink-0">
         <div className="flex items-center justify-between">
-          <h1 className="text-base lg:text-lg font-semibold text-white truncate">{title}</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-base lg:text-lg font-semibold text-white truncate">{title}</h1>
+            <div className="hidden sm:flex items-center gap-2 text-xs text-gray-400">
+              <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+              <span>as {currentUserNickname}</span>
+            </div>
+          </div>
           {channel && (channel.operators || []).length > 0 && (
             <div className="flex items-center gap-2 ml-2">
               <span className="text-xs text-gray-400 hidden sm:inline">Ops:</span>
@@ -145,6 +151,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ title, messages, onSendM
           )}
         </div>
       </header>
+
+      {/* Mobile current user indicator */}
+      <div className="sm:hidden px-4 py-2 bg-gray-800 border-b border-gray-700">
+        <div className="flex items-center gap-2 text-xs text-gray-400">
+          <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+          <span>Chatting as {currentUserNickname}</span>
+        </div>
+      </div>
 
       <div className="flex-1 p-2 lg:p-4 overflow-y-auto min-h-0">
         <div className="flex flex-col gap-2 lg:gap-3">

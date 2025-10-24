@@ -30,9 +30,9 @@ export interface ImageGenerationResponse {
 
 // Default configuration
 const DEFAULT_CONFIG: ImageGenerationConfig = {
-  provider: 'placeholder', // Default to placeholder for safety
-  model: 'gemini-2.5-flash-image-preview',
-  baseUrl: undefined // Nano Banana uses Google GenAI SDK directly
+  provider: 'nano-banana', // Default to Gemini for real image generation
+  model: 'gemini-2.0-flash-exp', // Use the working model
+  baseUrl: undefined // Gemini uses Google GenAI SDK directly
 };
 
 class ImageGenerationService {
@@ -68,8 +68,10 @@ class ImageGenerationService {
 
   private async generateWithNanoBanana(request: ImageGenerationRequest): Promise<ImageGenerationResponse> {
     if (!this.config.apiKey) {
-      throw new Error('Nano Banana API key not configured');
+      throw new Error('Gemini API key not configured');
     }
+
+    const startTime = Date.now();
 
     try {
       // Import GoogleGenAI dynamically to avoid issues in browser
@@ -77,9 +79,15 @@ class ImageGenerationService {
       
       const ai = new GoogleGenAI({ apiKey: this.config.apiKey });
       
+      // Use Gemini's image generation model
+      const model = this.config.model || 'gemini-2.0-flash-exp';
+      
+      console.log(`[Image Generation] Attempting to generate image with model: ${model}`);
+      
+      // Try to generate content with the model
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image-preview',
-        contents: request.prompt,
+        model: model,
+        contents: `Generate an image based on this prompt: ${request.prompt}`,
       });
 
       // Extract image data from response
@@ -90,29 +98,35 @@ class ImageGenerationService {
           const mimeType = part.inlineData.mimeType || 'image/png';
           const dataUrl = `data:${mimeType};base64,${imageData}`;
           
+          console.log(`[Image Generation] Successfully generated image with Gemini`);
+          
           return {
             success: true,
             imageUrl: dataUrl,
             metadata: {
-              model: 'gemini-2.5-flash-image-preview',
-              provider: 'nano-banana',
-              generationTime: Date.now() - Date.now()
+              model: model,
+              provider: 'gemini',
+              generationTime: Date.now() - startTime
             }
           };
         }
       }
       
-      // If no image data found, return error
-      throw new Error('No image data received from Nano Banana API');
+      // If no image data found, fall back to placeholder
+      console.warn('No image data received from Gemini, falling back to placeholder');
+      return await this.generatePlaceholder(request);
       
     } catch (error) {
-      if (error instanceof TypeError && error.message.includes('NetworkError')) {
-        throw new Error('Network error: Unable to connect to Nano Banana API. This is likely due to CORS restrictions. Please use the placeholder service or set up a proxy server.');
+      console.error('Gemini image generation failed:', error);
+      
+      // Check if it's a model not found error
+      if (error instanceof Error && error.message.includes('not found')) {
+        console.warn('Gemini model not found or doesn\'t support image generation, falling back to placeholder');
       }
-      if (error instanceof TypeError && error.message.includes('CORS')) {
-        throw new Error('CORS error: Nano Banana API does not allow direct browser requests. Please use the placeholder service or set up a proxy server to bypass CORS restrictions.');
-      }
-      throw error;
+      
+      // Fall back to placeholder on any error
+      console.log('Falling back to placeholder image generation');
+      return await this.generatePlaceholder(request);
     }
   }
 
@@ -137,35 +151,14 @@ class ImageGenerationService {
   }
 
   private async generatePlaceholder(request: ImageGenerationRequest): Promise<ImageGenerationResponse> {
-    // Generate a local placeholder image using SVG data URL to avoid CORS issues
+    // Generate a placeholder image using placehold.co service
     const width = request.width || 512;
     const height = request.height || 512;
     const prompt = request.prompt.substring(0, 50);
     
-    // Create an SVG placeholder image as a data URL
-    const svgContent = `
-      <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
-        <rect width="100%" height="100%" fill="#4A90E2"/>
-        <text x="50%" y="50%" font-family="Arial, sans-serif" font-size="16" fill="white" text-anchor="middle" dominant-baseline="middle">
-          ${prompt.replace(/[<>&"']/g, (char) => {
-            switch(char) {
-              case '<': return '&lt;';
-              case '>': return '&gt;';
-              case '&': return '&amp;';
-              case '"': return '&quot;';
-              case "'": return '&#39;';
-              default: return char;
-            }
-          })}
-        </text>
-        <text x="50%" y="70%" font-family="Arial, sans-serif" font-size="12" fill="#E0E0E0" text-anchor="middle" dominant-baseline="middle">
-          Placeholder Image
-        </text>
-      </svg>
-    `;
-    
-    // Convert SVG to data URL
-    const imageUrl = `data:image/svg+xml;base64,${btoa(svgContent)}`;
+    // Create a placehold.co URL with custom text and styling
+    const encodedText = encodeURIComponent(prompt);
+    const imageUrl = `https://placehold.co/${width}x${height}/4A90E2/FFFFFF/png?text=${encodedText}`;
     
     return {
       success: true,

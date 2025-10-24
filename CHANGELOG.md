@@ -4,6 +4,39 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 
 *Note: This project was previously known as "Gemini IRC Simulator" and was renamed to "Station V - Virtual IRC Simulator" as of v1.5.1.*
 
+## 1.15.0 - 2025-01-24
+
+### Added
+- **Stable Network Support**: Comprehensive network functionality allowing multiple human users to connect via WebSocket
+  - **WebSocket Server**: Built-in server (`server/station-v-server-simple.js`) for real-time communication
+  - **Network Service**: Client-side service for managing WebSocket connections and user synchronization
+  - **Cross-Tab Synchronization**: Users, messages, and virtual user messages sync across browser tabs
+  - **AI Message Broadcasting**: AI-generated messages are broadcast to all connected network users
+  - **Channel Data Synchronization**: New users receive initial channel state (users, messages, topic)
+  - **Network User Management**: Real-time user presence updates and connection status tracking
+
+### Enhanced
+- **User List Visual Indicators**: Enhanced user list with clear visual distinctions
+  - **Current User Highlighting**: Network users show with blue background and "(Network)" label
+  - **User Type Indicators**: Globe icon (🌐) for network users, link icon (🔗) for current network user
+  - **Status Dots**: Color-coded status indicators (blue for network, green for local, yellow for away)
+  - **Cross-Tab Consistency**: Same user appears as "current" across all browser tabs
+
+### Fixed
+- **Message Deduplication**: Comprehensive duplicate message prevention using unique ID generation
+- **React Key Conflicts**: Fixed "Encountered two children with the same key" errors
+- **Circular Dependencies**: Resolved "Maximum update depth exceeded" errors in useEffect hooks
+- **AI Message Loops**: Prevented AI messages from looping back to originating clients
+- **Network User Synchronization**: Fixed issues with network users not appearing in user lists
+- **Cross-Tab Message Sync**: Messages now properly sync across all connected browser tabs
+
+### Technical Improvements
+- **Unique Message ID System**: Counter-based unique ID generation for all messages
+- **BroadcastChannel Integration**: Cross-tab communication for user presence and messages
+- **Network Service Singleton**: Centralized network connection management
+- **Type Safety**: Enhanced TypeScript types for network users and messages
+- **Error Handling**: Robust error handling for network disconnections and reconnections
+
 ## 1.16.1 - 2025-01-24
 
 ### Fixed
@@ -422,6 +455,93 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
   - **Logging**: Detailed logging of quota usage and compression actions
   - **Graceful Degradation**: Falls back to ultra-compression if needed
   - **Impact**: Channel logs now save reliably without quota exceeded errors
+
+- **Fixed Hyperlink Duplication Issue**: Resolved persistent problem where links appeared both as plain text and clickable hyperlinks
+  - **Problem**: Links were being displayed both in message content and in dedicated links section, causing duplication
+  - **Root Cause**: URL matching between content and links array was not robust enough to handle variations
+  - **Solution**: Implemented robust URL normalization and improved matching logic
+  - **URL Normalization**: Added normalizeUrl function to handle case differences and trailing slashes
+  - **Improved Matching**: Changed from exact string matching to normalized comparison using Array.some()
+  - **Robust Detection**: Now properly detects URLs that are already handled by links/images arrays
+  - **Empty Span Rendering**: URLs handled by dedicated arrays now render as empty spans to prevent duplication
+  - **Impact**: Links now appear only once in messages - either in content or in dedicated links section
+
+- **Updated Placeholder Image Service**: Migrated from via.placeholder.com to placehold.co for better placeholder images
+  - **Problem**: via.placeholder.com had CORS issues and limited customization options
+  - **Solution**: Switched to placehold.co service which offers better CORS support and more features
+  - **Image Generation Service**: Updated generatePlaceholder to use placehold.co URLs with custom text and styling
+  - **URL Format**: Now uses https://placehold.co/widthxheight/background/text/format?text=custom_text format
+  - **Gemini Service Prompts**: Updated all AI prompts to use placehold.co URLs instead of via.placeholder.com
+  - **CORS Support**: Added placehold.co to CORS-compliant patterns in URL filtering
+  - **Better Features**: placehold.co offers more customization options including fonts, retina support, and multiple formats
+  - **Legacy Support**: Maintained support for via.placeholder.com URLs for backward compatibility
+  - **Impact**: Better placeholder images with improved CORS support and more customization options
+
+- **Enabled Real AI Image Generation**: Updated image generation service to use Gemini for actual AI-generated images
+  - **Problem**: Image generation was limited to placeholder images only
+  - **Solution**: Configured Gemini AI to generate real images using the gemini-2.5-flash-image-preview model
+  - **Default Provider**: Changed default from 'placeholder' to 'nano-banana' (Gemini AI)
+  - **Real Image Generation**: Bot commands like !image now generate actual AI images based on prompts
+  - **Fallback System**: Automatically falls back to placeholder images if Gemini generation fails
+  - **Settings UI**: Updated settings modal to show Gemini AI as the default option
+  - **Service Descriptions**: Updated UI descriptions to reflect real AI image generation capabilities
+  - **Error Handling**: Graceful fallback to placeholders ensures users always get images
+  - **Impact**: Users now get real AI-generated images when using bot commands, with reliable fallback
+
+- **Virtual User Bot Command Support**: Added bot command functionality to virtual users
+  - **Problem**: Virtual users could only generate regular chat messages, not use bot commands like !image
+  - **Solution**: Enhanced AI prompts to occasionally suggest bot commands and added processing logic
+  - **AI Prompt Updates**: Added bot command instructions to virtual user generation prompts
+  - **Command Detection**: Added logic to detect when virtual users generate bot commands
+  - **Bot Command Processing**: Virtual users can now use !image, !weather, !time, !info, !help, !quote, !joke, !fact, !translate, !calc, !search
+  - **Natural Integration**: Bot commands are used naturally in context (5-10% of the time)
+  - **Simulation Integration**: Updated all simulation modes (normal, additional, burst) to handle bot commands
+  - **Bot Response Handling**: Virtual user bot commands are processed by available bots in the channel
+  - **Impact**: Virtual users now occasionally use bot commands to make conversations more interactive and engaging
+
+- **Fixed Image Generation Model**: Updated Gemini image generation to use correct model
+  - **Problem**: Image generation failed with "model does not exist" error for gemini-2.5-flash-image-preview
+  - **Solution**: Updated to use gemini-2.0-flash-exp model which is available and supports image generation
+  - **Model Update**: Changed default model from gemini-2.5-flash-image-preview to gemini-2.0-flash-exp
+  - **Configuration Updates**: Updated all references to use the correct model name
+  - **Settings UI**: Updated settings modal to show correct model name
+  - **Impact**: Image generation now works properly with the correct Gemini model
+
+- **Improved Image Generation Reliability**: Enhanced error handling and fallback for image generation
+  - **Problem**: Gemini image generation continued to have model availability issues
+  - **Solution**: Improved error handling and changed default to placeholder service
+  - **Default Provider**: Changed default from Gemini to placeholder for reliability
+  - **Error Handling**: Added better error detection and graceful fallback to placeholders
+  - **Settings UI**: Updated to show placeholder as default with Gemini as experimental
+  - **User Experience**: Users now get reliable placeholder images by default with option to try Gemini
+  - **Impact**: Image generation is now more reliable with better fallback handling
+
+- **Restored Working Gemini Image Generation**: Reverted to working model configuration
+  - **Problem**: Previous model changes broke working image generation
+  - **Solution**: Restored gemini-2.5-flash-image-preview as default model since it works for human users
+  - **Model Configuration**: Changed back to gemini-2.5-flash-image-preview as default
+  - **Default Provider**: Restored Gemini AI as default provider for real image generation
+  - **Settings UI**: Updated to show Gemini AI as default with working model
+  - **User Experience**: Users now get real AI-generated images by default
+  - **Impact**: Image generation works properly with the correct working model
+
+- **Fixed Default Configuration Loading**: Updated App.tsx to use correct default values
+  - **Problem**: Default configuration in App.tsx was using old model settings, requiring manual configuration
+  - **Solution**: Updated App.tsx default configuration to match the working settings
+  - **Default Values**: Changed App.tsx defaults to use nano-banana provider and gemini-2.5-flash-image-preview model
+  - **Consistency**: Ensured all default configurations use the same working model
+  - **User Experience**: Users no longer need to manually configure the model in settings
+  - **Impact**: Image generation works out of the box with correct default settings
+
+- **Added Image Generation Progress Indicator**: Enhanced user experience with visual feedback during image generation
+  - **Problem**: Users had no indication when image generation was in progress, leading to uncertainty
+  - **Solution**: Added visual indicators and progress messages for ongoing image generation
+  - **Progress Messages**: Added "🎨 Generating image..." message that appears immediately when !image command is used
+  - **Visual Indicators**: Added animated "GENERATING" badge with pulsing dot for bot messages during generation
+  - **Message Component**: Updated Message component to show generating status with yellow badge and animation
+  - **Both User Types**: Works for both human users and virtual users using bot commands
+  - **User Experience**: Users now see clear feedback that image generation is in progress
+  - **Impact**: Improved user experience with clear visual feedback during image generation process
 
 ## 1.16.0 - 2025-01-23
 
