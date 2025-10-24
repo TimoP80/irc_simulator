@@ -67,6 +67,8 @@ export const BatchUserModal: React.FC<BatchUserModalProps> = ({
   const [usernameStyle, setUsernameStyle] = useState<'mixed' | 'tech' | 'gaming' | 'creative' | 'realistic' | 'abstract'>('mixed');
   const [forcePrimaryLanguage, setForcePrimaryLanguage] = useState(false);
   const [primaryLanguage, setPrimaryLanguage] = useState<string>('English');
+  const [multilingualPersonalities, setMultilingualPersonalities] = useState(false);
+  const [personalityLanguage, setPersonalityLanguage] = useState<string>('English');
 
   // Reset form when modal opens
   useEffect(() => {
@@ -102,7 +104,11 @@ export const BatchUserModal: React.FC<BatchUserModalProps> = ({
     if (generationMode === 'ai') {
       try {
         setIsGenerating(true);
-        const users = await generateBatchUsers(userCount, aiModel);
+        const options = {
+          multilingualPersonalities,
+          personalityLanguage: personalityLanguage
+        };
+        const users = await generateBatchUsers(userCount, aiModel, options);
         return users;
       } catch (error) {
         console.error('Failed to generate AI users:', error);
@@ -498,6 +504,42 @@ export const BatchUserModal: React.FC<BatchUserModalProps> = ({
                     </select>
                     <p className="text-xs text-gray-500 mt-1">
                       All generated users will have this as their primary language with native fluency
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Multilingual Personality Descriptions */}
+              <div className="mt-6 p-4 bg-gray-800 rounded-lg border border-gray-600">
+                <div className="flex items-center space-x-3 mb-3">
+                  <input
+                    type="checkbox"
+                    id="multilingualPersonalities"
+                    checked={multilingualPersonalities}
+                    onChange={(e) => setMultilingualPersonalities(e.target.checked)}
+                    className="rounded border-gray-600 bg-gray-700 text-indigo-500 focus:ring-indigo-500"
+                  />
+                  <label htmlFor="multilingualPersonalities" className="text-gray-300 font-medium">
+                    Multilingual Personality Descriptions
+                  </label>
+                </div>
+                {multilingualPersonalities && (
+                  <div className="ml-6">
+                    <label htmlFor="personalityLanguage" className="block text-sm text-gray-400 mb-2">
+                      Personality Description Language
+                    </label>
+                    <select
+                      id="personalityLanguage"
+                      value={personalityLanguage}
+                      onChange={(e) => setPersonalityLanguage(e.target.value)}
+                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      {TRAIT_POOLS.languages.map(lang => (
+                        <option key={lang} value={lang}>{lang}</option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Generate personality descriptions in the selected language. Examples: "Passionate about languages" (English), "Apasionado por la música" (Spanish), "愛好技術的工程師" (Chinese)
                     </p>
                   </div>
                 )}

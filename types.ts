@@ -106,7 +106,9 @@ export interface GeminiModel {
 
 // Type guards for language skills
 export const isPerLanguageFormat = (languageSkills: User['languageSkills']): languageSkills is { languages: Array<{ language: string; fluency: 'beginner' | 'intermediate' | 'advanced' | 'native'; accent?: string; }> } => {
-  return 'languages' in languageSkills && 
+  return languageSkills && 
+         typeof languageSkills === 'object' &&
+         'languages' in languageSkills && 
          Array.isArray(languageSkills.languages) && 
          languageSkills.languages.length > 0 && 
          typeof languageSkills.languages[0] === 'object' && 
@@ -115,7 +117,9 @@ export const isPerLanguageFormat = (languageSkills: User['languageSkills']): lan
 };
 
 export const isLegacyFormat = (languageSkills: User['languageSkills']): languageSkills is { fluency: 'beginner' | 'intermediate' | 'advanced' | 'native'; languages: string[]; accent?: string; } => {
-  return 'fluency' in languageSkills && 
+  return languageSkills && 
+         typeof languageSkills === 'object' &&
+         'fluency' in languageSkills && 
          'languages' in languageSkills && 
          Array.isArray(languageSkills.languages) &&
          languageSkills.languages.length > 0 &&
@@ -124,6 +128,10 @@ export const isLegacyFormat = (languageSkills: User['languageSkills']): language
 
 // Utility functions for working with language skills
 export const getLanguageFluency = (languageSkills: User['languageSkills'], language: string = 'English'): 'beginner' | 'intermediate' | 'advanced' | 'native' => {
+  if (!languageSkills) {
+    return 'native';
+  }
+  
   if (isPerLanguageFormat(languageSkills)) {
     const lang = languageSkills.languages.find(l => l.language.toLowerCase() === language.toLowerCase());
     return lang?.fluency || 'native';
@@ -135,6 +143,10 @@ export const getLanguageFluency = (languageSkills: User['languageSkills'], langu
 };
 
 export const getAllLanguages = (languageSkills: User['languageSkills']): string[] => {
+  if (!languageSkills) {
+    return ['English'];
+  }
+  
   if (isPerLanguageFormat(languageSkills)) {
     return languageSkills.languages.map(l => l.language);
   } else if (isLegacyFormat(languageSkills)) {
@@ -151,6 +163,10 @@ export const getAllLanguages = (languageSkills: User['languageSkills']): string[
 };
 
 export const getLanguageAccent = (languageSkills: User['languageSkills'], language: string = 'English'): string => {
+  if (!languageSkills) {
+    return '';
+  }
+  
   if (isPerLanguageFormat(languageSkills)) {
     const lang = languageSkills.languages.find(l => l.language.toLowerCase() === language.toLowerCase());
     return lang?.accent || '';

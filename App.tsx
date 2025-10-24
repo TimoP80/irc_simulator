@@ -792,58 +792,115 @@ const App: React.FC = () => {
       return unsafeDomains.some(domain => url.toLowerCase().includes(domain.toLowerCase()));
     };
     
-    // Function to fix common Imgur URL issues
-    const fixImgurUrl = (url: string): string => {
-      // Fix incomplete Imgur URLs that redirect to front page
-      if (url.includes('imgur.com/') && !url.includes('i.imgur.com/') && !url.includes('/a/')) {
-        // Convert imgur.com/ID to i.imgur.com/ID.jpg for direct images
-        const match = url.match(/imgur\.com\/([a-zA-Z0-9]+)(?:\?.*)?$/);
-        if (match) {
-          return `https://i.imgur.com/${match[1]}.jpg`;
-        }
-      }
-      
-      // Fix Imgur URLs that might load the full page
-      if (url.includes('imgur.com/') && !url.includes('i.imgur.com/')) {
-        // Handle various Imgur URL patterns
-        const patterns = [
-          /imgur\.com\/([a-zA-Z0-9]+)(?:\?.*)?$/,  // imgur.com/ID
-          /imgur\.com\/gallery\/([a-zA-Z0-9]+)(?:\?.*)?$/,  // imgur.com/gallery/ID
-          /imgur\.com\/a\/([a-zA-Z0-9]+)(?:\?.*)?$/  // imgur.com/a/ID
-        ];
-        
-        for (const pattern of patterns) {
-          const match = url.match(pattern);
-          if (match) {
-            // For gallery/album URLs, we'll skip them as they're not direct images
-            if (url.includes('/gallery/') || url.includes('/a/')) {
-              return url; // Keep album URLs as-is, they're not direct images
-            }
-            // For direct image URLs, convert to i.imgur.com format
-            return `https://i.imgur.com/${match[1]}.jpg`;
-          }
-        }
-      }
-      
-      return url;
+    // Function to detect Imgur URLs (for blocking)
+    const isImgurUrl = (url: string): boolean => {
+      return url.includes('imgur.com') || url.includes('i.imgur.com');
     };
     
+    // Function to detect Rick Astley redirect URLs
+    const isRickAstleyRedirect = (url: string): boolean => {
+      // Common Rick Astley redirect patterns
+      const rickAstleyPatterns = [
+        /dQw4w9WgXcQ/i, // The actual Rick Astley video ID
+        /rick.*astley/i, // Rick Astley in URL
+        /never.*gonna.*give.*you.*up/i, // Never gonna give you up in URL
+        /rickroll/i, // Rickroll in URL
+        /youtube\.com\/watch\?v=dQw4w9WgXcQ/i, // Direct Rick Astley YouTube URL
+        /youtu\.be\/dQw4w9WgXcQ/i, // Short Rick Astley YouTube URL
+      ];
+      
+      return rickAstleyPatterns.some(pattern => pattern.test(url));
+    };
+
+    // Function to detect outdated YouTube links
+    const isOutdatedYouTubeLink = (url: string): boolean => {
+      // Check if it's a YouTube URL
+      if (!url.includes('youtube.com/') && !url.includes('youtu.be/')) {
+        return false;
+      }
+      
+      // Check for outdated indicators in the URL or surrounding text
+      const outdatedPatterns = [
+        /2010|2011|2012|2013|2014|2015/i, // Old years
+        /old|classic|vintage|retro/i, // Outdated descriptors
+        /ancient|archived|deprecated/i, // Outdated status
+        /legacy|obsolete|outdated/i, // Outdated status
+      ];
+      
+      return outdatedPatterns.some(pattern => pattern.test(url));
+    };
+
+    // Function to detect potentially problematic YouTube links
+    const isProblematicYouTubeLink = (url: string): boolean => {
+      // Check if it's a YouTube URL
+      if (!url.includes('youtube.com/') && !url.includes('youtu.be/')) {
+        return false;
+      }
+      
+      // Block YouTube links that might be outdated or non-existent
+      // This is a more aggressive approach to prevent broken links
+      const problematicPatterns = [
+        /youtube\.com\/watch\?v=[a-zA-Z0-9_-]{11}/i, // Standard YouTube video IDs
+        /youtu\.be\/[a-zA-Z0-9_-]{11}/i, // Short YouTube URLs
+        /youtube\.com\/embed\/[a-zA-Z0-9_-]{11}/i, // Embedded YouTube URLs
+        /youtube\.com\/v\/[a-zA-Z0-9_-]{11}/i, // Alternative YouTube URLs
+      ];
+      
+      // If it matches a YouTube pattern, consider it potentially problematic
+      // since we can't verify if the video actually exists
+      return problematicPatterns.some(pattern => pattern.test(url));
+    };
+
     // Function to validate if URL is a direct image
     const isDirectImageUrl = (url: string): boolean => {
       // Check if it's a direct image URL (i.imgur.com with file extension)
       if (url.includes('i.imgur.com/') && /\.(jpg|jpeg|png|gif|webp|svg)(\?.*)?$/i.test(url)) {
         return true;
       }
-      // Check other direct image hosting services (more flexible patterns)
-      const directImagePatterns = [
-        /gyazo\.com\/[a-zA-Z0-9]+(\.[a-zA-Z0-9]+)?(\?.*)?$/i,  // gyazo.com/ID or gyazo.com/ID.jpg
-        /prnt\.sc\/[a-zA-Z0-9]+(\.[a-zA-Z0-9]+)?(\?.*)?$/i,   // prnt.sc/ID or prnt.sc/ID.jpg
-        /imgbb\.com\/[a-zA-Z0-9]+(\.[a-zA-Z0-9]+)?(\?.*)?$/i, // imgbb.com/ID or imgbb.com/ID.jpg
-        /postimg\.cc\/[a-zA-Z0-9]+(\.[a-zA-Z0-9]+)?(\?.*)?$/i, // postimg.cc/ID or postimg.cc/ID.jpg
-        /imgbox\.com\/[a-zA-Z0-9]+(\.[a-zA-Z0-9]+)?(\?.*)?$/i, // imgbox.com/ID or imgbox.com/ID.jpg
-        /imgchest\.com\/[a-zA-Z0-9]+(\.[a-zA-Z0-9]+)?(\?.*)?$/i, // imgchest.com/ID or imgchest.com/ID.jpg
-        /freeimage\.host\/[a-zA-Z0-9]+(\.[a-zA-Z0-9]+)?(\?.*)?$/i // freeimage.host/ID or freeimage.host/ID.jpg
+      // Block problematic domains that cause CORS errors
+      const blockedDomains = [
+        'imgbb.com',
+        'imgur.com',
+        'imgur.com/a/',
+        'imgur.com/gallery/',
+        'imgur.com/album/',
+        'imgbox.com',
+        '3lift.com',
+        'eb2.3lift.com',
+        'doubleclick.net',
+        'googlesyndication.com',
+        'googleadservices.com'
       ];
+      
+      // Check if URL contains any blocked domains
+      if (blockedDomains.some(domain => url.includes(domain))) {
+        console.log('[URL Filter] Blocked problematic domain:', url);
+        return false;
+      }
+      
+      // Only allow services with confirmed CORS support
+      // Based on testing, these services have proper CORS headers
+      const corsCompliantPatterns = [
+        /httpbin\.org\/image\/[a-zA-Z0-9]+$/i, // httpbin.org test images
+        /picsum\.photos\/[0-9]+\/[0-9]+(\/[0-9]+)?(\?.*)?$/i, // picsum.photos random images
+        /labs\.google\/fx\/tools\/whisk\/share\/[a-zA-Z0-9]+$/i, // Google Whisk AI-generated images
+      ];
+      
+      // Block all other image hosting services that cause CORS issues
+      const problematicImageServices = [
+        'gyazo.com', 'prnt.sc', 'postimg.cc', 'imgchest.com', 'freeimage.host',
+        'imgbb.com', 'imgur.com', 'imgur.com/a/', 'imgur.com/gallery/', 'imgur.com/album/',
+        'imgbox.com', '3lift.com', 'eb2.3lift.com', 'doubleclick.net', 'googlesyndication.com', 'googleadservices.com'
+      ];
+      
+      // Check if URL contains any problematic image services
+      if (problematicImageServices.some(service => url.includes(service))) {
+        console.log('[URL Filter] Blocked problematic image service:', url);
+        return false;
+      }
+      
+      // Check against CORS-compliant patterns
+      const directImagePatterns = corsCompliantPatterns;
       
       return directImagePatterns.some(pattern => pattern.test(url));
     };
@@ -851,16 +908,60 @@ const App: React.FC = () => {
     const allUrls = content.match(urlRegex) || [];
     const imageUrls = content.match(imageRegex) || [];
     
+    // Filter out Rick Astley redirect URLs, outdated YouTube links, problematic YouTube links, and Imgur URLs from all URLs
+    const filteredUrls = allUrls.filter(url => {
+      if (isRickAstleyRedirect(url)) {
+        console.log('[URL Filter] Blocked Rick Astley redirect URL:', url);
+        return false;
+      }
+      if (isOutdatedYouTubeLink(url)) {
+        console.log('[URL Filter] Blocked outdated YouTube link:', url);
+        return false;
+      }
+      if (isProblematicYouTubeLink(url)) {
+        console.log('[URL Filter] Blocked problematic YouTube link:', url);
+        return false;
+      }
+      if (isImgurUrl(url)) {
+        console.log('[URL Filter] Blocked Imgur URL:', url);
+        return false;
+      }
+      return true;
+    });
+    
     // Filter out unsafe URLs, fix Imgur URLs, and only keep direct image URLs
     const safeImageUrls = imageUrls
       .filter(url => {
+        // Check for Rick Astley redirects in image URLs too
+        if (isRickAstleyRedirect(url)) {
+          console.log('[URL Filter] Blocked Rick Astley redirect image URL:', url);
+          return false;
+        }
+        
+        // Check for outdated YouTube links in image URLs too
+        if (isOutdatedYouTubeLink(url)) {
+          console.log('[URL Filter] Blocked outdated YouTube image URL:', url);
+          return false;
+        }
+        
+        // Check for problematic YouTube links in image URLs too
+        if (isProblematicYouTubeLink(url)) {
+          console.log('[URL Filter] Blocked problematic YouTube image URL:', url);
+          return false;
+        }
+        
+        // Check for Imgur URLs in image URLs too
+        if (isImgurUrl(url)) {
+          console.log('[URL Filter] Blocked Imgur image URL:', url);
+          return false;
+        }
+        
         const isUnsafe = isUnsafeUrl(url);
         if (isUnsafe) {
           console.log('[URL Filter] Blocked unsafe URL:', url);
         }
         return !isUnsafe;
       })
-      .map(url => fixImgurUrl(url))
       .filter(url => {
         const isDirect = isDirectImageUrl(url);
         if (!isDirect) {
@@ -869,8 +970,33 @@ const App: React.FC = () => {
         return isDirect;
       }); // Only keep direct image URLs
     const safeLinkUrls = allUrls
-      .filter(url => !imageUrls.includes(url) && !isUnsafeUrl(url))
-      .map(url => fixImgurUrl(url));
+      .filter(url => {
+        // Check for Rick Astley redirects in link URLs
+        if (isRickAstleyRedirect(url)) {
+          console.log('[URL Filter] Blocked Rick Astley redirect link URL:', url);
+          return false;
+        }
+        
+        // Check for outdated YouTube links in link URLs
+        if (isOutdatedYouTubeLink(url)) {
+          console.log('[URL Filter] Blocked outdated YouTube link URL:', url);
+          return false;
+        }
+        
+        // Check for problematic YouTube links in link URLs
+        if (isProblematicYouTubeLink(url)) {
+          console.log('[URL Filter] Blocked problematic YouTube link URL:', url);
+          return false;
+        }
+        
+        // Check for Imgur URLs in link URLs too
+        if (isImgurUrl(url)) {
+          console.log('[URL Filter] Blocked Imgur link URL:', url);
+          return false;
+        }
+        
+        return !imageUrls.includes(url) && !isUnsafeUrl(url);
+      });
     
     console.log('[URL Filter] Processed URLs:', {
       allUrls: allUrls.length,
@@ -1456,7 +1582,11 @@ const App: React.FC = () => {
       if (activeContext && activeContext.type === 'channel') {
         const channel = channels.find(c => c.name === activeContext.name);
         if (channel) {
-          aiResponse = await generateReactionToMessage(channel, userMessage, currentUserNickname, aiModel);
+          // Check if there are other users in the channel besides the current user
+          const otherUsers = channel.users.filter(u => u.nickname !== currentUserNickname);
+          if (otherUsers.length > 0) {
+            aiResponse = await generateReactionToMessage(channel, userMessage, currentUserNickname, aiModel);
+          }
         }
       } else if (activeContext && activeContext.type === 'pm') { // 'pm'
         const conversation = privateMessages[activeContext.with] || { user: virtualUsers.find(u => u.nickname === activeContext.with)!, messages: [] };
@@ -1829,6 +1959,43 @@ The response must be a single line in the format: "nickname: greeting message"
           };
           simulationLogger.debug(`Adding AI message from ${nickname.trim()}: "${content}"`);
           addMessageToContext(aiMessage, { type: 'channel', name: targetChannel.name });
+          
+          // Sometimes generate a reaction to the AI message for more conversation
+          if (Math.random() < 0.5) { // 50% chance to generate a reaction
+            simulationLogger.debug(`Generating reaction to AI message from ${nickname.trim()}`);
+            setTimeout(async () => {
+              try {
+                const reactionResponse = await generateReactionToMessage(targetChannel, aiMessage, currentUserNickname, aiModel);
+                if (reactionResponse) {
+                  const [reactionNickname, ...reactionContentParts] = reactionResponse.split(':');
+                  const reactionContent = reactionContentParts.join(':').trim();
+                  
+                  if (reactionNickname && reactionContent && reactionNickname.trim()) {
+                    // Show typing indicator
+                    setTyping(reactionNickname.trim(), true);
+                    
+                    // Simulate typing delay
+                    await simulateTypingDelay(reactionContent.length, typingDelayConfig);
+                    
+                    // Hide typing indicator
+                    setTyping(reactionNickname.trim(), false);
+                    
+                    const reactionMessage: Message = {
+                      id: generateUniqueMessageId(),
+                      nickname: reactionNickname.trim(),
+                      content: reactionContent,
+                      timestamp: new Date(),
+                      type: 'ai'
+                    };
+                    simulationLogger.debug(`Adding reaction from ${reactionNickname.trim()}: "${reactionContent}"`);
+                    addMessageToContext(reactionMessage, { type: 'channel', name: targetChannel.name });
+                  }
+                }
+              } catch (error) {
+                console.error('[Simulation Debug] Error generating reaction:', error);
+              }
+            }, Math.random() * 3000 + 1000); // Random delay between 1-4 seconds
+          }
         } else {
           simulationLogger.debug(`Invalid response format: "${response}" - nickname: "${nickname}", content: "${content}"`);
         }
@@ -1836,9 +2003,47 @@ The response must be a single line in the format: "nickname: greeting message"
         simulationLogger.debug(`No response generated for ${targetChannel.name}`);
       }
       
+      // Even in normal mode, sometimes generate additional activity for more diverse conversations
+      if (!shouldBurst && Math.random() < 0.2) { // 20% chance for additional activity in normal mode
+        simulationLogger.debug(`Normal mode: generating additional activity for ${targetChannel.name}`);
+        setTimeout(async () => {
+          try {
+            console.log('[Simulation Debug] Using aiModel for additional activity:', aiModel);
+            const additionalResponse = await generateChannelActivity(targetChannel, currentUserNickname, aiModel);
+            if (additionalResponse) {
+              const [nickname, ...contentParts] = additionalResponse.split(':');
+              const content = contentParts.join(':').trim();
+              
+              if (nickname && content && nickname.trim()) {
+                // Show typing indicator
+                setTyping(nickname.trim(), true);
+                
+                // Simulate typing delay
+                await simulateTypingDelay(content.length, typingDelayConfig);
+                
+                // Hide typing indicator
+                setTyping(nickname.trim(), false);
+                
+                const aiMessage: Message = {
+                  id: generateUniqueMessageId(),
+                  nickname: nickname.trim(),
+                  content,
+                  timestamp: new Date(),
+                  type: 'ai'
+                };
+                simulationLogger.debug(`Adding additional AI message from ${nickname.trim()}: "${content}"`);
+                addMessageToContext(aiMessage, { type: 'channel', name: targetChannel.name });
+              }
+            }
+          } catch (error) {
+            console.error('[Simulation Debug] Error generating additional activity:', error);
+          }
+        }, Math.random() * 5000 + 2000); // Random delay between 2-7 seconds
+      }
+      
       // In burst mode, sometimes generate a second message for more activity
-      // Reduced probability and increased delay for Tier 1 API stability
-      if (shouldBurst && Math.random() < 0.15) { // Reduced from 0.3 to 0.15
+      // Increased probability for more balanced conversation
+      if (shouldBurst && Math.random() < 0.6) { // Increased from 0.4 to 0.6
         simulationLogger.debug(`Burst mode: generating second message for ${targetChannel.name}`);
         setTimeout(async () => {
           try {

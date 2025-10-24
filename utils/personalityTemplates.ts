@@ -29,6 +29,86 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
     }
   },
   {
+    id: 'multilingual_enthusiast',
+    name: 'Multilingual Enthusiast',
+    description: 'Loves languages and cultural exchange, speaks multiple languages',
+    baseUser: {
+      personality: 'Passionate about languages and cultural exchange, loves helping others learn and sharing knowledge about different cultures',
+      languageSkills: {
+        fluency: 'native',
+        languages: ['English', 'Spanish', 'French'],
+        accent: ''
+      },
+      writingStyle: {
+        formality: 'neutral',
+        verbosity: 'verbose',
+        humor: 'witty',
+        emojiUsage: 'medium',
+        punctuation: 'standard'
+      }
+    }
+  },
+  {
+    id: 'japanese_otaku',
+    name: 'Japanese Otaku',
+    description: 'Anime and manga enthusiast with Japanese cultural knowledge',
+    baseUser: {
+      personality: 'Passionate about anime, manga, and Japanese culture. Loves discussing the latest series and sharing cultural insights',
+      languageSkills: {
+        fluency: 'advanced',
+        languages: ['Japanese', 'English'],
+        accent: ''
+      },
+      writingStyle: {
+        formality: 'informal',
+        verbosity: 'verbose',
+        humor: 'witty',
+        emojiUsage: 'high',
+        punctuation: 'creative'
+      }
+    }
+  },
+  {
+    id: 'german_engineer',
+    name: 'German Engineer',
+    description: 'Precise and technical German-speaking engineer',
+    baseUser: {
+      personality: 'Precise, methodical, and highly technical. Values efficiency and accuracy in all discussions',
+      languageSkills: {
+        fluency: 'native',
+        languages: ['German', 'English'],
+        accent: ''
+      },
+      writingStyle: {
+        formality: 'formal',
+        verbosity: 'neutral',
+        humor: 'dry',
+        emojiUsage: 'none',
+        punctuation: 'standard'
+      }
+    }
+  },
+  {
+    id: 'spanish_artist',
+    name: 'Spanish Artist',
+    description: 'Creative and passionate Spanish-speaking artist',
+    baseUser: {
+      personality: 'Creative, passionate, and expressive. Loves discussing art, music, and culture with great enthusiasm',
+      languageSkills: {
+        fluency: 'native',
+        languages: ['Spanish', 'English'],
+        accent: ''
+      },
+      writingStyle: {
+        formality: 'informal',
+        verbosity: 'verbose',
+        humor: 'witty',
+        emojiUsage: 'high',
+        punctuation: 'excessive'
+      }
+    }
+  },
+  {
     id: 'polite_academic',
     name: 'Polite Academic',
     description: 'Formal, well-educated, and always respectful',
@@ -186,7 +266,17 @@ export const TRAIT_POOLS = {
     'helpful and supportive',
     'competitive and driven',
     'laid-back and relaxed',
-    'perfectionist and detail-oriented'
+    'perfectionist and detail-oriented',
+    'passionate about languages',
+    'culturally aware and open-minded',
+    'bilingual and bicultural',
+    'language learning enthusiast',
+    'international traveler',
+    'cultural bridge-builder',
+    'multilingual communicator',
+    'cross-cultural expert',
+    'global citizen',
+    'language exchange partner'
   ],
   interests: [
     'technology and programming',
@@ -203,7 +293,18 @@ export const TRAIT_POOLS = {
     'nature and environment',
     'business and finance',
     'education and learning',
-    'social causes and activism'
+    'social causes and activism',
+    'language learning and linguistics',
+    'cultural exchange and international relations',
+    'translation and interpretation',
+    'world literature and poetry',
+    'international cuisine and cooking',
+    'global music and traditional arts',
+    'cross-cultural communication',
+    'international business and trade',
+    'multilingual media and entertainment',
+    'cultural anthropology and sociology',
+    'international education and exchange programs'
   ],
   languages: [
     'English', 'Spanish', 'French', 'German', 'Italian', 'Portuguese', 

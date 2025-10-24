@@ -163,7 +163,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setModelsError(null);
       try {
         const models = await listAvailableModels();
-        setAvailableModels(models);
+        // Process API models to add baseModelId property
+        const processedModels = models.map(model => ({
+          ...model,
+          baseModelId: model.name, // Use the name as baseModelId
+        }));
+        setAvailableModels(processedModels);
       } catch (error) {
         console.error('Failed to fetch available models:', error);
         setModelsError(error instanceof Error ? error.message : 'Failed to fetch models');
