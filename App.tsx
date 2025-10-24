@@ -7,10 +7,24 @@ import { DEFAULT_CHANNELS, DEFAULT_VIRTUAL_USERS, DEFAULT_NICKNAME, SIMULATION_I
 import type { Channel, Message, User, ActiveContext, PrivateMessageConversation, AppConfig } from './types';
 import { addChannelOperator, removeChannelOperator, isChannelOperator, canUserPerformAction } from './types';
 import { generateChannelActivity, generateReactionToMessage, generatePrivateMessageResponse } from './services/geminiService';
+import { handleBotCommand, isBotCommand } from './services/botService';
 import { loadConfig, saveConfig, initializeStateFromConfig, saveChannelLogs, loadChannelLogs, clearChannelLogs, simulateTypingDelay } from './utils/config';
 import { getIRCExportService, getDefaultIRCExportConfig, type IRCExportConfig, type IRCExportStatus, type IRCExportMessage } from './services/ircExportService';
 import { getChatLogService, initializeChatLogs } from './services/chatLogService';
 import { ChatLogManager } from './components/ChatLogManager';
+
+// Helper function to deduplicate users in a channel
+const deduplicateChannelUsers = (users: User[]): User[] => {
+  const seen = new Set<string>();
+  return users.filter(user => {
+    if (seen.has(user.nickname)) {
+      console.warn(`[Deduplication] Removing duplicate user: ${user.nickname}`);
+      return false;
+    }
+    seen.add(user.nickname);
+    return true;
+  });
+};
 
 // Operator persistence functions
 const saveOperatorAssignments = (channels: Channel[]) => {
@@ -177,9 +191,19 @@ const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isChatLogOpen, setIsChatLogOpen] = useState(false);
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
+  const [lastSpeakersReset, setLastSpeakersReset] = useState(0); // Force user selection reset
   const [typingDelayConfig, setTypingDelayConfig] = useState(() => {
     const savedConfig = loadConfig();
     return savedConfig?.typingDelay || DEFAULT_TYPING_DELAY;
+  });
+  const [imageGenerationConfig, setImageGenerationConfig] = useState(() => {
+    const savedConfig = loadConfig();
+    return savedConfig?.imageGeneration || {
+      provider: 'placeholder',
+      apiKey: '',
+      model: 'gemini-2.5-flash-image-preview',
+      baseUrl: undefined
+    };
   });
   
   // IRC Export state
@@ -209,7 +233,7 @@ const App: React.FC = () => {
   });
   const burstModeRef = useRef<boolean>(false);
   const lastConversationResetRef = useRef<Record<string, number>>({});
-  
+
   // Unique ID generator to prevent React key collisions
   const messageIdCounterRef = useRef<number>(0);
   const generateUniqueMessageId = useCallback(() => {
@@ -218,6 +242,86 @@ const App: React.FC = () => {
   }, []);
 
   // Auto-join users to channels that only have the current user
+  // Function to reset last speakers tracking to force more diverse user selection
+  const resetLastSpeakers = useCallback(() => {
+    console.log('[User Selection] Resetting last speakers tracking to force diverse user selection');
+    setLastSpeakersReset(prev => prev + 1);
+    
+    // Clear recent messages to reset the "recent speakers" tracking
+    setChannels(prevChannels => 
+      prevChannels.map(channel => ({
+        ...channel,
+        messages: channel.messages.slice(-50) // Keep only last 50 messages to reset recent speaker tracking
+      }))
+    );
+  }, []);
+
+  // Manual reset function for stuck loading state
+  const resetLoadingState = useCallback(() => {
+    console.warn('[Input Protection] Manually resetting loading state');
+    setIsLoading(false);
+  }, []);
+
+  // Handle bot command messages
+  const handleBotCommandMessage = async (content: string) => {
+    if (!activeContext) return;
+    
+    // Find a bot user in the current context
+    let botUser: User | undefined;
+    if (activeContext.type === 'channel') {
+      const channel = channels.find(c => c.name === activeContext.name);
+      botUser = channel?.users.find(u => u.userType === 'bot');
+    } else if (activeContext.type === 'pm') {
+      const conversation = privateMessages[activeContext.with];
+      if (conversation?.user.userType === 'bot') {
+        botUser = conversation.user;
+      }
+    }
+    
+    if (!botUser) {
+      // No bot available, show error message
+      const errorMessage: Message = {
+        id: Date.now(),
+        nickname: 'system',
+        content: '❌ No bot is available in this channel to handle your command.',
+        timestamp: new Date(),
+        type: 'system'
+      };
+      addMessageToContext(errorMessage, activeContext);
+      return;
+    }
+    
+    try {
+      const botResponse = await handleBotCommand(content, botUser, activeContext.name, aiModel, imageGenerationConfig);
+      if (botResponse) {
+        addMessageToContext(botResponse, activeContext);
+      }
+    } catch (error) {
+      console.error('[Bot Service] Bot command failed:', error);
+      
+      // Provide specific error messages based on error type
+      let errorContent = '❌ Bot command failed. Please try again later.';
+      if (error instanceof Error) {
+        if (error.message.includes('quota exhausted') || error.message.includes('quota exceeded')) {
+          errorContent = '⚠️ AI service quota exhausted. Please try again later or check your API key limits.';
+        } else if (error.message.includes('rate limit')) {
+          errorContent = '⚠️ Rate limit exceeded. Please wait a moment and try again.';
+        } else if (error.message.includes('Network error')) {
+          errorContent = '⚠️ Network error. Please check your internet connection and try again.';
+        }
+      }
+      
+      const errorMessage: Message = {
+        id: Date.now(),
+        nickname: 'system',
+        content: errorContent,
+        timestamp: new Date(),
+        type: 'system'
+      };
+      addMessageToContext(errorMessage, activeContext);
+    }
+  };
+
   const autoJoinUsersToEmptyChannels = useCallback(() => {
     const channelsToUpdate: Channel[] = [];
     
@@ -238,40 +342,47 @@ const App: React.FC = () => {
           const shuffledUsers = [...availableUsers].sort(() => Math.random() - 0.5);
           const usersToJoin = shuffledUsers.slice(0, numUsersToJoin);
           
-          const updatedChannel = {
-            ...channel,
-            users: [...channel.users, ...usersToJoin]
-          };
+          // Filter out users who are already in the channel to prevent duplicates
+          const usersNotInChannel = usersToJoin.filter(user => 
+            !channel.users.some(channelUser => channelUser.nickname === user.nickname)
+          );
           
-          channelsToUpdate.push(updatedChannel);
-          
-          // Add join messages for the new users
-          usersToJoin.forEach(user => {
-            const joinMessage: Message = {
-              id: generateUniqueMessageId(),
-              nickname: user.nickname,
-              content: `joined ${channel.name}`,
-              timestamp: new Date(),
-              type: 'join'
+          if (usersNotInChannel.length > 0) {
+            const updatedChannel = {
+              ...channel,
+              users: [...channel.users, ...usersNotInChannel]
             };
-            console.log(`[Auto-Join] Adding join message for ${user.nickname} to channel ${channel.name}`);
-            addMessageToContext(joinMessage, { type: 'channel', name: channel.name });
-          });
           
-          // Update user channel assignments
-          const updatedUsers = virtualUsers.map(user => {
-            if (usersToJoin.some(u => u.nickname === user.nickname)) {
-              return {
-                ...user,
-                assignedChannels: [...(user.assignedChannels || []), channel.name]
+            channelsToUpdate.push(updatedChannel);
+            
+            // Add join messages for the new users
+            usersNotInChannel.forEach(user => {
+              const joinMessage: Message = {
+                id: generateUniqueMessageId(),
+                nickname: user.nickname,
+                content: `joined ${channel.name}`,
+                timestamp: new Date(),
+                type: 'join'
               };
-            }
-            return user;
-          });
-          setVirtualUsers(updatedUsers);
-          saveUserChannelAssignments(updatedUsers);
-          
-          simulationLogger.debug(`Auto-joined ${usersToJoin.length} users to ${channel.name}: ${usersToJoin.map(u => u.nickname).join(', ')}`);
+              console.log(`[Auto-Join] Adding join message for ${user.nickname} to channel ${channel.name}`);
+              addMessageToContext(joinMessage, { type: 'channel', name: channel.name });
+            });
+            
+            // Update user channel assignments
+            const updatedUsers = virtualUsers.map(user => {
+              if (usersNotInChannel.some(u => u.nickname === user.nickname)) {
+                return {
+                  ...user,
+                  assignedChannels: [...(user.assignedChannels || []), channel.name]
+                };
+              }
+              return user;
+            });
+            setVirtualUsers(updatedUsers);
+            saveUserChannelAssignments(updatedUsers);
+            
+            simulationLogger.debug(`Auto-joined ${usersNotInChannel.length} users to ${channel.name}: ${usersNotInChannel.map(u => u.nickname).join(', ')}`);
+          }
         }
       }
     });
@@ -280,7 +391,14 @@ const App: React.FC = () => {
       setChannels(prevChannels => 
         prevChannels.map(channel => {
           const updatedChannel = channelsToUpdate.find(c => c.name === channel.name);
-          return updatedChannel || channel;
+          if (updatedChannel) {
+            // Deduplicate users to prevent React key collisions
+            return {
+              ...updatedChannel,
+              users: deduplicateChannelUsers(updatedChannel.users)
+            };
+          }
+          return channel;
         })
       );
     }
@@ -315,13 +433,13 @@ const App: React.FC = () => {
     }
     
     // Merge saved logs with current channels
-    if (savedLogs && savedLogs.length > 0) {
-      configLogger.debug('Saved logs details:', savedLogs.map(c => ({ 
-        name: c.name, 
-        messageCount: c.messages?.length || 0,
-        messages: c.messages?.slice(0, 2) // Show first 2 messages
-      })));
-      
+      if (savedLogs && savedLogs.length > 0) {
+        configLogger.debug('Saved logs details:', savedLogs.map(c => ({ 
+          name: c.name, 
+          messageCount: c.messages?.length || 0,
+          messages: c.messages?.slice(0, 2) // Show first 2 messages
+        })));
+        
       // Merge saved messages with current channels
       setChannels(prevChannels => {
         const mergedChannels = prevChannels.map(configuredChannel => {
@@ -351,7 +469,7 @@ const App: React.FC = () => {
         configLogger.debug('Merged channels message counts:', mergedChannels.map(c => ({ name: c.name, messageCount: c.messages?.length || 0 })));
         return mergedChannels;
       });
-    } else {
+      } else {
       configLogger.debug('No saved logs, using current channels');
     }
   }, []);
@@ -397,6 +515,12 @@ const App: React.FC = () => {
     setAiModel(savedAiModel || DEFAULT_AI_MODEL);
     console.log('[Settings Debug] Set aiModel to:', savedAiModel || DEFAULT_AI_MODEL);
     setTypingDelayConfig(typingDelay || DEFAULT_TYPING_DELAY);
+      setImageGenerationConfig(config.imageGeneration || {
+        provider: 'placeholder',
+        apiKey: '',
+        model: 'gemini-2.5-flash-image-preview',
+        baseUrl: undefined
+      });
     setPrivateMessages({});
 
     
@@ -772,8 +896,9 @@ const App: React.FC = () => {
 
   // Extract links and images from message content
   const extractLinksAndImages = useCallback((content: string): { links: string[], images: string[] } => {
-    const urlRegex = /(https?:\/\/[^\s]+)/gi;
-    const imageRegex = /(https?:\/\/[^\s]+\.(jpg|jpeg|png|gif|webp|svg)(\?[^\s]*)?)/gi;
+    // Improved URL regex that handles more edge cases and doesn't truncate at common punctuation
+    const urlRegex = /(https?:\/\/[^\s<>"']+)/gi;
+    const imageRegex = /(https?:\/\/[^\s<>"']+\.(jpg|jpeg|png|gif|webp|svg)(\?[^\s<>"']*)?)/gi;
     
     // List of unsafe domains to filter out
     const unsafeDomains = [
@@ -881,16 +1006,15 @@ const App: React.FC = () => {
       // Only allow services with confirmed CORS support
       // Based on testing, these services have proper CORS headers
       const corsCompliantPatterns = [
-        /httpbin\.org\/image\/[a-zA-Z0-9]+$/i, // httpbin.org test images
-        /picsum\.photos\/[0-9]+\/[0-9]+(\/[0-9]+)?(\?.*)?$/i, // picsum.photos random images
-        /labs\.google\/fx\/tools\/whisk\/share\/[a-zA-Z0-9]+$/i, // Google Whisk AI-generated images
+        /via\.placeholder\.com\/[0-9]+x[0-9]+(\/[a-fA-F0-9]{6})?(\/[a-fA-F0-9]{6})?(\?.*)?$/i, // via.placeholder.com consistent placeholder images
       ];
       
       // Block all other image hosting services that cause CORS issues
       const problematicImageServices = [
         'gyazo.com', 'prnt.sc', 'postimg.cc', 'imgchest.com', 'freeimage.host',
         'imgbb.com', 'imgur.com', 'imgur.com/a/', 'imgur.com/gallery/', 'imgur.com/album/',
-        'imgbox.com', '3lift.com', 'eb2.3lift.com', 'doubleclick.net', 'googlesyndication.com', 'googleadservices.com'
+        'imgbox.com', '3lift.com', 'eb2.3lift.com', 'doubleclick.net', 'googlesyndication.com', 'googleadservices.com',
+        'picsum.photos', 'httpbin.org', 'labs.google' // Block random image services that return different images each time
       ];
       
       // Check if URL contains any problematic image services
@@ -905,102 +1029,67 @@ const App: React.FC = () => {
       return directImagePatterns.some(pattern => pattern.test(url));
     };
     
+    // Extract all URLs once and process them efficiently
     const allUrls = content.match(urlRegex) || [];
-    const imageUrls = content.match(imageRegex) || [];
     
-    // Filter out Rick Astley redirect URLs, outdated YouTube links, problematic YouTube links, and Imgur URLs from all URLs
-    const filteredUrls = allUrls.filter(url => {
+    // Remove duplicates by using Set
+    const uniqueUrls = [...new Set(allUrls)];
+    
+    // Helper function to check if a URL should be blocked
+    const shouldBlockUrl = (url: string): boolean => {
       if (isRickAstleyRedirect(url)) {
         console.log('[URL Filter] Blocked Rick Astley redirect URL:', url);
-        return false;
+        return true;
       }
       if (isOutdatedYouTubeLink(url)) {
         console.log('[URL Filter] Blocked outdated YouTube link:', url);
-        return false;
+        return true;
       }
       if (isProblematicYouTubeLink(url)) {
         console.log('[URL Filter] Blocked problematic YouTube link:', url);
-        return false;
+        return true;
       }
       if (isImgurUrl(url)) {
         console.log('[URL Filter] Blocked Imgur URL:', url);
-        return false;
+        return true;
       }
-      return true;
-    });
+      if (isUnsafeUrl(url)) {
+        console.log('[URL Filter] Blocked unsafe URL:', url);
+        return true;
+      }
+      return false;
+    };
     
-    // Filter out unsafe URLs, fix Imgur URLs, and only keep direct image URLs
-    const safeImageUrls = imageUrls
-      .filter(url => {
-        // Check for Rick Astley redirects in image URLs too
-        if (isRickAstleyRedirect(url)) {
-          console.log('[URL Filter] Blocked Rick Astley redirect image URL:', url);
-          return false;
-        }
-        
-        // Check for outdated YouTube links in image URLs too
-        if (isOutdatedYouTubeLink(url)) {
-          console.log('[URL Filter] Blocked outdated YouTube image URL:', url);
-          return false;
-        }
-        
-        // Check for problematic YouTube links in image URLs too
-        if (isProblematicYouTubeLink(url)) {
-          console.log('[URL Filter] Blocked problematic YouTube image URL:', url);
-          return false;
-        }
-        
-        // Check for Imgur URLs in image URLs too
-        if (isImgurUrl(url)) {
-          console.log('[URL Filter] Blocked Imgur image URL:', url);
-          return false;
-        }
-        
-        const isUnsafe = isUnsafeUrl(url);
-        if (isUnsafe) {
-          console.log('[URL Filter] Blocked unsafe URL:', url);
-        }
-        return !isUnsafe;
-      })
-      .filter(url => {
-        const isDirect = isDirectImageUrl(url);
-        if (!isDirect) {
+    // Helper function to check if a URL is an image
+    const isImageUrl = (url: string): boolean => {
+      return /\.(jpg|jpeg|png|gif|webp|svg)(\?[^\s<>"']*)?$/i.test(url);
+    };
+    
+    // Process URLs once and categorize them
+    const safeImageUrls: string[] = [];
+    const safeLinkUrls: string[] = [];
+    
+    for (const url of uniqueUrls) {
+      if (shouldBlockUrl(url)) {
+        continue;
+      }
+      
+      if (isImageUrl(url)) {
+        // Check if it's a direct image URL
+        if (isDirectImageUrl(url)) {
+          safeImageUrls.push(url);
+        } else {
           console.log('[URL Filter] Blocked non-direct image URL:', url);
         }
-        return isDirect;
-      }); // Only keep direct image URLs
-    const safeLinkUrls = allUrls
-      .filter(url => {
-        // Check for Rick Astley redirects in link URLs
-        if (isRickAstleyRedirect(url)) {
-          console.log('[URL Filter] Blocked Rick Astley redirect link URL:', url);
-          return false;
-        }
-        
-        // Check for outdated YouTube links in link URLs
-        if (isOutdatedYouTubeLink(url)) {
-          console.log('[URL Filter] Blocked outdated YouTube link URL:', url);
-          return false;
-        }
-        
-        // Check for problematic YouTube links in link URLs
-        if (isProblematicYouTubeLink(url)) {
-          console.log('[URL Filter] Blocked problematic YouTube link URL:', url);
-          return false;
-        }
-        
-        // Check for Imgur URLs in link URLs too
-        if (isImgurUrl(url)) {
-          console.log('[URL Filter] Blocked Imgur link URL:', url);
-          return false;
-        }
-        
-        return !imageUrls.includes(url) && !isUnsafeUrl(url);
-      });
+      } else {
+        // It's a regular link
+        safeLinkUrls.push(url);
+      }
+    }
     
     console.log('[URL Filter] Processed URLs:', {
       allUrls: allUrls.length,
-      imageUrls: imageUrls.length,
+      uniqueUrls: uniqueUrls.length,
       safeImageUrls: safeImageUrls.length,
       safeLinkUrls: safeLinkUrls.length
     });
@@ -1019,7 +1108,8 @@ const App: React.FC = () => {
     const processedMessage = {
       ...message,
       links: links.length > 0 ? links : undefined,
-      images: images.length > 0 ? images : undefined
+      // Preserve existing images array if it exists, otherwise use extracted images
+      images: message.images || (images.length > 0 ? images : undefined)
     };
     if (context.type === 'channel') {
       console.log(`[addMessageToContext] Adding message to channel ${context.name}:`, processedMessage);
@@ -1102,16 +1192,16 @@ const App: React.FC = () => {
       // Handle /topic command
       if (cmd === '/topic') {
         if (activeContext?.type !== 'channel') {
-          addMessageToContext({
+      addMessageToContext({
             id: generateUniqueMessageId(),
-            nickname: 'system',
+        nickname: 'system',
             content: 'You can only change topics in channels',
-            timestamp: new Date(),
-            type: 'system'
-          }, activeContext);
-          return;
-        }
-        
+        timestamp: new Date(),
+        type: 'system'
+      }, activeContext);
+      return;
+    }
+
         const activeChannel = channels.find(c => c.name === activeContext.name);
         if (!activeChannel) return;
         
@@ -1129,13 +1219,13 @@ const App: React.FC = () => {
         
         // If no new topic provided, show current topic
         if (parts.length === 1) {
-          addMessageToContext({
+            addMessageToContext({
             id: generateUniqueMessageId(),
-            nickname: 'system',
+                nickname: 'system',
             content: `Current topic for ${activeChannel.name}: ${activeChannel.topic || 'No topic set'}`,
-            timestamp: new Date(),
-            type: 'system'
-          }, activeContext);
+                timestamp: new Date(),
+                type: 'system'
+            }, activeContext);
           return;
         }
         
@@ -1187,24 +1277,24 @@ const App: React.FC = () => {
       // Handle /me command
       if (cmd === '/me') {
         if (activeContext?.type !== 'channel') {
-          addMessageToContext({
+            addMessageToContext({
             id: generateUniqueMessageId(),
-            nickname: 'system',
+              nickname: 'system',
             content: 'You can only use /me commands in channels',
-            timestamp: new Date(),
-            type: 'system'
-          }, activeContext);
+              timestamp: new Date(),
+              type: 'system'
+            }, activeContext);
           return;
         }
         
         if (parts.length < 2) {
-          addMessageToContext({
+            addMessageToContext({
             id: generateUniqueMessageId(),
-            nickname: 'system',
+              nickname: 'system',
             content: 'Usage: /me <action> (e.g., /me waves)',
-            timestamp: new Date(),
-            type: 'system'
-          }, activeContext);
+              timestamp: new Date(),
+              type: 'system'
+            }, activeContext);
           return;
         }
         
@@ -1307,9 +1397,9 @@ const App: React.FC = () => {
         setChannels(prev => [...prev, newChannel]);
         setActiveContext({ type: 'channel', name: channelName });
         
-        addMessageToContext({
+            addMessageToContext({
           id: generateUniqueMessageId(),
-          nickname: 'system',
+              nickname: 'system',
           content: `Joined ${channelName}`,
           timestamp: new Date(),
           type: 'system'
@@ -1325,9 +1415,9 @@ const App: React.FC = () => {
             id: generateUniqueMessageId(),
             nickname: 'system',
             content: 'You can only part from channels',
-            timestamp: new Date(),
-            type: 'system'
-          }, activeContext);
+              timestamp: new Date(),
+              type: 'system'
+            }, activeContext);
           return;
         }
         
@@ -1457,13 +1547,13 @@ const App: React.FC = () => {
       }
       
       // Handle other commands
-      addMessageToContext({
-        id: Date.now(),
-        nickname: 'system',
+        addMessageToContext({
+          id: Date.now(),
+          nickname: 'system',
         content: `Command not supported in web mode: ${command}. Type /help for available commands.`,
-        timestamp: new Date(),
-        type: 'system'
-      }, activeContext);
+          timestamp: new Date(),
+          type: 'system'
+        }, activeContext);
       return;
     }
 
@@ -1564,6 +1654,18 @@ const App: React.FC = () => {
       return;
     }
     
+    // Check for bot commands
+    if (isBotCommand(content)) {
+      await handleBotCommandMessage(content);
+      return;
+    }
+    
+    // Prevent multiple simultaneous message sends
+    if (isLoading) {
+      console.warn('[Input Protection] Message send already in progress, ignoring duplicate request');
+      return;
+    }
+    
     setIsLoading(true);
     const userMessage: Message = {
       id: Date.now(),
@@ -1577,6 +1679,12 @@ const App: React.FC = () => {
     // Track user message time for burst mode
     lastUserMessageTimeRef.current = Date.now();
 
+    // Set a timeout to ensure isLoading is always reset
+    const loadingTimeout = setTimeout(() => {
+      console.warn('[Input Protection] AI response timeout, resetting loading state');
+      setIsLoading(false);
+    }, 30000); // 30 second timeout
+
     try {
       let aiResponse: string | null = null;
       if (activeContext && activeContext.type === 'channel') {
@@ -1585,7 +1693,7 @@ const App: React.FC = () => {
           // Check if there are other users in the channel besides the current user
           const otherUsers = channel.users.filter(u => u.nickname !== currentUserNickname);
           if (otherUsers.length > 0) {
-            aiResponse = await generateReactionToMessage(channel, userMessage, currentUserNickname, aiModel);
+          aiResponse = await generateReactionToMessage(channel, userMessage, currentUserNickname, aiModel);
           }
         }
       } else if (activeContext && activeContext.type === 'pm') { // 'pm'
@@ -1655,6 +1763,7 @@ const App: React.FC = () => {
       };
       addMessageToContext(errorMessage, activeContext);
     } finally {
+      clearTimeout(loadingTimeout);
       setIsLoading(false);
     }
   };
@@ -1741,6 +1850,9 @@ The response must be a single line in the format: "nickname: greeting message"
               updatedChannel.users = [...updatedChannel.users, newUser];
             }
           });
+          
+          // Deduplicate users to prevent React key collisions
+          updatedChannel.users = deduplicateChannelUsers(updatedChannel.users);
           
           return updatedChannel;
         });
@@ -2160,6 +2272,28 @@ The response must be a single line in the format: "nickname: greeting message"
     };
   }, [runSimulation, simulationSpeed, isSettingsOpen]);
 
+  // Safety mechanism to reset loading state on component unmount or errors
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      setIsLoading(false);
+    };
+
+    const handleError = () => {
+      console.warn('[Input Protection] Global error detected, resetting loading state');
+      setIsLoading(false);
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('error', handleError);
+    window.addEventListener('unhandledrejection', handleError);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('error', handleError);
+      window.removeEventListener('unhandledrejection', handleError);
+    };
+  }, []);
+
   const activeChannel = useMemo(() => 
     activeContext?.type === 'channel' ? channels.find(c => c.name === activeContext.name) : undefined,
     [activeContext, channels]
@@ -2248,6 +2382,7 @@ The response must be a single line in the format: "nickname: greeting message"
         onSelectContext={setActiveContext}
         onOpenSettings={handleOpenSettings}
         onOpenChatLogs={handleOpenChatLogs}
+        onResetSpeakers={resetLastSpeakers}
       />
       <main className="flex flex-1 flex-col border-l border-r border-gray-700 min-h-0 lg:min-h-0">
         <ChatWindow 

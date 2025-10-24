@@ -1,6 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import type { Channel, Message, PrivateMessageConversation, RandomWorldConfig, GeminiModel, ModelsListResponse, User } from '../types';
-import { getLanguageFluency, getAllLanguages, getLanguageAccent, isChannelOperator, isPerLanguageFormat } from '../types';
+import { getLanguageFluency, getAllLanguages, getLanguageAccent, isChannelOperator, isPerLanguageFormat, isLegacyFormat } from '../types';
 import { withRateLimitAndRetries } from '../utils/config';
 
 const API_KEY = process.env.GEMINI_API_KEY;
@@ -570,14 +570,14 @@ LINK AND IMAGE SUPPORT:
 - Share images by including image URLs from common hosting services.
 - When sharing links or images, make them contextually relevant to the conversation.
 - Examples of good link sharing: "Check this out: https://example.com" or "Found this interesting: https://github.com/user/repo"
-- Examples of good image sharing: "Here's a screenshot: https://picsum.photos/400/300" or "Look at this: https://httpbin.org/image/jpeg" or "Check out this AI-generated image: https://labs.google/fx/tools/whisk/share/abc123"
+- Examples of good image sharing: "Here's a screenshot: https://via.placeholder.com/400x300/0066CC/FFFFFF?text=Screenshot" or "Look at this: https://via.placeholder.com/300x200/FF6B6B/FFFFFF?text=Image" or "Check out this: https://via.placeholder.com/500x300/4ECDC4/FFFFFF?text=Content"
 - Be proactive about sharing relevant content - don't wait for perfect opportunities, create them naturally.
-- SAFE image hosting services (use these): picsum.photos, httpbin.org, labs.google/fx/tools/whisk/share
-- AVOID these problematic services: gyazo.com, prnt.sc, postimg.cc, imgchest.com, freeimage.host, imgbb.com, imgur.com, i.imgur.com, imgbox.com, 3lift.com, ads.assemblyexchange.com, or any ad/tracking services
+- SAFE image hosting services (use these): via.placeholder.com (for consistent placeholder images)
+- AVOID these problematic services: picsum.photos (returns random images), httpbin.org (returns random test images), gyazo.com, prnt.sc, postimg.cc, imgchest.com, freeimage.host, imgbb.com, imgur.com, i.imgur.com, imgbox.com, 3lift.com, ads.assemblyexchange.com, or any ad/tracking services
 - NEVER use Imgur URLs (imgur.com, i.imgur.com), ImgBB URLs (imgbb.com), or Imgbox URLs (imgbox.com) as they cause CORS errors
-- Use complete, working URLs like: https://picsum.photos/400/300, https://httpbin.org/image/jpeg, https://labs.google/fx/tools/whisk/share/abc123
+- Use complete, working URLs like: https://via.placeholder.com/400x300/0066CC/FFFFFF?text=Screenshot, https://via.placeholder.com/300x200/FF6B6B/FFFFFF?text=Image
 - ALWAYS include file extensions (.jpg, .png, .gif, .webp) for direct image links
-- Preferred services: picsum.photos, httpbin.org, labs.google/fx/tools/whisk/share (these have proper CORS headers and work reliably)
+- Preferred services: via.placeholder.com (these provide consistent, static placeholder images that don't change)
 - CRITICAL: Only use REAL, EXISTING URLs that actually work - never make up fake URLs or non-existent content
 - CRITICAL: NEVER post Rick Astley's "Never Gonna Give You Up" video or any rickroll content
 - NEVER use YouTube video ID "dQw4w9WgXcQ" or any URLs containing this ID
@@ -630,6 +630,12 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
     return '';
   }
   
+  // Additional safety check to ensure we have valid users
+  if (usersInChannel.some(user => !user || !user.nickname)) {
+    console.error(`[AI Debug] Invalid users found in channel ${channel.name}:`, usersInChannel);
+    return '';
+  }
+  
   // Additional safety check: ensure we don't generate messages for the current user
   if (usersInChannel.some(u => u.nickname === currentUserNickname)) {
     console.log(`[AI Debug] Current user found in filtered users - this should not happen! Skipping AI generation`);
@@ -664,9 +670,9 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
   // Shuffle the array to add more variety
   const shuffledUsers = [...candidateUsers].sort(() => Math.random() - 0.5);
   
-  // Strongly prefer users who haven't spoken recently (last 5 messages for better balance)
+  // Prefer users who haven't spoken recently (last 2 messages for better balance)
   // Exclude current user from recent speakers tracking since we only care about virtual users
-  const recentSpeakers = channel.messages.slice(-5)
+  const recentSpeakers = channel.messages.slice(-2)
     .filter(msg => msg.nickname !== currentUserNickname)
     .map(msg => msg.nickname);
   const lessActiveUsers = shuffledUsers.filter(user => !recentSpeakers.includes(user.nickname));
@@ -676,9 +682,9 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
   const lastSpeaker = lastMessage ? lastMessage.nickname : null;
   const avoidLastSpeaker = lastSpeaker ? shuffledUsers.filter(user => user.nickname !== lastSpeaker) : shuffledUsers;
   
-  // Identify users who haven't spoken in a while (last 10 messages) for priority selection
+  // Identify users who haven't spoken in a while (last 5 messages) for priority selection
   // Exclude current user from long-term recent speakers tracking
-  const longTermRecentSpeakers = channel.messages.slice(-10)
+  const longTermRecentSpeakers = channel.messages.slice(-5)
     .filter(msg => msg.nickname !== currentUserNickname)
     .map(msg => msg.nickname);
   const longTermInactiveUsers = shuffledUsers.filter(user => !longTermRecentSpeakers.includes(user.nickname));
@@ -712,17 +718,23 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
       (user.writingStyle && user.writingStyle.verbosity === 'terse') ||
       (user.writingStyle && user.writingStyle.verbosity === 'very_terse')
     );
-    // If we have introspective users, use them with 60% probability, otherwise use all users
-    timeBasedUsers = introspectiveUsers.length > 0 && Math.random() < 0.6 ? introspectiveUsers : shuffledUsers;
+  // If we have introspective users, use them with 20% probability, otherwise use all users
+  timeBasedUsers = introspectiveUsers.length > 0 && Math.random() < 0.2 ? introspectiveUsers : shuffledUsers;
   }
   
-  // Balanced user selection to prevent same user from speaking multiple times while allowing all users to participate
-  if (longTermInactiveUsers.length > 0) {
-    // 60% chance to prefer long-term inactive users (users who haven't spoken in last 10 messages)
-    candidateUsers = Math.random() < 0.6 ? longTermInactiveUsers : timeBasedUsers;
+  // Much more balanced user selection to allow natural conversation flow
+  // Significantly reduced restrictions to allow all users to participate regularly
+  
+  // 30% chance to use completely random selection to ensure diversity
+  if (Math.random() < 0.3) {
+    console.log(`[User Selection] Using completely random selection for diversity`);
+    candidateUsers = shuffledUsers;
+  } else if (longTermInactiveUsers.length > 0) {
+    // 20% chance to prefer long-term inactive users (users who haven't spoken in last 5 messages)
+    candidateUsers = Math.random() < 0.2 ? longTermInactiveUsers : timeBasedUsers;
   } else if (lessActiveUsers.length > 0) {
-    // 50% chance to prefer less active users (users who haven't spoken in last 5 messages)
-    candidateUsers = Math.random() < 0.5 ? lessActiveUsers : timeBasedUsers;
+    // 15% chance to prefer less active users (users who haven't spoken in last 2 messages)
+    candidateUsers = Math.random() < 0.15 ? lessActiveUsers : timeBasedUsers;
   } else if (avoidLastSpeaker.length > 0 && lastSpeaker) {
     // If no less active users, avoid the last speaker but allow others
     candidateUsers = avoidLastSpeaker;
@@ -736,7 +748,41 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
     candidateUsers = shuffledUsers;
   }
   
+  // Gentle user rotation: only avoid users who have spoken 4+ times in the last 6 messages
+  // This is much less aggressive to allow more natural conversation flow
+  const recentUserCounts = channel.messages.slice(-6)
+    .filter(msg => msg.nickname !== currentUserNickname)
+    .reduce((counts, msg) => {
+      counts[msg.nickname] = (counts[msg.nickname] || 0) + 1;
+      return counts;
+    }, {} as Record<string, number>);
+  
+  const overactiveUsers = Object.entries(recentUserCounts)
+    .filter(([_, count]) => count >= 4) // Increased threshold from 3 to 4
+    .map(([nickname, _]) => nickname);
+  
+  if (overactiveUsers.length > 0) {
+    console.log(`[User Selection] Detected overactive users: ${overactiveUsers.join(', ')} - gentle rotation`);
+    // Only reduce probability, don't completely filter out
+    candidateUsers = candidateUsers.filter(user => !overactiveUsers.includes(user.nickname));
+    
+    // If filtering removed all candidates, use all users as fallback
+    if (candidateUsers.length === 0) {
+      console.warn(`[User Selection] No candidates after overactive filtering, using all users as fallback`);
+      candidateUsers = shuffledUsers;
+    }
+  }
+  
   const randomUser = candidateUsers[Math.floor(Math.random() * candidateUsers.length)];
+  
+  // Safety check to ensure we have a valid user
+  if (!randomUser) {
+    console.error(`[User Selection] No valid user found! candidateUsers.length: ${candidateUsers.length}`);
+    console.error(`[User Selection] candidateUsers:`, candidateUsers.map(u => u.nickname));
+    console.error(`[User Selection] shuffledUsers:`, shuffledUsers.map(u => u.nickname));
+    console.error(`[User Selection] overactiveUsers:`, overactiveUsers);
+    throw new Error('No valid user found for channel activity');
+  }
   
   console.log(`[AI Debug] Selected user: ${randomUser.nickname} for channel activity (language: ${getAllLanguages(randomUser.languageSkills)[0]})`);
   console.log(`[AI Debug] Recent speakers (last 3): ${recentSpeakers.join(', ')}`);
@@ -748,8 +794,25 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
   console.log(`[AI Debug] Time-based users: ${timeBasedUsers.map(u => u.nickname).join(', ')}`);
   console.log(`[AI Debug] Total users in channel: ${usersInChannel.length}`);
 
+  // Safety check: ensure user has valid languageSkills
+  if (!randomUser.languageSkills) {
+    console.error(`[AI Debug] User ${randomUser.nickname} has undefined languageSkills!`);
+    console.error(`[AI Debug] User object:`, randomUser);
+    // Set default languageSkills
+    randomUser.languageSkills = {
+      languages: [{ language: 'English', fluency: 'native', accent: '' }]
+    };
+  }
+
   const userLanguages = getAllLanguages(randomUser.languageSkills);
+  // Use the first language from language skills, not from personality description
   const primaryLanguage = userLanguages[0] || 'English';
+  
+  console.log(`[AI Debug] User ${randomUser.nickname} language skills:`, randomUser.languageSkills);
+  console.log(`[AI Debug] User ${randomUser.nickname} languages:`, userLanguages);
+  console.log(`[AI Debug] User ${randomUser.nickname} primary language:`, primaryLanguage);
+  console.log(`[AI Debug] isPerLanguageFormat check:`, isPerLanguageFormat(randomUser.languageSkills));
+  console.log(`[AI Debug] isLegacyFormat check:`, isLegacyFormat(randomUser.languageSkills));
 
   // Calculate appropriate token limit based on verbosity
   const getTokenLimit = (verbosity: string): number => {
@@ -856,7 +919,7 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
     diversityPrompt = 'IMPORTANT: Add some humor, wit, or clever wordplay to the conversation.';
   } else if (conversationVariety < 0.95) {
     // 10% chance: Share a link or image
-    diversityPrompt = 'IMPORTANT: Share a relevant link or image that adds value to the conversation. Use complete, working URLs like https://picsum.photos/400/300 or https://github.com/user/repo. Always include file extensions for images. Use only CORS-compliant services: picsum.photos, httpbin.org, labs.google/fx/tools/whisk/share. Avoid ad networks, tracking services, and problematic image hosting services. CRITICAL: AVOID sharing YouTube links entirely - they often become outdated, unavailable, or redirect to unwanted content. Instead, share GitHub repos, news articles, tutorials, memes, screenshots, or documentation. If you must share video content, describe it instead of linking to it. CRITICAL: Only share REAL, EXISTING links that actually work - never make up fake URLs or non-existent content. If unsure about a link\'s existence, don\'t share it. NEVER post Rick Astley\'s "Never Gonna Give You Up" or similar overused memes - these are cliché and repetitive. NEVER use YouTube video ID "dQw4w9WgXcQ" or any URLs containing this ID. NEVER post URLs that redirect to Rick Astley content, even if they look legitimate. Share fresh, diverse content instead.';
+    diversityPrompt = 'IMPORTANT: Share a relevant link or image that adds value to the conversation. Use complete, working URLs like https://via.placeholder.com/400x300/0066CC/FFFFFF?text=Screenshot or https://github.com/user/repo. Always include file extensions for images. Use only CORS-compliant services: via.placeholder.com (for consistent placeholder images). Avoid ad networks, tracking services, and problematic image hosting services. CRITICAL: AVOID sharing YouTube links entirely - they often become outdated, unavailable, or redirect to unwanted content. Instead, share GitHub repos, news articles, tutorials, memes, screenshots, or documentation. If you must share video content, describe it instead of linking to it. CRITICAL: Only share REAL, EXISTING links that actually work - never make up fake URLs or non-existent content. If unsure about a link\'s existence, don\'t share it. NEVER post Rick Astley\'s "Never Gonna Give You Up" or similar overused memes - these are cliché and repetitive. NEVER use YouTube video ID "dQw4w9WgXcQ" or any URLs containing this ID. NEVER post URLs that redirect to Rick Astley content, even if they look legitimate. Share fresh, diverse content instead.';
   } else {
     // 5% chance: Be more conversational and natural
     diversityPrompt = 'IMPORTANT: Be more conversational and natural - like you\'re talking to friends in a relaxed setting.';
@@ -951,6 +1014,8 @@ CRITICAL: Respond ONLY in ${primaryLanguage}. Do not use any other language.
 ${userLanguages.length > 1 ? `Available languages: ${userLanguages.join(', ')}. Use ${primaryLanguage} only.` : ''}
 ${dominantLanguage !== primaryLanguage ? `Note: The channel's dominant language is ${dominantLanguage}, but ${randomUser.nickname} should respond in ${primaryLanguage}.` : ''}
 
+LANGUAGE INSTRUCTION: The user's primary language is ${primaryLanguage} based on their language skills. Ignore the language of their personality description - use ${primaryLanguage} for all communication regardless of what language their personality description is written in.
+
 Consider ${randomUser.nickname}'s writing style:
 - Formality: ${writingStyle.formality}
 - Verbosity: ${writingStyle.verbosity} ${writingStyle.verbosity === 'very_verbose' ? '(write very long, detailed messages with multiple sentences and thorough explanations)' : writingStyle.verbosity === 'verbose' ? '(write moderately detailed messages with several sentences)' : writingStyle.verbosity === 'terse' ? '(write brief, concise messages)' : writingStyle.verbosity === 'very_terse' ? '(write very brief messages - short phrases or single sentences, but make them complete and meaningful)' : ''}
@@ -994,7 +1059,7 @@ ${isChannelOperator(channel, randomUser.nickname) ? `- Role: Channel operator (c
             model: validatedModel,
             contents: prompt,
             config: config,
-        })
+        }), `channel activity generation for ${randomUser.nickname}`
       );
       
       const result = extractTextFromResponse(response);
@@ -1207,7 +1272,7 @@ ${formatMessageHistory(channel.messages)}
 
     ${reactionAntiGreetingSpam}
 
-    ${Math.random() < 0.2 ? 'IMPORTANT: Consider sharing a relevant link or image in your reaction to make it more engaging. Use complete, working URLs like https://picsum.photos/400/300 or https://github.com/user/repo. Always include file extensions for images. Use only CORS-compliant services: picsum.photos, httpbin.org, labs.google/fx/tools/whisk/share. Avoid ad networks, tracking services, and problematic image hosting services. CRITICAL: AVOID sharing YouTube links entirely - they often become outdated, unavailable, or redirect to unwanted content. Instead, share GitHub repos, news articles, tutorials, memes, screenshots, or documentation. If you must share video content, describe it instead of linking to it. CRITICAL: Only share REAL, EXISTING links that actually work - never make up fake URLs or non-existent content. If unsure about a link\'s existence, don\'t share it. NEVER post Rick Astley\'s "Never Gonna Give You Up" or similar overused memes - these are cliché and repetitive. NEVER use YouTube video ID "dQw4w9WgXcQ" or any URLs containing this ID. NEVER post URLs that redirect to Rick Astley content, even if they look legitimate. Share fresh, diverse content instead.' : ''}
+    ${Math.random() < 0.2 ? 'IMPORTANT: Consider sharing a relevant link or image in your reaction to make it more engaging. Use complete, working URLs like https://via.placeholder.com/400x300/0066CC/FFFFFF?text=Screenshot or https://github.com/user/repo. Always include file extensions for images. Use only CORS-compliant services: via.placeholder.com (for consistent placeholder images). Avoid ad networks, tracking services, and problematic image hosting services. CRITICAL: AVOID sharing YouTube links entirely - they often become outdated, unavailable, or redirect to unwanted content. Instead, share GitHub repos, news articles, tutorials, memes, screenshots, or documentation. If you must share video content, describe it instead of linking to it. CRITICAL: Only share REAL, EXISTING links that actually work - never make up fake URLs or non-existent content. If unsure about a link\'s existence, don\'t share it. NEVER post Rick Astley\'s "Never Gonna Give You Up" or similar overused memes - these are cliché and repetitive. NEVER use YouTube video ID "dQw4w9WgXcQ" or any URLs containing this ID. NEVER post URLs that redirect to Rick Astley content, even if they look legitimate. Share fresh, diverse content instead.' : ''}
 
     IMPORTANT: Reply to ONE person at a time, not multiple people. Focus on the most recent or most relevant message. Avoid addressing multiple users in one sentence - this is unrealistic IRC behavior. Keep your response natural and conversational, like a real IRC user would.
 
@@ -1218,6 +1283,8 @@ ${writingStyle.verbosity === 'very_verbose' ? 'IMPORTANT: This user is very verb
 
 CRITICAL: Respond ONLY in ${primaryLanguage}. Do not use any other language.
 ${userLanguages.length > 1 ? `Available languages: ${userLanguages.join(', ')}. Use ${primaryLanguage} only.` : ''}
+
+LANGUAGE INSTRUCTION: The user's primary language is ${primaryLanguage} based on their language skills. Ignore the language of their personality description - use ${primaryLanguage} for all communication regardless of what language their personality description is written in.
 
 Consider ${randomUser.nickname}'s writing style:
 - Formality: ${writingStyle.formality}
@@ -1262,7 +1329,7 @@ ${isChannelOperator(channel, randomUser.nickname) ? `- Role: Channel operator (c
                   model: validatedModel,
                   contents: prompt,
                   config: config,
-              })
+              }), `reaction generation from ${randomUser.nickname}`
           );
           
           const result = extractTextFromResponse(response);
@@ -1332,6 +1399,8 @@ ${formatMessageHistory(conversation.messages)}
 CRITICAL: Respond ONLY in ${primaryLanguage}. Do not use any other language.
 ${userLanguages.length > 1 ? `Available languages: ${userLanguages.join(', ')}. Use ${primaryLanguage} only.` : ''}
 
+LANGUAGE INSTRUCTION: The user's primary language is ${primaryLanguage} based on their language skills. Ignore the language of their personality description - use ${primaryLanguage} for all communication regardless of what language their personality description is written in.
+
 Your writing style:
 - Formality: ${writingStyle.formality}
 - Verbosity: ${writingStyle.verbosity} ${writingStyle.verbosity === 'very_verbose' ? '(write very long, detailed messages with multiple sentences and thorough explanations)' : writingStyle.verbosity === 'verbose' ? '(write moderately detailed messages with several sentences)' : writingStyle.verbosity === 'terse' ? '(write brief, concise messages)' : writingStyle.verbosity === 'very_terse' ? '(write very brief messages - short phrases or single sentences, but make them complete and meaningful)' : ''}
@@ -1370,7 +1439,7 @@ ${writingStyle.verbosity === 'very_verbose' ? 'IMPORTANT: This user is very verb
                 model: validatedModel,
                 contents: prompt,
                 config: config,
-            })
+            }), `private message response from ${conversation.user.nickname}`
         );
         
         const result = extractTextFromResponse(response);
@@ -1489,27 +1558,27 @@ Provide the output in JSON format.
                       properties: {
                         formality: {
                           type: Type.STRING,
-                          enum: ['casual', 'formal', 'mixed'],
+                          enum: ['very_informal', 'informal', 'neutral', 'formal', 'very_formal'],
                           description: "Writing formality level."
                         },
                         verbosity: {
                           type: Type.STRING,
-                          enum: ['concise', 'moderate', 'verbose'],
+                          enum: ['very_terse', 'terse', 'neutral', 'verbose', 'very_verbose'],
                           description: "Writing verbosity level."
                         },
                         humor: {
                           type: Type.STRING,
-                          enum: ['none', 'light', 'heavy'],
+                          enum: ['none', 'dry', 'sarcastic', 'witty', 'slapstick'],
                           description: "Humor level in writing."
                         },
                         emojiUsage: {
                           type: Type.STRING,
-                          enum: ['none', 'minimal', 'frequent'],
+                          enum: ['none', 'low', 'medium', 'high', 'excessive'],
                           description: "Emoji usage frequency."
                         },
                         punctuation: {
                           type: Type.STRING,
-                          enum: ['minimal', 'standard', 'excessive'],
+                          enum: ['minimal', 'standard', 'creative', 'excessive'],
                           description: "Punctuation style."
                         }
                       },
@@ -1535,7 +1604,7 @@ Provide the output in JSON format.
             model: validatedModel,
             contents: prompt,
             config: config,
-          })
+          }), `batch user generation (${users.length} users)`
         );
 
     console.log(`[AI Debug] Successfully received response from Gemini for batch user generation`);
@@ -1569,7 +1638,7 @@ Create a list of 8 unique virtual users with distinct, concise, and interesting 
 
 For each user, also generate:
 - Language skills: fluency level (beginner/intermediate/advanced/native), languages they speak, and optional accent/dialect
-- Writing style: formality (casual/formal/mixed), verbosity (concise/moderate/verbose), humor level (none/light/heavy), emoji usage (none/minimal/frequent), and punctuation style (minimal/standard/excessive)
+- Writing style: formality (very_informal/informal/neutral/formal/very_formal), verbosity (very_terse/terse/neutral/verbose/very_verbose), humor level (none/dry/sarcastic/witty/slapstick), emoji usage (none/low/medium/high/excessive), and punctuation style (minimal/standard/creative/excessive)
 
 Create a list of 4 unique and thematic IRC channels with creative topics. Channel names must start with #.
 
@@ -1602,49 +1671,58 @@ Provide the output in JSON format.
                                     languageSkills: {
                                         type: Type.OBJECT,
                                         properties: {
-                                            fluency: {
-                                                type: Type.STRING,
-                                                enum: ['beginner', 'intermediate', 'advanced', 'native'],
-                                                description: "Language fluency level."
-                                            },
                                             languages: {
                                                 type: Type.ARRAY,
-                                                items: { type: Type.STRING },
-                                                description: "List of languages the user speaks."
-                                            },
-                                            accent: {
-                                                type: Type.STRING,
-                                                description: "Optional accent or dialect description."
+                                                items: {
+                                                    type: Type.OBJECT,
+                                                    properties: {
+                                                        language: {
+                                                            type: Type.STRING,
+                                                            description: "The language name (e.g., 'English', 'Finnish', 'Spanish')."
+                                                        },
+                                                        fluency: {
+                                                            type: Type.STRING,
+                                                            enum: ['beginner', 'intermediate', 'advanced', 'native'],
+                                                            description: "Fluency level in this specific language."
+                                                        },
+                                                        accent: {
+                                                            type: Type.STRING,
+                                                            description: "Optional accent or dialect for this language."
+                                                        }
+                                                    },
+                                                    required: ['language', 'fluency']
+                                                },
+                                                description: "List of languages with individual fluency levels."
                                             }
                                         },
-                                        required: ['fluency', 'languages']
+                                        required: ['languages']
                                     },
                                     writingStyle: {
                                         type: Type.OBJECT,
                                         properties: {
                                             formality: {
                                                 type: Type.STRING,
-                                                enum: ['casual', 'formal', 'mixed'],
+                                                enum: ['very_informal', 'informal', 'neutral', 'formal', 'very_formal'],
                                                 description: "Writing formality level."
                                             },
                                             verbosity: {
                                                 type: Type.STRING,
-                                                enum: ['concise', 'moderate', 'verbose'],
+                                                enum: ['very_terse', 'terse', 'neutral', 'verbose', 'very_verbose'],
                                                 description: "Writing verbosity level."
                                             },
                                             humor: {
                                                 type: Type.STRING,
-                                                enum: ['none', 'light', 'heavy'],
+                                                enum: ['none', 'dry', 'sarcastic', 'witty', 'slapstick'],
                                                 description: "Humor level in writing."
                                             },
                                             emojiUsage: {
                                                 type: Type.STRING,
-                                                enum: ['none', 'minimal', 'frequent'],
+                                                enum: ['none', 'low', 'medium', 'high', 'excessive'],
                                                 description: "Emoji usage frequency."
                                             },
                                             punctuation: {
                                                 type: Type.STRING,
-                                                enum: ['minimal', 'standard', 'excessive'],
+                                                enum: ['minimal', 'standard', 'creative', 'excessive'],
                                                 description: "Punctuation style."
                                             }
                                         },
@@ -1688,7 +1766,7 @@ Provide the output in JSON format.
                     model: validatedModel,
                     contents: prompt,
                     config: config,
-                })
+                }), `world configuration generation`
             );
 
     const jsonString = extractTextFromResponse(response);

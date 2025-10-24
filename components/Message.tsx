@@ -16,6 +16,7 @@ let colorIndex = 0;
 const getUserColor = (nickname: string, currentUserNickname: string) => {
   if (nickname === currentUserNickname) return 'text-cyan-400';
   if (nickname === 'system') return 'text-gray-500';
+  if (nickname.endsWith('Bot') || nickname.includes('Bot')) return 'text-amber-400'; // Special color for bots
   if (!userColorMap[nickname]) {
     userColorMap[nickname] = colors[colorIndex % colors.length];
     colorIndex++;
@@ -24,8 +25,11 @@ const getUserColor = (nickname: string, currentUserNickname: string) => {
 };
 
 export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickname }) => {
-  const { nickname, content, timestamp, type, command, images, links } = message;
+  const { nickname, content, timestamp, type, command, images, links, botCommand } = message;
   const time = new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  
+  // Check if this is a bot message
+  const isBotMessage = type === 'bot' || nickname.endsWith('Bot') || nickname.includes('Bot');
 
   // Helper function to render images from the extracted images array
   const renderImages = () => {
@@ -77,7 +81,9 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
   const renderContent = (text: string) => {
     // Split content by URLs to handle them separately
     const urlRegex = /(https?:\/\/[^\s]+)/gi;
-    const parts = text.split(urlRegex);
+    const dataUrlRegex = /(data:[^;]+;base64,[^\s]+)/gi;
+    const combinedRegex = new RegExp(`(${urlRegex.source}|${dataUrlRegex.source})`, 'gi');
+    const parts = text.split(combinedRegex);
     
     return parts.map((part, index) => {
       if (urlRegex.test(part)) {
@@ -87,7 +93,7 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
         
         if (isHandledLink) {
           // Skip this URL as it's already handled by the dedicated links array
-          return <span key={index}>{part}</span>;
+          return <span key={index}></span>; // Render empty span to prevent duplicate display
         }
         
         // Don't skip images - let them render normally in the content
@@ -196,6 +202,16 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
             </a>
           );
         }
+      } else if (dataUrlRegex.test(part)) {
+        // Handle data URLs (base64 images) - check if they're already in the images array
+        const isHandledImage = images && images.includes(part);
+        if (isHandledImage) {
+          // Skip this data URL as it's already handled by the images array
+          return <span key={index}></span>;
+        } else {
+          // Show placeholder for data URLs not in images array
+          return <span key={index} className="text-gray-500 italic">[Generated Image]</span>;
+        }
       } else {
         return <span key={index}>{part}</span>;
       }
@@ -289,6 +305,33 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
         <p className="text-purple-400 break-words">
           <span className={`${nicknameColor} font-bold`}>{nickname}</span> changed the topic to: {renderContent(content)}
         </p>
+      </div>
+    );
+  }
+
+  // Handle bot messages
+  if (isBotMessage) {
+    return (
+      <div className="flex items-start gap-2 lg:gap-4 text-xs lg:text-sm">
+        <span className="text-gray-600 font-semibold flex-shrink-0 w-12 lg:w-14 text-right">{time}</span>
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-1">
+            <span className={`${nicknameColor} font-bold`}>{nickname}</span>
+            <span className="text-amber-500 text-xs bg-amber-900 px-2 py-0.5 rounded">🤖 BOT</span>
+            {botCommand && (
+              <span className="text-blue-400 text-xs bg-blue-900 px-2 py-0.5 rounded">
+                {botCommand.toUpperCase()}
+              </span>
+            )}
+          </div>
+          <div className="text-gray-200 break-words whitespace-pre-wrap bg-gray-800 p-2 rounded border-l-2 border-amber-500">
+            {renderContent(content)}
+          </div>
+          {/* Render extracted images */}
+          {renderImages()}
+          {/* Render extracted links */}
+          {renderLinks()}
+        </div>
       </div>
     );
   }

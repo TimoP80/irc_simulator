@@ -4,6 +4,7 @@ import { loadConfig } from '../utils/config';
 import { DEFAULT_NICKNAME, FALLBACK_AI_MODELS, DEFAULT_AI_MODEL, DEFAULT_TYPING_DELAY } from '../constants';
 import { generateRandomWorldConfiguration, listAvailableModels } from '../services/geminiService';
 import { UserManagement } from './UserManagement';
+import { BotManagement } from './BotManagement';
 import { ChannelManagement } from './ChannelManagement';
 import { IRCExportSettings } from './IRCExportSettings';
 import { getDebugConfig, updateDebugConfig, setDebugEnabled, setLogLevel, toggleCategory } from '../utils/debugLogger';
@@ -45,9 +46,11 @@ const parseUsersFromText = (text: string): User[] => {
         status: 'online' as const,
         personality: personalityParts.join(',').trim(),
         languageSkills: {
-          fluency: 'native' as const,
-          languages: ['English'],
-          accent: ''
+          languages: [{ 
+            language: 'English', 
+            fluency: 'native' as const, 
+            accent: '' 
+          }]
         },
         writingStyle: {
           formality: 'casual' as const,
@@ -123,6 +126,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       aiModel: aiModel || DEFAULT_AI_MODEL, // Ensure it's never undefined
       typingDelay: savedConfig?.typingDelay || DEFAULT_TYPING_DELAY,
       userObjects: savedConfig?.userObjects,
+      imageGeneration: savedConfig?.imageGeneration || {
+        provider: 'placeholder',
+        apiKey: '',
+        model: 'stable-diffusion-xl',
+        baseUrl: 'https://api.nanobanana.ai'
+      },
     };
   });
   const [users, setUsers] = useState<User[]>(() => {
@@ -321,6 +330,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               onChannelsChange?.(newChannels);
             }}
           />
+          
+          <BotManagement 
+            users={users} 
+            onUsersChange={onUsersChange || setUsers} 
+            aiModel={config.aiModel}
+            channels={currentChannels || channels}
+            currentUserNickname={config.currentUserNickname}
+            onChannelsChange={(newChannels) => {
+              setChannels(newChannels);
+              onChannelsChange?.(newChannels);
+            }}
+          />
+          
           <ChannelManagement 
             channels={channels} 
             onChannelsChange={(newChannels) => {
@@ -474,6 +496,110 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                 </>
               )}
+            </div>
+          </div>
+
+          <div className="border-t border-gray-600 pt-6">
+            <h3 className="text-lg font-semibold text-gray-200 mb-4">🖼️ Image Generation Settings</h3>
+            <p className="text-sm text-gray-400 mb-4">Configure image generation for bot commands like !image. Choose your preferred service and API key.</p>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Image Generation Provider</label>
+                <select
+                  value={config.imageGeneration?.provider || 'placeholder'}
+                  onChange={(e) => setConfig(prev => ({
+                    ...prev,
+                    imageGeneration: {
+                      ...prev.imageGeneration,
+                      provider: e.target.value as 'nano-banana' | 'imagen' | 'placeholder' | 'dalle'
+                    }
+                  }))}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="placeholder">Placeholder (Default - No API key needed)</option>
+                  <option value="nano-banana">Nano Banana (Stable Diffusion API)</option>
+                  <option value="imagen">Google Imagen (Coming Soon)</option>
+                  <option value="dalle">OpenAI DALLE (Coming Soon)</option>
+                </select>
+              </div>
+              
+              {config.imageGeneration?.provider !== 'placeholder' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">API Key</label>
+                    <input
+                      type="password"
+                      value={config.imageGeneration?.apiKey || ''}
+                      onChange={(e) => setConfig(prev => ({
+                        ...prev,
+                        imageGeneration: {
+                          ...prev.imageGeneration,
+                          apiKey: e.target.value
+                        }
+                      }))}
+                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Enter your API key"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Model</label>
+                    <input
+                      type="text"
+                      value={config.imageGeneration?.model || 'stable-diffusion-xl'}
+                      onChange={(e) => setConfig(prev => ({
+                        ...prev,
+                        imageGeneration: {
+                          ...prev.imageGeneration,
+                          model: e.target.value
+                        }
+                      }))}
+                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Model name (e.g., stable-diffusion-xl)"
+                    />
+                  </div>
+                  
+                  {config.imageGeneration?.provider === 'nano-banana' && (
+                    <div className="bg-blue-900/20 border border-blue-500/30 p-3 rounded-lg">
+                      <p className="text-xs text-blue-300">
+                        <strong>ℹ️ Nano Banana Info:</strong> Nano Banana uses the Google GenAI SDK with the <code className="bg-gray-800 px-1 rounded">gemini-2.5-flash-image-preview</code> model. 
+                        No base URL configuration needed - it uses Google's infrastructure directly.
+                      </p>
+                    </div>
+                  )}
+                </>
+              )}
+              
+              <div className="bg-gray-700 p-3 rounded-lg">
+                <p className="text-xs text-gray-400">
+                  <strong>Image Generation Services:</strong><br/>
+                  • <strong>Placeholder:</strong> Uses placeholder images (no API key needed, no CORS issues)<br/>
+                  • <strong>Nano Banana:</strong> Google GenAI SDK with gemini-2.5-flash-image-preview model<br/>
+                  • <strong>Imagen:</strong> Google's image generation (coming soon)<br/>
+                  • <strong>DALLE:</strong> OpenAI's image generation (coming soon)
+                </p>
+              </div>
+              
+              <div className="bg-yellow-900/20 border border-yellow-500/30 p-3 rounded-lg">
+                <p className="text-xs text-yellow-300">
+                  <strong>⚠️ CORS Warning:</strong> External image generation APIs (like Nano Banana) may not work due to CORS restrictions. 
+                  If you encounter CORS errors, try using the Placeholder service instead.
+                </p>
+              </div>
+              
+              <div className="bg-red-900/20 border border-red-500/30 p-3 rounded-lg">
+                <p className="text-xs text-red-300">
+                  <strong>🚫 Browser Limitation:</strong> Direct browser requests to external APIs are blocked by CORS. 
+                  To use external APIs, you need to set up a proxy server or use server-side rendering.
+                </p>
+              </div>
+              
+              <div className="bg-blue-900/20 border border-blue-500/30 p-3 rounded-lg">
+                <p className="text-xs text-blue-300">
+                  <strong>Test Image Generation:</strong> Try typing <code className="bg-gray-800 px-1 rounded">!image a sunset</code> in a channel with a bot to test image generation.
+                </p>
+              </div>
             </div>
           </div>
 

@@ -256,7 +256,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onUsersCh
                       AI User
                     </span>
                     <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-900 text-blue-200">
-                      {user.languageSkills?.fluency || 'unknown'}
+                      {user.languageSkills?.languages?.[0]?.fluency || 'unknown'}
                     </span>
                   </div>
                   
