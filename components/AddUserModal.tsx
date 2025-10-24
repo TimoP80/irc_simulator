@@ -378,14 +378,14 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
                 className={`w-full bg-gray-700 border rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none ${
                   errors.personality ? 'border-red-500' : 'border-gray-600'
                 }`}
-                placeholder="Describe this user's personality, interests, and how they should behave in chat..."
+                placeholder="Describe this user's personality, interests, and how they should behave in chat. You can write in any language - the AI will understand multilingual descriptions..."
                 maxLength={500}
               />
               {errors.personality && (
                 <p className="text-red-400 text-xs mt-1">{errors.personality}</p>
               )}
               <p className="text-gray-500 text-xs mt-1">
-                {personality.length}/500 characters. Be descriptive about their behavior and interests.
+                {personality.length}/500 characters. Be descriptive about their behavior and interests. Examples: "Passionate about languages and cultural exchange" or "Apasionado por la música y el arte" or "愛好技術和編程的工程師".
               </p>
             </div>
           </div>

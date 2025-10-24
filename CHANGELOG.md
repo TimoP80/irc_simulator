@@ -4,6 +4,151 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 
 *Note: This project was previously known as "Gemini IRC Simulator" and was renamed to "Station V - Virtual IRC Simulator" as of v1.5.1.*
 
+## 1.16.1 - 2025-01-24
+
+### Fixed
+- **Language Skills Undefined Error**: Fixed critical error where `isPerLanguageFormat` function was receiving `undefined` language skills objects
+  - **Root Cause**: Type guard functions were not properly handling `undefined` values when checking language skills
+  - **Solution**: Added comprehensive null checks to all language skills utility functions
+  - **Functions Fixed**: `isPerLanguageFormat`, `isLegacyFormat`, `getAllLanguages`, `getLanguageFluency`, `getLanguageAccent`
+  - **Error Prevention**: All functions now safely handle `undefined` language skills with appropriate fallbacks
+  - **Impact**: Eliminated "right-hand side of 'in' should be an object, got undefined" errors during AI message generation
+
+- **User Properties Undefined Error**: Fixed critical error where `user.personality` and `user.writingStyle` were `undefined` during AI simulation
+  - **Root Cause**: User objects with missing or undefined properties were causing `toLowerCase()` and property access errors
+  - **Solution**: Added null checks for `user.personality` and `user.writingStyle` before accessing their properties
+  - **Functions Fixed**: `generateChannelActivity` time-based user filtering and personality-based response variation
+  - **Error Prevention**: All user property accesses now safely handle undefined values with appropriate fallbacks
+  - **Impact**: Eliminated "can't access property 'toLowerCase', user.personality is undefined" errors during simulation
+
+- **Comprehensive User Property Safety**: Implemented comprehensive safety measures for all user property accesses
+  - **Helper Function**: Created `safeGetUserProperty()` function to safely access user properties with fallbacks
+  - **Writing Style Safety**: Added safe access to `writingStyle` properties in all AI generation functions
+  - **Functions Enhanced**: `generateChannelActivity`, `generateReactionToMessage`, `generatePrivateMessageResponse`
+  - **Fallback Values**: Provided sensible defaults for undefined `writingStyle` (neutral formality, verbosity, etc.)
+  - **Error Prevention**: Eliminated "can't access property 'verbosity', randomUser.writingStyle is undefined" errors
+  - **Impact**: All AI functions now work reliably even with incomplete or malformed user objects
+
+- **Missing Import Fix**: Fixed critical error where `isPerLanguageFormat` function was not imported in `geminiService.ts`
+  - **Root Cause**: The `isPerLanguageFormat` function was being used but not imported from the types module
+  - **Solution**: Added `isPerLanguageFormat` to the import statement in `services/geminiService.ts`
+  - **Error Prevention**: Eliminated "isPerLanguageFormat is not defined" errors during AI simulation
+  - **Impact**: Language skills processing now works correctly in all AI generation functions
+
+- **User Selection Balance**: Improved user selection algorithm to prevent channel activity from focusing on one user
+  - **Problem**: Channel activity was becoming too focused on a single user instead of distributing across multiple users
+  - **Solution**: Made time-based user filtering less restrictive and improved probability-based selection
+  - **Changes**: Reduced time-based filtering probability from 100% to 60%, improved fallback logic, added safety checks
+  - **Balanced Selection**: Adjusted probabilities for long-term inactive users (60%) and less active users (40%)
+  - **Enhanced Debugging**: Added comprehensive logging to track user selection patterns and identify issues
+  - **Impact**: More balanced user participation across all channel members, preventing single-user dominance
+
+- **Enhanced Conversation Activity**: Significantly improved channel conversation dynamics and user interaction
+  - **Problem**: Channel activity was still too focused on single users, and addressing others didn't provoke reactions
+  - **Solution**: Implemented multi-message conversation system with automatic reactions and improved user selection
+  - **Burst Mode Enhancement**: Increased burst mode probability from 15% to 40% for more active conversations
+  - **Automatic Reactions**: Added 30% chance to generate reactions to AI messages, creating more natural conversation flow
+  - **Improved User Selection**: Increased recent speaker tracking from 3 to 5 messages, boosted inactive user preference to 80%
+  - **Less Active User Priority**: Increased less active user selection probability to 70% for better balance
+  - **Conversation Flow**: Added random delays (1-4 seconds) between reactions to simulate natural conversation timing
+  - **Impact**: Much more dynamic and balanced conversations with multiple users participating and reacting to each other
+
+- **Critical User Selection Fix**: Fixed fundamental issue where current user messages were incorrectly included in recent speaker tracking
+  - **Problem**: Current user messages were being counted in recent speakers, causing virtual users to be incorrectly marked as "recent speakers"
+  - **Root Cause**: Recent speaker tracking included all messages (including current user) but filtering logic only considered virtual users
+  - **Solution**: Excluded current user from recent speaker tracking in both `generateChannelActivity` and `generateReactionToMessage` functions
+  - **Functions Fixed**: Recent speakers tracking now properly filters out current user messages before mapping nicknames
+  - **Impact**: Virtual users are now correctly identified as inactive/active, preventing single-user dominance
+  - **Debug Improvement**: Recent speaker lists now accurately reflect only virtual user activity, enabling proper user rotation
+
+- **Enhanced Conversation Diversity**: Significantly improved conversation dynamics to prevent single-user dominance
+  - **Problem**: Despite fixes, conversations were still dominated by single users instead of diverse multi-user interactions
+  - **Solution**: Implemented comprehensive conversation diversity improvements with balanced user selection and increased activity
+  - **User Selection Balance**: Reduced inactive user preference from 80% to 60% and less active user preference from 70% to 50%
+  - **Burst Mode Enhancement**: Increased burst mode probability from 40% to 60% for more active conversations
+  - **Reaction System**: Increased reaction probability from 30% to 50% for more natural conversation flow
+  - **Normal Mode Activity**: Added 20% chance for additional activity even in normal mode to prevent conversation stagnation
+  - **Timing Improvements**: Added random delays (2-7 seconds) for additional activity to simulate natural conversation patterns
+  - **Impact**: Much more diverse and balanced conversations with multiple users participating regularly
+
+## 1.16.0 - 2025-01-23
+
+### Added
+- **Multilingual Personality Descriptions**: Complete support for creating personality descriptions in multiple languages
+  - **Multilingual Templates**: Added new personality templates including Multilingual Enthusiast, Japanese Otaku, German Engineer, and Spanish Artist
+  - **Cultural Diversity**: Enhanced personality templates with authentic cultural backgrounds and language combinations
+  - **AI Language Support**: AI can now generate personality descriptions in any supported language (English, Spanish, Chinese, Japanese, German, French, etc.)
+  - **Batch Generation Options**: Added multilingual personality generation options in batch user creation
+  - **Language Selection**: Users can choose which language to generate personality descriptions in
+  - **Cultural Examples**: Added examples for different languages to guide users in creating authentic personalities
+  - **Enhanced AI Prompts**: Updated AI system instructions to handle multilingual personalities authentically
+  - **Language Context**: AI now receives detailed language skills information for all users in conversations
+  - **Multilingual Behavior**: AI can generate responses that occasionally use words from other languages when appropriate
+
+### Enhanced
+- **Personality Templates**: Expanded trait pools with multilingual personality traits
+  - **Cultural Traits**: Added traits like "passionate about languages", "culturally aware", "bilingual and bicultural", "language learning enthusiast", "international traveler", "cultural bridge-builder", "multilingual communicator", "cross-cultural expert", "global citizen", "language exchange partner"
+  - **Multilingual Interests**: Added interests like "language learning and linguistics", "cultural exchange and international relations", "translation and interpretation", "world literature and poetry", "international cuisine and cooking", "global music and traditional arts", "cross-cultural communication", "international business and trade", "multilingual media and entertainment", "cultural anthropology and sociology", "international education and exchange programs"
+- **User Interface**: Enhanced personality input with multilingual support
+  - **Multilingual Placeholder**: Updated personality input field to encourage multilingual descriptions
+  - **Language Examples**: Added examples in English, Spanish, and Chinese to guide users
+  - **Enhanced Help Text**: Updated help text to show multilingual personality examples
+- **AI System Instructions**: Enhanced AI prompts to better handle multilingual personalities
+  - **Language Skills Context**: AI prompts now include detailed language skills information for all users
+  - **Multilingual Support Instructions**: Added specific instructions for AI to handle multilingual personalities authentically
+  - **Cultural Authenticity**: AI can now generate personality descriptions in different languages while maintaining cultural authenticity
+
+## 1.15.0 - 2025-01-23
+
+### Fixed
+- **AI Model Selection Issues**: Resolved critical problems with AI model selection and validation
+  - **Model Validation**: Fixed `validateModelId` function to properly handle all supported model types
+  - **Model Processing**: Added proper processing for API models to include `baseModelId` property
+  - **Model Propagation**: Ensured selected models are correctly passed to AI generation functions
+  - **Debug Logging**: Enhanced logging to track model selection and validation process
+  - **Impact**: Users can now successfully select and use different AI models (Gemini 2.5 Flash, 1.5 Flash, 1.5 Pro)
+
+- **Response Structure Parsing**: Fixed AI response parsing for new Gemini API response formats
+  - **Enhanced Parsing**: Updated `extractTextFromResponse` function to handle new response structures
+  - **Multiple Extraction Methods**: Added fallback extraction methods for different response formats
+  - **Comprehensive Debugging**: Added detailed logging to track response structure and parsing steps
+  - **Robust Error Handling**: Improved error handling with multiple fallback methods
+  - **Impact**: AI generation now works reliably regardless of response structure returned by Gemini API
+
+- **Token Limits and Truncation**: Resolved token limit issues causing response truncation
+  - **Increased Token Limits**: Raised thinking budget from 1000 to 2000 tokens for thinking mode models
+  - **Output Token Adjustment**: Ensured minimum 2000 output tokens for thinking mode models
+  - **Truncation Detection**: Added detection and handling for `MAX_TOKENS` finish reason
+  - **Partial Text Extraction**: Added logic to extract partial text from truncated responses
+  - **Impact**: AI responses are no longer truncated and provide complete, high-quality content
+
+- **YouTube Link Issues**: Completely resolved problematic YouTube link generation and sharing
+  - **Comprehensive Blocking**: Added `isProblematicYouTubeLink` function to block all YouTube URLs
+  - **AI Prompt Updates**: Strongly discouraged YouTube link sharing in all AI prompts
+  - **Alternative Content**: Encouraged sharing of GitHub repos, news articles, tutorials, documentation
+  - **Video Content Description**: Suggested describing video content instead of linking to it
+  - **Impact**: Users no longer encounter outdated, non-existent, or problematic YouTube videos
+
+- **Imgur Link CORS Issues**: Fixed Imgur link filtering and CORS error prevention
+  - **Complete Imgur Blocking**: Added `isImgurUrl` function to block all Imgur URL variations
+  - **AI Prompt Updates**: Removed all Imgur references from AI prompts
+  - **CORS-Compliant Services**: Updated to recommend only imgbox.com and picsum.photos
+  - **Removed Fixing Logic**: Eliminated contradictory Imgur URL fixing that was causing issues
+  - **Impact**: No more CORS errors from Imgur links, improved content reliability
+
+### Enhanced
+- **AI Response Quality**: Significantly improved AI response quality and reliability
+  - **Better Model Support**: All supported AI models now work correctly with proper configuration
+  - **Robust Error Handling**: Comprehensive error handling prevents failures and provides graceful degradation
+  - **Enhanced Debugging**: Detailed logging makes troubleshooting easier and more effective
+  - **Professional Quality**: System now works reliably across all scenarios and model types
+
+- **Link and Image Sharing**: Improved link and image sharing functionality
+  - **CORS-Compliant Services**: Focus on services with proper CORS headers (imgbox.com, picsum.photos)
+  - **Reliable Content**: AI now shares more reliable content types (GitHub, documentation, news)
+  - **Better User Experience**: Users can trust that shared links will work consistently
+  - **Comprehensive Filtering**: Proactive filtering prevents problematic or broken links
+
 ## 1.13.17 - 2025-01-23
 
 ### Added

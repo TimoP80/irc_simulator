@@ -24,8 +24,54 @@ const getUserColor = (nickname: string, currentUserNickname: string) => {
 };
 
 export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickname }) => {
-  const { nickname, content, timestamp, type, command } = message;
+  const { nickname, content, timestamp, type, command, images, links } = message;
   const time = new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  // Helper function to render images from the extracted images array
+  const renderImages = () => {
+    if (!images || images.length === 0) return null;
+    
+    return images.map((imageUrl, index) => (
+      <div key={`image-${index}`} className="my-2">
+        <img 
+          src={imageUrl} 
+          alt="Shared image" 
+          className="max-w-full h-auto rounded border border-gray-600 cursor-pointer hover:opacity-80 transition-opacity"
+          onClick={() => window.open(imageUrl, '_blank')}
+          onError={(e) => {
+            // Fallback to link if image fails to load
+            e.currentTarget.style.display = 'none';
+            const linkElement = document.createElement('a');
+            linkElement.href = imageUrl;
+            linkElement.textContent = imageUrl;
+            linkElement.className = 'text-blue-400 hover:text-blue-300 underline break-all';
+            linkElement.target = '_blank';
+            e.currentTarget.parentNode?.appendChild(linkElement);
+          }}
+          onLoad={(e) => {
+            const img = e.currentTarget;
+            if (img.tagName === 'VIDEO' || img.tagName === 'AUDIO') {
+              img.pause?.();
+            }
+          }}
+          crossOrigin="anonymous"
+          loading="lazy"
+          referrerPolicy="no-referrer"
+        />
+      </div>
+    ));
+  };
+
+  // Helper function to render links from the extracted links array
+  const renderLinks = () => {
+    if (!links || links.length === 0) return null;
+    
+    return links.map((linkUrl, index) => (
+      <a key={`link-${index}`} href={linkUrl} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline break-all">
+        {linkUrl}
+      </a>
+    ));
+  };
 
   // Helper function to render content with links and images
   const renderContent = (text: string) => {
@@ -35,6 +81,18 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
     
     return parts.map((part, index) => {
       if (urlRegex.test(part)) {
+        // Check if this URL is already handled by the images/links arrays
+        const isHandledImage = images && images.includes(part);
+        const isHandledLink = links && links.includes(part);
+        
+        if (isHandledLink) {
+          // Skip this URL as it's already handled by the dedicated links array
+          return <span key={index}>{part}</span>;
+        }
+        
+        // Don't skip images - let them render normally in the content
+        // The dedicated renderImages() function will handle them separately
+        
         // Check if it's an image URL (more flexible detection)
         const imageRegex = /\.(jpg|jpeg|png|gif|webp|svg)(\?[^\s]*)?$/i;
         const isImageHostingService = /(gyazo\.com|prnt\.sc|imgbb\.com|postimg\.cc|imgbox\.com|imgchest\.com|freeimage\.host)\/[a-zA-Z0-9]+/i.test(part);
@@ -164,6 +222,10 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
           <span className="text-gray-500 italic break-words">
             * <span className={`${nicknameColor} font-bold`}>{nickname}</span> <span className="text-gray-200">{renderContent(content)}</span>
           </span>
+          {/* Render extracted images */}
+          {renderImages()}
+          {/* Render extracted links */}
+          {renderLinks()}
         </div>
       </div>
     );
@@ -254,6 +316,10 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
         <div className="text-gray-200 break-words whitespace-pre-wrap">
           {renderContent(content)}
         </div>
+        {/* Render extracted images */}
+        {renderImages()}
+        {/* Render extracted links */}
+        {renderLinks()}
       </div>
     </div>
   );

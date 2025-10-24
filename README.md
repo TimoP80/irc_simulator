@@ -2,7 +2,7 @@
 
 ### An Experiment in AI-Simulated Social Environments
 
-**Current Version: 1.13.17** - Primary language forcing in user generator, chat log database, and mobile compatibility enhancements.
+**Current Version: 1.16.0** - Multilingual personality descriptions, enhanced cultural diversity, and improved AI language support.
 
 ---
 
@@ -49,6 +49,7 @@ The simulation is powered by the Gemini API, using carefully crafted prompts to 
     -   **Writing Style**: Control formality, verbosity, humor, emoji usage, and punctuation styles
     -   **Visual User Cards**: See detailed user attributes including fluency badges and style information
     -   **Dynamic Language Management**: Add and remove multiple languages for multilingual AI users
+    -   **Multilingual Personality Descriptions**: Write personality descriptions in any language for authentic cultural representation
 -   **Batch User Generation**: Mass create users with powerful generation tools:
     -   **Personality Templates**: 8 predefined archetypes (Chatterbox, Polite Academic, Sarcastic Gamer, etc.)
     -   **AI-Assisted Generation**: Let Gemini AI create unique, creative personalities automatically
@@ -345,9 +346,30 @@ npm run lint
 npx tsc --noEmit
 ```
 
-## 6. Recent Updates (v1.13.12)
+## 6. Recent Updates (v1.16.0)
 
-Station V has recently received major enhancements including time-of-day synchronization, conversation diversity improvements, and enhanced realism:
+Station V has recently received major enhancements including multilingual personality descriptions, enhanced cultural diversity, and improved AI language support:
+
+### 🌍 **Multilingual Personality Descriptions (v1.16.0)**
+- **Complete Language Support**: Write personality descriptions in any supported language (English, Spanish, Chinese, Japanese, German, French, etc.)
+- **Cultural Authenticity**: AI can generate personality descriptions in different languages while maintaining cultural authenticity
+- **Multilingual Templates**: New personality templates including Multilingual Enthusiast, Japanese Otaku, German Engineer, and Spanish Artist
+- **Batch Generation Options**: Added multilingual personality generation options in batch user creation
+- **Language Selection**: Users can choose which language to generate personality descriptions in
+- **Cultural Examples**: Added examples for different languages to guide users in creating authentic personalities
+- **Enhanced AI Prompts**: Updated AI system instructions to handle multilingual personalities authentically
+- **Language Context**: AI now receives detailed language skills information for all users in conversations
+- **Multilingual Behavior**: AI can generate responses that occasionally use words from other languages when appropriate
+
+### 🎭 **Enhanced Personality Templates (v1.16.0)**
+- **Cultural Traits**: Added traits like "passionate about languages", "culturally aware", "bilingual and bicultural", "language learning enthusiast", "international traveler", "cultural bridge-builder", "multilingual communicator", "cross-cultural expert", "global citizen", "language exchange partner"
+- **Multilingual Interests**: Added interests like "language learning and linguistics", "cultural exchange and international relations", "translation and interpretation", "world literature and poetry", "international cuisine and cooking", "global music and traditional arts", "cross-cultural communication", "international business and trade", "multilingual media and entertainment", "cultural anthropology and sociology", "international education and exchange programs"
+- **User Interface**: Enhanced personality input with multilingual support and language examples
+- **AI System Instructions**: Enhanced AI prompts to better handle multilingual personalities
+
+## 6.1 Previous Updates (v1.13.12)
+
+Station V previously received major enhancements including time-of-day synchronization, conversation diversity improvements, and enhanced realism:
 
 ### 🕐 **Time-of-Day Synchronization (v1.13.12)**
 - **Real-time Context**: AI conversations automatically include current time, day of week, and social context
@@ -555,6 +577,9 @@ A: Single creation gives you full control over each user's attributes. Mass gene
 
 **Q: Can I import users from other sources?**
 A: Yes! Use the Import/Export feature to import users from CSV or JSON files. You can also create users in a spreadsheet and import them.
+
+**Q: Can I write personality descriptions in different languages?**
+A: Yes! You can write personality descriptions in any language. The AI will understand and work with multilingual descriptions. Examples: "Passionate about technology" (English), "Apasionado por la música y el arte" (Spanish), "愛好技術和編程的工程師" (Chinese).
 
 **Q: Can I import channels from other configurations?**
 A: Yes! In Channel Management, click "Import/Export" to import channels from CSV or JSON files. This allows you to share channel configurations between different World Editor setups.

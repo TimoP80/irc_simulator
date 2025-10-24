@@ -1,6 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import type { Channel, Message, PrivateMessageConversation, RandomWorldConfig, GeminiModel, ModelsListResponse, User } from '../types';
-import { getLanguageFluency, getAllLanguages, getLanguageAccent, isChannelOperator } from '../types';
+import { getLanguageFluency, getAllLanguages, getLanguageAccent, isChannelOperator, isPerLanguageFormat } from '../types';
 import { withRateLimitAndRetries } from '../utils/config';
 
 const API_KEY = process.env.GEMINI_API_KEY;
@@ -16,7 +16,7 @@ const validateModelId = (model: string): string => {
   console.log(`[AI Debug] validateModelId called with: "${model}" (type: ${typeof model}, length: ${model.length})`);
   
   // If model contains spaces or looks like a display name, extract the actual model ID
-  if (model.includes(' ') || model.includes('-') && model.length > 20) {
+  if (model.includes(' ') || (model.includes('-') && model.length > 20)) {
     // Try to extract model ID from display name
     const match = model.match(/(gemini-[0-9.]+-[a-z]+)/i);
     if (match) {
@@ -25,9 +25,18 @@ const validateModelId = (model: string): string => {
     }
   }
   
-  // If it looks like a valid model ID, return as is
-  if (model.match(/^gemini-[0-9.]+-[a-z]+$/i)) {
+  // Valid model IDs: gemini-2.5-flash, gemini-1.5-flash, gemini-1.5-pro
+  const validModels = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+  
+  // Check if it's a valid model ID
+  if (validModels.includes(model)) {
     console.log(`[AI Debug] Model ID "${model}" is valid, returning as-is`);
+    return model;
+  }
+  
+  // If it looks like a valid model ID pattern, return as is
+  if (model.match(/^gemini-[0-9.]+-[a-z]+$/i)) {
+    console.log(`[AI Debug] Model ID "${model}" matches pattern, returning as-is`);
     return model;
   }
   
@@ -91,13 +100,39 @@ const getFallbackResponse = (user: User, context: 'activity' | 'reaction', origi
   const randomResponse = contextResponses[Math.floor(Math.random() * contextResponses.length)];
   
   // Add some personality-based variation
-  if (user.writingStyle.verbosity === 'very_verbose') {
+  if (user.writingStyle && user.writingStyle.verbosity === 'very_verbose') {
     return `${randomResponse} ${randomResponse} ${randomResponse}`;
-  } else if (user.writingStyle.verbosity === 'very_terse') {
+  } else if (user.writingStyle && user.writingStyle.verbosity === 'very_terse') {
     return randomResponse.split(' ')[0];
   }
   
   return randomResponse;
+};
+
+// Helper function to safely get user properties with fallbacks
+const safeGetUserProperty = (user: User, property: string, fallback: any = null) => {
+  if (!user) return fallback;
+  
+  switch (property) {
+    case 'personality':
+      return user.personality || '';
+    case 'writingStyle':
+      return user.writingStyle || {
+        formality: 'neutral',
+        verbosity: 'neutral',
+        humor: 'none',
+        emojiUsage: 'low',
+        punctuation: 'standard'
+      };
+    case 'languageSkills':
+      return user.languageSkills || {
+        fluency: 'native',
+        languages: ['English'],
+        accent: ''
+      };
+    default:
+      return user[property as keyof User] || fallback;
+  }
 };
 
 // Helper function to get greeting phrases for detection
@@ -299,19 +334,126 @@ const extractTextFromResponse = (response: any): string => {
     throw new Error("No response received from AI service");
   }
   
+  console.log("[AI Debug] Response structure:", {
+    hasText: !!response.text,
+    hasCandidates: !!response.candidates,
+    candidatesLength: response.candidates?.length,
+    hasContent: !!response.candidates?.[0]?.content,
+    hasParts: !!response.candidates?.[0]?.content?.parts,
+    partsLength: response.candidates?.[0]?.content?.parts?.length,
+    modelVersion: response.modelVersion,
+    responseId: response.responseId
+  });
+  
   if (response.text) {
     // Old format
+    console.log("[AI Debug] Using old format (response.text)");
     return response.text.trim();
-  } else if (response.candidates && response.candidates.length > 0 && 
-             response.candidates[0].content && 
-             response.candidates[0].content.parts && 
-             response.candidates[0].content.parts.length > 0) {
-    // New format - extract from candidates
-    return response.candidates[0].content.parts[0].text?.trim() || '';
-  } else {
-    console.error("Invalid response structure:", response);
-    throw new Error("Invalid response from AI service: unable to extract text content");
+  } else if (response.candidates && response.candidates.length > 0) {
+    const candidate = response.candidates[0];
+    console.log("[AI Debug] Candidate structure:", {
+      hasContent: !!candidate.content,
+      hasParts: !!candidate.content?.parts,
+      partsLength: candidate.content?.parts?.length,
+      firstPartText: candidate.content?.parts?.[0]?.text?.substring(0, 100) + "...",
+      candidateKeys: Object.keys(candidate),
+      contentKeys: candidate.content ? Object.keys(candidate.content) : null,
+      finishReason: candidate.finishReason,
+      candidateValues: Object.keys(candidate).reduce((acc, key) => {
+        acc[key] = typeof candidate[key] === 'string' ? candidate[key].substring(0, 100) + "..." : candidate[key];
+        return acc;
+      }, {} as any),
+      contentValues: candidate.content ? Object.keys(candidate.content).reduce((acc, key) => {
+        acc[key] = typeof candidate.content[key] === 'string' ? candidate.content[key].substring(0, 100) + "..." : candidate.content[key];
+        return acc;
+      }, {} as any) : null
+    });
+    
+    // Check if response was truncated due to token limits
+    if (candidate.finishReason === 'MAX_TOKENS') {
+      console.warn("[AI Debug] Response was truncated due to MAX_TOKENS limit");
+      // Try to extract any partial text that might be available
+      if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
+        const partialText = candidate.content.parts[0].text?.trim() || '';
+        if (partialText) {
+          console.log("[AI Debug] Using partial text from truncated response");
+          return partialText;
+        }
+      }
+    }
+    
+    // Try different extraction paths
+    if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
+      const text = candidate.content.parts[0].text?.trim() || '';
+      console.log("[AI Debug] Extracted text length:", text.length);
+      if (text) {
+        return text;
+      }
+    }
+    
+    // Try direct text extraction from candidate
+    if (candidate.text) {
+      console.log("[AI Debug] Using candidate.text");
+      return candidate.text.trim();
+    }
+    
+    // Try content.text extraction
+    if (candidate.content && candidate.content.text) {
+      console.log("[AI Debug] Using candidate.content.text");
+      return candidate.content.text.trim();
+    }
+    
+    // Try parts array with different structure
+    if (candidate.content && candidate.content.parts) {
+      for (const part of candidate.content.parts) {
+        if (part.text) {
+          console.log("[AI Debug] Using part.text from parts array");
+          return part.text.trim();
+        }
+      }
+    }
+    
+    // For thinking mode models, the response might be in a different structure
+    // Check if there's a response property or similar
+    if (candidate.response) {
+      console.log("[AI Debug] Using candidate.response");
+      return candidate.response.trim();
+    }
+    
+    // Check for other possible text properties
+    const possibleTextProperties = ['output', 'result', 'message', 'content', 'text'];
+    for (const prop of possibleTextProperties) {
+      if (candidate[prop] && typeof candidate[prop] === 'string') {
+        console.log(`[AI Debug] Using candidate.${prop}`);
+        return candidate[prop].trim();
+      }
+    }
+    
+    // Check content for other possible text properties
+    if (candidate.content) {
+      for (const prop of possibleTextProperties) {
+        if (candidate.content[prop] && typeof candidate.content[prop] === 'string') {
+          console.log(`[AI Debug] Using candidate.content.${prop}`);
+          return candidate.content[prop].trim();
+        }
+      }
+    }
   }
+  
+  // Try alternative extraction methods
+  if (response.candidates?.[0]?.content?.parts?.[0]?.text) {
+    console.log("[AI Debug] Using alternative extraction method");
+    return response.candidates[0].content.parts[0].text.trim();
+  }
+  
+  // Try direct candidate text
+  if (response.candidates?.[0]?.text) {
+    console.log("[AI Debug] Using direct candidate text");
+    return response.candidates[0].text.trim();
+  }
+  
+  console.error("Invalid response structure:", response);
+  throw new Error("Invalid response from AI service: unable to extract text content");
 };
 
 // Time-of-day context generation
@@ -428,17 +570,23 @@ LINK AND IMAGE SUPPORT:
 - Share images by including image URLs from common hosting services.
 - When sharing links or images, make them contextually relevant to the conversation.
 - Examples of good link sharing: "Check this out: https://example.com" or "Found this interesting: https://github.com/user/repo"
-- Examples of good image sharing: "Here's a screenshot: https://gyazo.com/abc123.jpg" or "Look at this: https://prnt.sc/xyz.png"
+- Examples of good image sharing: "Here's a screenshot: https://picsum.photos/400/300" or "Look at this: https://httpbin.org/image/jpeg" or "Check out this AI-generated image: https://labs.google/fx/tools/whisk/share/abc123"
 - Be proactive about sharing relevant content - don't wait for perfect opportunities, create them naturally.
-- SAFE image hosting services (use these): gyazo.com, prnt.sc, imgbb.com, postimg.cc, imgbox.com, imgchest.com, freeimage.host
-- AVOID these problematic services: 3lift.com, ads.assemblyexchange.com, imgur.com, or any ad/tracking services
-- NEVER use Imgur URLs (imgur.com, i.imgur.com) as they cause JavaScript errors and audio/video issues
-- Use complete, working URLs like: https://gyazo.com/abc123.jpg, https://prnt.sc/xyz.png, https://imgbb.com/abc123.jpg
+- SAFE image hosting services (use these): picsum.photos, httpbin.org, labs.google/fx/tools/whisk/share
+- AVOID these problematic services: gyazo.com, prnt.sc, postimg.cc, imgchest.com, freeimage.host, imgbb.com, imgur.com, i.imgur.com, imgbox.com, 3lift.com, ads.assemblyexchange.com, or any ad/tracking services
+- NEVER use Imgur URLs (imgur.com, i.imgur.com), ImgBB URLs (imgbb.com), or Imgbox URLs (imgbox.com) as they cause CORS errors
+- Use complete, working URLs like: https://picsum.photos/400/300, https://httpbin.org/image/jpeg, https://labs.google/fx/tools/whisk/share/abc123
 - ALWAYS include file extensions (.jpg, .png, .gif, .webp) for direct image links
-- Preferred services: gyazo.com, prnt.sc, imgbb.com (these are reliable and don't cause JavaScript issues)
-- Common link types: GitHub repos, news articles, tutorials, memes, screenshots, documentation, YouTube videos
-- YouTube link diversity: Share varied YouTube content - music, tutorials, documentaries, comedy, gaming, tech reviews, cooking, travel, etc.
-- AVOID repetitive YouTube links: Don't post the same YouTube video multiple times, vary the content and creators
+- Preferred services: picsum.photos, httpbin.org, labs.google/fx/tools/whisk/share (these have proper CORS headers and work reliably)
+- CRITICAL: Only use REAL, EXISTING URLs that actually work - never make up fake URLs or non-existent content
+- CRITICAL: NEVER post Rick Astley's "Never Gonna Give You Up" video or any rickroll content
+- NEVER use YouTube video ID "dQw4w9WgXcQ" or any URLs containing this ID
+- NEVER post URLs that redirect to Rick Astley content, even if they look legitimate
+- CRITICAL: AVOID sharing YouTube links entirely - they often become outdated, unavailable, or redirect to unwanted content
+- Instead of YouTube links, share other types of content: GitHub repos, news articles, tutorials, memes, screenshots, documentation
+- If you must share video content, describe it instead of linking to it
+- Common link types: GitHub repos, news articles, tutorials, memes, screenshots, documentation (NO YouTube videos)
+- AVOID YouTube links completely: They often become unavailable or redirect to unwanted content
 - NEVER use URLs that contain tracking parameters, ads, or redirect through ad networks
 - CRITICAL: Only share REAL, EXISTING links that actually work - never make up fake URLs or non-existent content
 - For YouTube links: Only reference well-known, real videos that actually exist on YouTube
@@ -516,8 +664,11 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
   // Shuffle the array to add more variety
   const shuffledUsers = [...candidateUsers].sort(() => Math.random() - 0.5);
   
-  // Strongly prefer users who haven't spoken recently (last 3 messages)
-  const recentSpeakers = channel.messages.slice(-3).map(msg => msg.nickname);
+  // Strongly prefer users who haven't spoken recently (last 5 messages for better balance)
+  // Exclude current user from recent speakers tracking since we only care about virtual users
+  const recentSpeakers = channel.messages.slice(-5)
+    .filter(msg => msg.nickname !== currentUserNickname)
+    .map(msg => msg.nickname);
   const lessActiveUsers = shuffledUsers.filter(user => !recentSpeakers.includes(user.nickname));
   
   // If the last message was from a specific user, strongly avoid them for the next message
@@ -526,7 +677,10 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
   const avoidLastSpeaker = lastSpeaker ? shuffledUsers.filter(user => user.nickname !== lastSpeaker) : shuffledUsers;
   
   // Identify users who haven't spoken in a while (last 10 messages) for priority selection
-  const longTermRecentSpeakers = channel.messages.slice(-10).map(msg => msg.nickname);
+  // Exclude current user from long-term recent speakers tracking
+  const longTermRecentSpeakers = channel.messages.slice(-10)
+    .filter(msg => msg.nickname !== currentUserNickname)
+    .map(msg => msg.nickname);
   const longTermInactiveUsers = shuffledUsers.filter(user => !longTermRecentSpeakers.includes(user.nickname));
   
   // Time-based user activity patterns
@@ -535,40 +689,39 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
   const dayOfWeek = now.getDay();
   const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
   
-  // Adjust user selection based on time of day
+  // Adjust user selection based on time of day (but don't be too restrictive)
   let timeBasedUsers = shuffledUsers;
   
   if (hour >= 6 && hour < 12) {
-    // Morning: Prefer users with energetic personalities
-    timeBasedUsers = shuffledUsers.filter(user => 
-      user.personality.toLowerCase().includes('energetic') ||
-      user.personality.toLowerCase().includes('optimistic') ||
-      user.personality.toLowerCase().includes('morning') ||
-      user.writingStyle.verbosity === 'verbose' ||
-      user.writingStyle.verbosity === 'very_verbose'
+    // Morning: Prefer users with energetic personalities, but include others too
+    const energeticUsers = shuffledUsers.filter(user => 
+      (user.personality && user.personality.toLowerCase().includes('energetic')) ||
+      (user.personality && user.personality.toLowerCase().includes('optimistic')) ||
+      (user.personality && user.personality.toLowerCase().includes('morning')) ||
+      (user.writingStyle && user.writingStyle.verbosity === 'verbose') ||
+      (user.writingStyle && user.writingStyle.verbosity === 'very_verbose')
     );
+    // If we have energetic users, use them with 60% probability, otherwise use all users
+    timeBasedUsers = energeticUsers.length > 0 && Math.random() < 0.6 ? energeticUsers : shuffledUsers;
   } else if (hour >= 21 || hour < 6) {
-    // Late night/early morning: Prefer users with introspective personalities
-    timeBasedUsers = shuffledUsers.filter(user => 
-      user.personality.toLowerCase().includes('quiet') ||
-      user.personality.toLowerCase().includes('introspective') ||
-      user.personality.toLowerCase().includes('night') ||
-      user.writingStyle.verbosity === 'terse' ||
-      user.writingStyle.verbosity === 'very_terse'
+    // Late night/early morning: Prefer users with introspective personalities, but include others too
+    const introspectiveUsers = shuffledUsers.filter(user => 
+      (user.personality && user.personality.toLowerCase().includes('quiet')) ||
+      (user.personality && user.personality.toLowerCase().includes('introspective')) ||
+      (user.personality && user.personality.toLowerCase().includes('night')) ||
+      (user.writingStyle && user.writingStyle.verbosity === 'terse') ||
+      (user.writingStyle && user.writingStyle.verbosity === 'very_terse')
     );
-  }
-  
-  // If no time-based users found, use original shuffled users
-  if (timeBasedUsers.length === 0) {
-    timeBasedUsers = shuffledUsers;
+    // If we have introspective users, use them with 60% probability, otherwise use all users
+    timeBasedUsers = introspectiveUsers.length > 0 && Math.random() < 0.6 ? introspectiveUsers : shuffledUsers;
   }
   
   // Balanced user selection to prevent same user from speaking multiple times while allowing all users to participate
   if (longTermInactiveUsers.length > 0) {
-    // 70% chance to prefer long-term inactive users (users who haven't spoken in last 10 messages)
-    candidateUsers = Math.random() < 0.7 ? longTermInactiveUsers : timeBasedUsers;
+    // 60% chance to prefer long-term inactive users (users who haven't spoken in last 10 messages)
+    candidateUsers = Math.random() < 0.6 ? longTermInactiveUsers : timeBasedUsers;
   } else if (lessActiveUsers.length > 0) {
-    // 50% chance to prefer less active users (users who haven't spoken in last 3 messages)
+    // 50% chance to prefer less active users (users who haven't spoken in last 5 messages)
     candidateUsers = Math.random() < 0.5 ? lessActiveUsers : timeBasedUsers;
   } else if (avoidLastSpeaker.length > 0 && lastSpeaker) {
     // If no less active users, avoid the last speaker but allow others
@@ -576,6 +729,11 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
   } else {
     // Fallback to time-based selection
     candidateUsers = timeBasedUsers;
+  }
+  
+  // Ensure we always have candidate users
+  if (candidateUsers.length === 0) {
+    candidateUsers = shuffledUsers;
   }
   
   const randomUser = candidateUsers[Math.floor(Math.random() * candidateUsers.length)];
@@ -587,6 +745,8 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
   console.log(`[AI Debug] Less active users: ${lessActiveUsers.map(u => u.nickname).join(', ')}`);
   console.log(`[AI Debug] Long-term inactive users: ${longTermInactiveUsers.map(u => u.nickname).join(', ')}`);
   console.log(`[AI Debug] Candidate users: ${candidateUsers.map(u => u.nickname).join(', ')}`);
+  console.log(`[AI Debug] Time-based users: ${timeBasedUsers.map(u => u.nickname).join(', ')}`);
+  console.log(`[AI Debug] Total users in channel: ${usersInChannel.length}`);
 
   const userLanguages = getAllLanguages(randomUser.languageSkills);
   const primaryLanguage = userLanguages[0] || 'English';
@@ -603,8 +763,9 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
     }
   };
 
-  const tokenLimit = getTokenLimit(randomUser.writingStyle.verbosity);
-  console.log(`[AI Debug] Token limit for ${randomUser.nickname} (${randomUser.writingStyle.verbosity}): ${tokenLimit}`);
+  const writingStyle = safeGetUserProperty(randomUser, 'writingStyle');
+  const tokenLimit = getTokenLimit(writingStyle.verbosity);
+  console.log(`[AI Debug] Token limit for ${randomUser.nickname} (${writingStyle.verbosity}): ${tokenLimit}`);
 
   // Check for greeting spam by the selected user
   const userRecentMessages = channel.messages.slice(-5).filter(msg => msg.nickname === randomUser.nickname);
@@ -695,7 +856,7 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
     diversityPrompt = 'IMPORTANT: Add some humor, wit, or clever wordplay to the conversation.';
   } else if (conversationVariety < 0.95) {
     // 10% chance: Share a link or image
-    diversityPrompt = 'IMPORTANT: Share a relevant link or image that adds value to the conversation. Use complete, working URLs like https://gyazo.com/abc123.jpg or https://github.com/user/repo. Always include file extensions for images. Avoid ad networks, tracking services, and Imgur URLs. For YouTube links, share diverse content - different genres, creators, and topics. Avoid posting the same video multiple times. CRITICAL: Only share REAL, EXISTING links that actually work - never make up fake URLs or non-existent content. If unsure about a link\'s existence, don\'t share it. For YouTube links, prefer recent content over old videos that may no longer be available. NEVER post Rick Astley\'s "Never Gonna Give You Up" or similar overused memes - these are cliché and repetitive.';
+    diversityPrompt = 'IMPORTANT: Share a relevant link or image that adds value to the conversation. Use complete, working URLs like https://picsum.photos/400/300 or https://github.com/user/repo. Always include file extensions for images. Use only CORS-compliant services: picsum.photos, httpbin.org, labs.google/fx/tools/whisk/share. Avoid ad networks, tracking services, and problematic image hosting services. CRITICAL: AVOID sharing YouTube links entirely - they often become outdated, unavailable, or redirect to unwanted content. Instead, share GitHub repos, news articles, tutorials, memes, screenshots, or documentation. If you must share video content, describe it instead of linking to it. CRITICAL: Only share REAL, EXISTING links that actually work - never make up fake URLs or non-existent content. If unsure about a link\'s existence, don\'t share it. NEVER post Rick Astley\'s "Never Gonna Give You Up" or similar overused memes - these are cliché and repetitive. NEVER use YouTube video ID "dQw4w9WgXcQ" or any URLs containing this ID. NEVER post URLs that redirect to Rick Astley content, even if they look legitimate. Share fresh, diverse content instead.';
   } else {
     // 5% chance: Be more conversational and natural
     diversityPrompt = 'IMPORTANT: Be more conversational and natural - like you\'re talking to friends in a relaxed setting.';
@@ -720,27 +881,27 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
   
   const hasRecentYouTubeLinks = recentYouTubeLinks.length > 0;
   
-  // Always include anti-Rick Astley measures in link sharing prompts
-  const antiRickAstleyPrompt = 'CRITICAL: NEVER post Rick Astley\'s "Never Gonna Give You Up" or similar overused memes. These are cliché and repetitive. Share fresh, diverse content instead.';
+  // Always include anti-Rick Astley and YouTube avoidance measures in link sharing prompts
+  const antiRickAstleyPrompt = 'CRITICAL: NEVER post Rick Astley\'s "Never Gonna Give You Up" or similar overused memes. NEVER use YouTube video ID "dQw4w9WgXcQ" or any URLs containing this ID. NEVER post URLs that redirect to Rick Astley content, even if they look legitimate. CRITICAL: AVOID sharing YouTube links entirely - they often become outdated, unavailable, or redirect to unwanted content. Instead, share GitHub repos, news articles, tutorials, memes, screenshots, or documentation. If you must share video content, describe it instead of linking to it. These are cliché and repetitive. Share fresh, diverse content instead.';
   
   if (!hasRecentLinks && Math.random() < 0.3) {
     // 30% chance to encourage link/image sharing if none recently
-    linkImagePrompt = `IMPORTANT: Consider sharing a relevant link or image to make the conversation more engaging. Use complete, working URLs like https://gyazo.com/abc123.jpg or https://github.com/user/repo. Always include file extensions for images. Avoid ad networks, tracking services, and Imgur URLs. For YouTube links, share diverse content - different genres, creators, and topics. Avoid posting the same video multiple times. ${antiRickAstleyPrompt}`;
+    linkImagePrompt = `IMPORTANT: Consider sharing a relevant link or image to make the conversation more engaging. Use complete, working URLs like https://picsum.photos/400/300 or https://github.com/user/repo. Always include file extensions for images. Use only CORS-compliant services: picsum.photos, httpbin.org, labs.google/fx/tools/whisk/share. Avoid ad networks, tracking services, and problematic image hosting services. ${antiRickAstleyPrompt}`;
   } else if (hasRecentYouTubeLinks && Math.random() < 0.4) {
     // 40% chance to discourage repetitive YouTube links
-    linkImagePrompt = `IMPORTANT: Avoid posting repetitive YouTube links. Share diverse content - different genres, creators, and topics. Consider sharing other types of links (GitHub, news articles, tutorials) or images instead of more YouTube videos. CRITICAL: Only share REAL, EXISTING links that actually work - never make up fake URLs or non-existent content. ${antiRickAstleyPrompt}`;
+    linkImagePrompt = `IMPORTANT: Avoid posting repetitive links. Share diverse content - different types of links and topics. Consider sharing GitHub repos, news articles, tutorials, or images. CRITICAL: Only share REAL, EXISTING links that actually work - never make up fake URLs or non-existent content. ${antiRickAstleyPrompt}`;
   } else if (Math.random() < 0.3) {
     // 30% chance to emphasize real content only
     linkImagePrompt = `IMPORTANT: If sharing links, only share REAL, EXISTING content that actually works. Never make up fake URLs, video IDs, or non-existent content. Better to share no link than a fake one. ${antiRickAstleyPrompt}`;
   } else if (Math.random() < 0.2) {
     // 20% chance to encourage well-known content
-    linkImagePrompt = `IMPORTANT: If sharing YouTube links, reference well-known, real videos that actually exist. Examples: popular music videos, famous tutorials, or well-known documentaries. Never create fake video IDs or made-up URLs. ${antiRickAstleyPrompt}`;
+    linkImagePrompt = `IMPORTANT: If sharing links, reference well-known, real content that actually exists. Examples: popular GitHub repos, famous tutorials, or well-known documentation. Never create fake URLs or made-up content. ${antiRickAstleyPrompt}`;
   } else if (Math.random() < 0.15) {
     // 15% chance to discourage repetitive content
-    linkImagePrompt = `IMPORTANT: Avoid posting repetitive YouTube links. Share diverse content from different creators and genres. Don\'t post the same video multiple times. ${antiRickAstleyPrompt}`;
+    linkImagePrompt = `IMPORTANT: Avoid posting repetitive links. Share diverse content from different sources and topics. Don\'t post the same link multiple times. ${antiRickAstleyPrompt}`;
   } else if (Math.random() < 0.08) {
     // 8% chance to discourage outdated YouTube content
-    linkImagePrompt = `IMPORTANT: Avoid sharing old or potentially outdated YouTube videos that may no longer be available. Prefer recent content or consider sharing other types of links (GitHub, news articles, tutorials) instead. ${antiRickAstleyPrompt}`;
+    linkImagePrompt = `IMPORTANT: Avoid sharing old or potentially outdated links that may no longer be available. Prefer recent content or consider sharing other types of links (GitHub, news articles, tutorials) instead. ${antiRickAstleyPrompt}`;
   } else {
     // Default prompt with anti-Rick Astley measures
     linkImagePrompt = `IMPORTANT: If sharing links, only share REAL, EXISTING content that actually works. Never make up fake URLs, video IDs, or non-existent content. Better to share no link than a fake one. ${antiRickAstleyPrompt}`;
@@ -756,6 +917,12 @@ ${timeContext}
 The topic of channel ${channel.name} is: "${channel.topic}".
 The users in the channel are: ${channel.users.map(u => u.nickname).join(', ')}.
 Their personalities are: ${channel.users.map(u => `${u.nickname} is ${u.personality}`).join('. ')}.
+Their language skills are: ${channel.users.map(u => {
+  const languages = isPerLanguageFormat(u.languageSkills) 
+    ? u.languageSkills.languages.map(lang => `${lang.language} (${lang.fluency})`).join(', ')
+    : getAllLanguages(u.languageSkills).join(', ');
+  return `${u.nickname} speaks: ${languages}`;
+}).join('. ')}.
 Channel operators (who can kick/ban users): ${channel.operators.join(', ') || 'None'}.
 The last 20 messages were:
 ${formatMessageHistory(channel.messages)}
@@ -772,22 +939,24 @@ ${linkImagePrompt}
 
 IMPORTANT: Reply to ONE person at a time, not multiple people. Focus on the most recent or most relevant message. Avoid addressing multiple users in one sentence - this is unrealistic IRC behavior. Keep your response natural and conversational, like a real IRC user would.
 
+MULTILINGUAL SUPPORT: If ${randomUser.nickname} speaks multiple languages, they may occasionally use words or phrases from their other languages, but should primarily communicate in ${primaryLanguage}. This adds authenticity to their multilingual personality.
+
 Generate a new, single, in-character message from ${randomUser.nickname} that is relevant to the topic or the recent conversation.
 The message should feel natural for the current time of day and social context.
 The message must be a single line in the format: "nickname: message"
 
-${randomUser.writingStyle.verbosity === 'very_verbose' ? 'IMPORTANT: This user is very verbose - write a long, detailed message with multiple sentences and thorough explanations. Do not cut off the message.' : randomUser.writingStyle.verbosity === 'verbose' ? 'IMPORTANT: This user is verbose - write a moderately detailed message with several sentences.' : ''}
+${writingStyle.verbosity === 'very_verbose' ? 'IMPORTANT: This user is very verbose - write a long, detailed message with multiple sentences and thorough explanations. Do not cut off the message.' : writingStyle.verbosity === 'verbose' ? 'IMPORTANT: This user is verbose - write a moderately detailed message with several sentences.' : ''}
 
 CRITICAL: Respond ONLY in ${primaryLanguage}. Do not use any other language.
 ${userLanguages.length > 1 ? `Available languages: ${userLanguages.join(', ')}. Use ${primaryLanguage} only.` : ''}
 ${dominantLanguage !== primaryLanguage ? `Note: The channel's dominant language is ${dominantLanguage}, but ${randomUser.nickname} should respond in ${primaryLanguage}.` : ''}
 
 Consider ${randomUser.nickname}'s writing style:
-- Formality: ${randomUser.writingStyle.formality}
-- Verbosity: ${randomUser.writingStyle.verbosity} ${randomUser.writingStyle.verbosity === 'very_verbose' ? '(write very long, detailed messages with multiple sentences and thorough explanations)' : randomUser.writingStyle.verbosity === 'verbose' ? '(write moderately detailed messages with several sentences)' : randomUser.writingStyle.verbosity === 'terse' ? '(write brief, concise messages)' : randomUser.writingStyle.verbosity === 'very_terse' ? '(write very brief messages - short phrases or single sentences, but make them complete and meaningful)' : ''}
-- Humor: ${randomUser.writingStyle.humor}
-- Emoji usage: ${randomUser.writingStyle.emojiUsage}
-- Punctuation: ${randomUser.writingStyle.punctuation}
+- Formality: ${writingStyle.formality}
+- Verbosity: ${writingStyle.verbosity} ${writingStyle.verbosity === 'very_verbose' ? '(write very long, detailed messages with multiple sentences and thorough explanations)' : writingStyle.verbosity === 'verbose' ? '(write moderately detailed messages with several sentences)' : writingStyle.verbosity === 'terse' ? '(write brief, concise messages)' : writingStyle.verbosity === 'very_terse' ? '(write very brief messages - short phrases or single sentences, but make them complete and meaningful)' : ''}
+- Humor: ${writingStyle.humor}
+- Emoji usage: ${writingStyle.emojiUsage}
+- Punctuation: ${writingStyle.punctuation}
 - Language fluency: ${getLanguageFluency(randomUser.languageSkills)}
 - Languages: ${userLanguages.join(', ')}
 ${getLanguageAccent(randomUser.languageSkills) ? `- Accent: ${getLanguageAccent(randomUser.languageSkills)}` : ''}
@@ -805,16 +974,26 @@ ${isChannelOperator(channel, randomUser.nickname) ? `- Role: Channel operator (c
     console.log(`[AI Debug] Using temperature: ${finalTemperature.toFixed(2)} for ${randomUser.nickname}`);
     
     try {
+      // Configure thinking mode based on model requirements
+      const config: any = {
+        systemInstruction: getBaseSystemInstruction(currentUserNickname),
+        temperature: finalTemperature,
+        maxOutputTokens: tokenLimit,
+      };
+      
+      // Some models require thinking mode with a budget
+      if (validatedModel.includes('2.5') || validatedModel.includes('pro')) {
+        config.thinkingConfig = { thinkingBudget: 2000 }; // Increased budget for thinking mode
+        config.maxOutputTokens = Math.max(tokenLimit, 2000); // Ensure minimum output tokens
+        console.log(`[AI Debug] Using thinking mode with budget 2000 for model: ${validatedModel}`);
+        console.log(`[AI Debug] Adjusted maxOutputTokens to: ${config.maxOutputTokens}`);
+      }
+      
       const response = await withRateLimitAndRetries(() => 
         ai.models.generateContent({
             model: validatedModel,
             contents: prompt,
-            config: {
-                systemInstruction: getBaseSystemInstruction(currentUserNickname),
-                temperature: finalTemperature,
-                maxOutputTokens: tokenLimit,
-                thinkingConfig: { thinkingBudget: 0 },
-            },
+            config: config,
         })
       );
       
@@ -889,7 +1068,10 @@ export const generateReactionToMessage = async (channel: Channel, userMessage: M
     const shuffledUsers = [...candidateUsers].sort(() => Math.random() - 0.5);
     
     // Strongly prefer users who haven't reacted recently (last 3 messages)
-    const recentSpeakers = channel.messages.slice(-3).map(msg => msg.nickname);
+    // Exclude current user from recent speakers tracking for reactions
+    const recentSpeakers = channel.messages.slice(-3)
+      .filter(msg => msg.nickname !== currentUserNickname)
+      .map(msg => msg.nickname);
     const lessActiveUsers = shuffledUsers.filter(user => !recentSpeakers.includes(user.nickname));
     
     // If the last message was from a specific user, avoid them for reactions
@@ -974,6 +1156,7 @@ export const generateReactionToMessage = async (channel: Channel, userMessage: M
     
     const userLanguages = getAllLanguages(randomUser.languageSkills);
     const primaryLanguage = userLanguages[0] || 'English';
+    const writingStyle = safeGetUserProperty(randomUser, 'writingStyle');
     
     // Calculate appropriate token limit based on verbosity
     const getTokenLimit = (verbosity: string): number => {
@@ -987,8 +1170,8 @@ export const generateReactionToMessage = async (channel: Channel, userMessage: M
       }
     };
 
-    const tokenLimit = getTokenLimit(randomUser.writingStyle.verbosity);
-    console.log(`[AI Debug] Token limit for reaction from ${randomUser.nickname} (${randomUser.writingStyle.verbosity}): ${tokenLimit}`);
+    const tokenLimit = getTokenLimit(writingStyle.verbosity);
+    console.log(`[AI Debug] Token limit for reaction from ${randomUser.nickname} (${writingStyle.verbosity}): ${tokenLimit}`);
     
     // Get time-of-day context for reactions too
     const timeContext = getTimeOfDayContext();
@@ -1024,24 +1207,24 @@ ${formatMessageHistory(channel.messages)}
 
     ${reactionAntiGreetingSpam}
 
-    ${Math.random() < 0.2 ? 'IMPORTANT: Consider sharing a relevant link or image in your reaction to make it more engaging. Use complete, working URLs like https://gyazo.com/abc123.jpg or https://github.com/user/repo. Always include file extensions for images. Avoid ad networks, tracking services, and Imgur URLs. For YouTube links, share diverse content - different genres, creators, and topics. Avoid posting the same video multiple times. CRITICAL: Only share REAL, EXISTING links that actually work - never make up fake URLs or non-existent content. If unsure about a link\'s existence, don\'t share it. For YouTube links, prefer recent content over old videos that may no longer be available. NEVER post Rick Astley\'s "Never Gonna Give You Up" or similar overused memes - these are cliché and repetitive.' : ''}
+    ${Math.random() < 0.2 ? 'IMPORTANT: Consider sharing a relevant link or image in your reaction to make it more engaging. Use complete, working URLs like https://picsum.photos/400/300 or https://github.com/user/repo. Always include file extensions for images. Use only CORS-compliant services: picsum.photos, httpbin.org, labs.google/fx/tools/whisk/share. Avoid ad networks, tracking services, and problematic image hosting services. CRITICAL: AVOID sharing YouTube links entirely - they often become outdated, unavailable, or redirect to unwanted content. Instead, share GitHub repos, news articles, tutorials, memes, screenshots, or documentation. If you must share video content, describe it instead of linking to it. CRITICAL: Only share REAL, EXISTING links that actually work - never make up fake URLs or non-existent content. If unsure about a link\'s existence, don\'t share it. NEVER post Rick Astley\'s "Never Gonna Give You Up" or similar overused memes - these are cliché and repetitive. NEVER use YouTube video ID "dQw4w9WgXcQ" or any URLs containing this ID. NEVER post URLs that redirect to Rick Astley content, even if they look legitimate. Share fresh, diverse content instead.' : ''}
 
     IMPORTANT: Reply to ONE person at a time, not multiple people. Focus on the most recent or most relevant message. Avoid addressing multiple users in one sentence - this is unrealistic IRC behavior. Keep your response natural and conversational, like a real IRC user would.
 
     Generate a realistic and in-character reaction from ${randomUser.nickname}.
 The reaction should feel natural for the current time of day and social context.
 The reaction must be a single line in the format: "nickname: message"
-${randomUser.writingStyle.verbosity === 'very_verbose' ? 'IMPORTANT: This user is very verbose - write a long, detailed reaction with multiple sentences and thorough explanations. Do not cut off the message.' : randomUser.writingStyle.verbosity === 'verbose' ? 'IMPORTANT: This user is verbose - write a moderately detailed reaction with several sentences.' : ''}
+${writingStyle.verbosity === 'very_verbose' ? 'IMPORTANT: This user is very verbose - write a long, detailed reaction with multiple sentences and thorough explanations. Do not cut off the message.' : writingStyle.verbosity === 'verbose' ? 'IMPORTANT: This user is verbose - write a moderately detailed reaction with several sentences.' : ''}
 
 CRITICAL: Respond ONLY in ${primaryLanguage}. Do not use any other language.
 ${userLanguages.length > 1 ? `Available languages: ${userLanguages.join(', ')}. Use ${primaryLanguage} only.` : ''}
 
 Consider ${randomUser.nickname}'s writing style:
-- Formality: ${randomUser.writingStyle.formality}
-- Verbosity: ${randomUser.writingStyle.verbosity} ${randomUser.writingStyle.verbosity === 'very_verbose' ? '(write very long, detailed messages with multiple sentences and thorough explanations)' : randomUser.writingStyle.verbosity === 'verbose' ? '(write moderately detailed messages with several sentences)' : randomUser.writingStyle.verbosity === 'terse' ? '(write brief, concise messages)' : randomUser.writingStyle.verbosity === 'very_terse' ? '(write very brief messages - short phrases or single sentences, but make them complete and meaningful)' : ''}
-- Humor: ${randomUser.writingStyle.humor}
-- Emoji usage: ${randomUser.writingStyle.emojiUsage}
-- Punctuation: ${randomUser.writingStyle.punctuation}
+- Formality: ${writingStyle.formality}
+- Verbosity: ${writingStyle.verbosity} ${writingStyle.verbosity === 'very_verbose' ? '(write very long, detailed messages with multiple sentences and thorough explanations)' : writingStyle.verbosity === 'verbose' ? '(write moderately detailed messages with several sentences)' : writingStyle.verbosity === 'terse' ? '(write brief, concise messages)' : writingStyle.verbosity === 'very_terse' ? '(write very brief messages - short phrases or single sentences, but make them complete and meaningful)' : ''}
+- Humor: ${writingStyle.humor}
+- Emoji usage: ${writingStyle.emojiUsage}
+- Punctuation: ${writingStyle.punctuation}
 - Language fluency: ${getLanguageFluency(randomUser.languageSkills)}
 - Languages: ${userLanguages.join(', ')}
 ${getLanguageAccent(randomUser.languageSkills) ? `- Accent: ${getLanguageAccent(randomUser.languageSkills)}` : ''}
@@ -1059,16 +1242,26 @@ ${isChannelOperator(channel, randomUser.nickname) ? `- Role: Channel operator (c
         console.log(`[AI Debug] Using temperature: ${finalTemperature.toFixed(2)} for reaction from ${randomUser.nickname}`);
         
         try {
+          // Configure thinking mode based on model requirements
+          const config: any = {
+            systemInstruction: getBaseSystemInstruction(currentUserNickname),
+            temperature: finalTemperature,
+            maxOutputTokens: tokenLimit,
+          };
+          
+          // Some models require thinking mode with a budget
+          if (validatedModel.includes('2.5') || validatedModel.includes('pro')) {
+            config.thinkingConfig = { thinkingBudget: 2000 }; // Increased budget for thinking mode
+            config.maxOutputTokens = Math.max(tokenLimit, 2000); // Ensure minimum output tokens
+            console.log(`[AI Debug] Using thinking mode with budget 2000 for reaction model: ${validatedModel}`);
+            console.log(`[AI Debug] Adjusted maxOutputTokens to: ${config.maxOutputTokens}`);
+          }
+          
           const response = await withRateLimitAndRetries(() => 
               ai.models.generateContent({
                   model: validatedModel,
                   contents: prompt,
-                  config: {
-                      systemInstruction: getBaseSystemInstruction(currentUserNickname),
-                      temperature: finalTemperature,
-                      maxOutputTokens: tokenLimit,
-                      thinkingConfig: { thinkingBudget: 0 },
-                  },
+                  config: config,
               })
           );
           
@@ -1104,6 +1297,7 @@ export const generatePrivateMessageResponse = async (conversation: PrivateMessag
     const aiUser = conversation.user;
     const userLanguages = getAllLanguages(aiUser.languageSkills);
     const primaryLanguage = userLanguages[0] || 'English';
+    const writingStyle = safeGetUserProperty(aiUser, 'writingStyle');
     
     // Calculate appropriate token limit based on verbosity
     const getTokenLimit = (verbosity: string): number => {
@@ -1117,8 +1311,8 @@ export const generatePrivateMessageResponse = async (conversation: PrivateMessag
       }
     };
 
-    const tokenLimit = getTokenLimit(aiUser.writingStyle.verbosity);
-    console.log(`[AI Debug] Token limit for private message from ${aiUser.nickname} (${aiUser.writingStyle.verbosity}): ${tokenLimit}`);
+    const tokenLimit = getTokenLimit(writingStyle.verbosity);
+    console.log(`[AI Debug] Token limit for private message from ${aiUser.nickname} (${writingStyle.verbosity}): ${tokenLimit}`);
     
     // Get time-of-day context for private messages too
     const timeContext = getTimeOfDayContext();
@@ -1139,32 +1333,43 @@ CRITICAL: Respond ONLY in ${primaryLanguage}. Do not use any other language.
 ${userLanguages.length > 1 ? `Available languages: ${userLanguages.join(', ')}. Use ${primaryLanguage} only.` : ''}
 
 Your writing style:
-- Formality: ${aiUser.writingStyle.formality}
-- Verbosity: ${aiUser.writingStyle.verbosity} ${aiUser.writingStyle.verbosity === 'very_verbose' ? '(write very long, detailed messages with multiple sentences and thorough explanations)' : aiUser.writingStyle.verbosity === 'verbose' ? '(write moderately detailed messages with several sentences)' : aiUser.writingStyle.verbosity === 'terse' ? '(write brief, concise messages)' : aiUser.writingStyle.verbosity === 'very_terse' ? '(write very brief messages - short phrases or single sentences, but make them complete and meaningful)' : ''}
-- Humor: ${aiUser.writingStyle.humor}
-- Emoji usage: ${aiUser.writingStyle.emojiUsage}
-- Punctuation: ${aiUser.writingStyle.punctuation}
+- Formality: ${writingStyle.formality}
+- Verbosity: ${writingStyle.verbosity} ${writingStyle.verbosity === 'very_verbose' ? '(write very long, detailed messages with multiple sentences and thorough explanations)' : writingStyle.verbosity === 'verbose' ? '(write moderately detailed messages with several sentences)' : writingStyle.verbosity === 'terse' ? '(write brief, concise messages)' : writingStyle.verbosity === 'very_terse' ? '(write very brief messages - short phrases or single sentences, but make them complete and meaningful)' : ''}
+- Humor: ${writingStyle.humor}
+- Emoji usage: ${writingStyle.emojiUsage}
+- Punctuation: ${writingStyle.punctuation}
 - Language fluency: ${getLanguageFluency(aiUser.languageSkills)}
 - Languages: ${userLanguages.join(', ')}
 ${getLanguageAccent(aiUser.languageSkills) ? `- Accent: ${getLanguageAccent(aiUser.languageSkills)}` : ''}
 
 Generate a natural, in-character response that feels appropriate for the current time of day.
 The response must be a single line in the format: "${aiUser.nickname}: message"
-${aiUser.writingStyle.verbosity === 'very_verbose' ? 'IMPORTANT: This user is very verbose - write a long, detailed response with multiple sentences and thorough explanations. Do not cut off the message.' : aiUser.writingStyle.verbosity === 'verbose' ? 'IMPORTANT: This user is verbose - write a moderately detailed response with several sentences.' : ''}
+${writingStyle.verbosity === 'very_verbose' ? 'IMPORTANT: This user is very verbose - write a long, detailed response with multiple sentences and thorough explanations. Do not cut off the message.' : writingStyle.verbosity === 'verbose' ? 'IMPORTANT: This user is verbose - write a moderately detailed response with several sentences.' : ''}
 `;
 
     try {
         console.log(`[AI Debug] Sending request to Gemini for private message response from ${aiUser.nickname}`);
+        
+        // Configure thinking mode based on model requirements
+        const config: any = {
+          systemInstruction: getBaseSystemInstruction(currentUserNickname),
+          temperature: 0.75,
+          maxOutputTokens: tokenLimit,
+        };
+        
+        // Some models require thinking mode with a budget
+        if (validatedModel.includes('2.5') || validatedModel.includes('pro')) {
+          config.thinkingConfig = { thinkingBudget: 2000 }; // Increased budget for thinking mode
+          config.maxOutputTokens = Math.max(tokenLimit, 2000); // Ensure minimum output tokens
+          console.log(`[AI Debug] Using thinking mode with budget 2000 for private message model: ${validatedModel}`);
+          console.log(`[AI Debug] Adjusted maxOutputTokens to: ${config.maxOutputTokens}`);
+        }
+        
         const response = await withRateLimitAndRetries(() => 
             ai.models.generateContent({
                 model: validatedModel,
                 contents: prompt,
-                config: {
-                    systemInstruction: getBaseSystemInstruction(currentUserNickname),
-                    temperature: 0.75,
-                    maxOutputTokens: tokenLimit,
-                    thinkingConfig: { thinkingBudget: 0 },
-                },
+                config: config,
             })
         );
         
@@ -1185,11 +1390,26 @@ ${aiUser.writingStyle.verbosity === 'very_verbose' ? 'IMPORTANT: This user is ve
 };
 
 
-export const generateBatchUsers = async (count: number, model: string = 'gemini-2.5-flash'): Promise<User[]> => {
+export const generateBatchUsers = async (count: number, model: string = 'gemini-2.5-flash', options?: {
+  multilingualPersonalities?: boolean;
+  personalityLanguage?: string;
+}): Promise<User[]> => {
   console.log(`[AI Debug] generateBatchUsers called for count: ${count}`);
   
   const validatedModel = validateModelId(model);
   console.log(`[AI Debug] Validated model ID for batch users: "${validatedModel}"`);
+  
+  const multilingualPrompt = options?.multilingualPersonalities && options?.personalityLanguage 
+    ? `IMPORTANT: Generate personality descriptions in ${options.personalityLanguage}. For example:
+- English: "Passionate about technology and loves helping others"
+- Spanish: "Apasionado por la tecnología y le encanta ayudar a otros"
+- Chinese: "熱愛技術，喜歡幫助他人"
+- Japanese: "技術に情熱を持ち、他人を助けることが好き"
+- German: "Leidenschaftlich für Technik und liebt es, anderen zu helfen"
+- French: "Passionné par la technologie et aime aider les autres"
+
+Use the target language naturally and authentically for personality descriptions.`
+    : '';
   
   const prompt = `
 Generate ${count} unique IRC users with diverse personalities, language skills, and writing styles.
@@ -1203,21 +1423,21 @@ IMPORTANT: Create a diverse mix of languages including English, Finnish, Spanish
 Include users who speak only one language (e.g., only Finnish) and users who speak multiple languages.
 Make the language distribution realistic and varied.
 
+${multilingualPrompt}
+
 Make each user distinct and interesting for an IRC chat environment.
 Provide the output in JSON format.
 `;
 
   try {
     console.log(`[AI Debug] Sending request to Gemini for batch user generation (${count} users)`);
-    const response = await withRateLimitAndRetries(() =>
-      ai.models.generateContent({
-        model: validatedModel,
-        contents: prompt,
-        config: {
-          systemInstruction: "You are a creative character generator for an IRC simulation. Generate diverse, interesting users with unique personalities and communication styles. Create a realistic mix of languages including English, Finnish, Spanish, French, German, Japanese, and others. Include both monolingual and multilingual users. Provide a valid JSON response.",
-          temperature: 1.0,
-          maxOutputTokens: 2000,
-          responseMimeType: "application/json",
+    
+    // Configure thinking mode based on model requirements
+    const config: any = {
+      systemInstruction: "You are a creative character generator for an IRC simulation. Generate diverse, interesting users with unique personalities and communication styles. Create a realistic mix of languages including English, Finnish, Spanish, French, German, Japanese, and others. Include both monolingual and multilingual users. Provide a valid JSON response.",
+      temperature: 1.0,
+      maxOutputTokens: 2000,
+      responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
             properties: {
@@ -1302,9 +1522,21 @@ Provide the output in JSON format.
             },
             required: ['users']
           }
+        };
+        
+        // Some models require thinking mode with a budget
+        if (validatedModel.includes('2.5') || validatedModel.includes('pro')) {
+          config.thinkingConfig = { thinkingBudget: 2000 }; // Higher budget for batch generation
+          console.log(`[AI Debug] Using thinking mode with budget 2000 for batch generation model: ${validatedModel}`);
         }
-      })
-    );
+        
+        const response = await withRateLimitAndRetries(() =>
+          ai.models.generateContent({
+            model: validatedModel,
+            contents: prompt,
+            config: config,
+          })
+        );
 
     console.log(`[AI Debug] Successfully received response from Gemini for batch user generation`);
     
@@ -1344,15 +1576,12 @@ Create a list of 4 unique and thematic IRC channels with creative topics. Channe
 Provide the output in JSON format.
 `;
 
-    const response = await withRateLimitAndRetries(() =>
-        ai.models.generateContent({
-            model: validatedModel,
-            contents: prompt,
-            config: {
-                systemInstruction: "You are a creative world-builder for a simulated IRC environment. Generate a valid JSON response based on the provided schema.",
-                temperature: 1.0,
-                maxOutputTokens: 4000,
-                responseMimeType: "application/json",
+    // Configure thinking mode based on model requirements
+    const config: any = {
+        systemInstruction: "You are a creative world-builder for a simulated IRC environment. Generate a valid JSON response based on the provided schema.",
+        temperature: 1.0,
+        maxOutputTokens: 4000,
+        responseMimeType: "application/json",
                 responseSchema: {
                     type: Type.OBJECT,
                     properties: {
@@ -1446,9 +1675,21 @@ Provide the output in JSON format.
                     },
                     required: ['users', 'channels']
                 }
+            };
+            
+            // Some models require thinking mode with a budget
+            if (validatedModel.includes('2.5') || validatedModel.includes('pro')) {
+                config.thinkingConfig = { thinkingBudget: 2000 }; // Higher budget for world generation
+                console.log(`[AI Debug] Using thinking mode with budget 2000 for world config model: ${validatedModel}`);
             }
-        })
-    );
+            
+            const response = await withRateLimitAndRetries(() =>
+                ai.models.generateContent({
+                    model: validatedModel,
+                    contents: prompt,
+                    config: config,
+                })
+            );
 
     const jsonString = extractTextFromResponse(response);
     
