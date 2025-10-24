@@ -88,11 +88,16 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
     return parts.map((part, index) => {
       if (urlRegex.test(part)) {
         // Check if this URL is already handled by the images/links arrays
-        const isHandledImage = images && images.includes(part);
-        const isHandledLink = links && links.includes(part);
+        // Use more robust matching to handle URL variations
+        const normalizeUrl = (url: string) => url.toLowerCase().replace(/\/$/, ''); // Remove trailing slash and normalize case
+        const normalizedPart = normalizeUrl(part);
         
-        if (isHandledLink) {
-          // Skip this URL as it's already handled by the dedicated links array
+        const isHandledImage = images && images.some(img => normalizeUrl(img) === normalizedPart);
+        const isHandledLink = links && links.some(link => normalizeUrl(link) === normalizedPart);
+        
+        
+        if (isHandledLink || isHandledImage) {
+          // Skip this URL as it's already handled by the dedicated links/images arrays
           return <span key={index}></span>; // Render empty span to prevent duplicate display
         }
         
@@ -321,6 +326,12 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
             {botCommand && (
               <span className="text-blue-400 text-xs bg-blue-900 px-2 py-0.5 rounded">
                 {botCommand.toUpperCase()}
+              </span>
+            )}
+            {message.botResponse?.status === 'generating' && (
+              <span className="text-yellow-400 text-xs bg-yellow-900 px-2 py-0.5 rounded flex items-center gap-1">
+                <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
+                GENERATING
               </span>
             )}
           </div>

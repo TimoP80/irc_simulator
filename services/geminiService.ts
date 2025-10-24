@@ -452,8 +452,8 @@ const extractTextFromResponse = (response: any): string => {
     return response.candidates[0].text.trim();
   }
   
-  console.error("Invalid response structure:", response);
-  throw new Error("Invalid response from AI service: unable to extract text content");
+    console.error("Invalid response structure:", response);
+    throw new Error("Invalid response from AI service: unable to extract text content");
 };
 
 // Time-of-day context generation
@@ -565,19 +565,12 @@ If a user only speaks Finnish, respond in Finnish. If they only speak English, r
 Match the language to the user's language configuration exactly.
 
 LINK AND IMAGE SUPPORT:
-- You SHOULD include links to websites and images in your messages when relevant. This makes conversations more engaging and realistic.
+- You SHOULD include links to websites in your messages when relevant. This makes conversations more engaging and realistic.
 - Use realistic, relevant URLs that fit the conversation context.
-- Share images by including image URLs from common hosting services.
-- When sharing links or images, make them contextually relevant to the conversation.
+- When sharing links, make them contextually relevant to the conversation.
 - Examples of good link sharing: "Check this out: https://example.com" or "Found this interesting: https://github.com/user/repo"
-- Examples of good image sharing: "Here's a screenshot: https://via.placeholder.com/400x300/0066CC/FFFFFF?text=Screenshot" or "Look at this: https://via.placeholder.com/300x200/FF6B6B/FFFFFF?text=Image" or "Check out this: https://via.placeholder.com/500x300/4ECDC4/FFFFFF?text=Content"
 - Be proactive about sharing relevant content - don't wait for perfect opportunities, create them naturally.
-- SAFE image hosting services (use these): via.placeholder.com (for consistent placeholder images)
-- AVOID these problematic services: picsum.photos (returns random images), httpbin.org (returns random test images), gyazo.com, prnt.sc, postimg.cc, imgchest.com, freeimage.host, imgbb.com, imgur.com, i.imgur.com, imgbox.com, 3lift.com, ads.assemblyexchange.com, or any ad/tracking services
-- NEVER use Imgur URLs (imgur.com, i.imgur.com), ImgBB URLs (imgbb.com), or Imgbox URLs (imgbox.com) as they cause CORS errors
-- Use complete, working URLs like: https://via.placeholder.com/400x300/0066CC/FFFFFF?text=Screenshot, https://via.placeholder.com/300x200/FF6B6B/FFFFFF?text=Image
-- ALWAYS include file extensions (.jpg, .png, .gif, .webp) for direct image links
-- Preferred services: via.placeholder.com (these provide consistent, static placeholder images that don't change)
+- IMPORTANT: For images, use the !image bot command instead of sharing direct image URLs
 - CRITICAL: Only use REAL, EXISTING URLs that actually work - never make up fake URLs or non-existent content
 - CRITICAL: NEVER post Rick Astley's "Never Gonna Give You Up" video or any rickroll content
 - NEVER use YouTube video ID "dQw4w9WgXcQ" or any URLs containing this ID
@@ -602,6 +595,16 @@ LINK AND IMAGE SUPPORT:
 - Prefer recent content (from the last few years) over old videos that may no longer be available
 - If you're not certain a YouTube video is still available, don't share it - better to share no link than a broken one
 - Consider sharing other types of content (GitHub repos, news articles, tutorials) instead of potentially outdated YouTube links
+
+BOT COMMAND SUPPORT:
+- Occasionally (about 5-10% of the time), you can use bot commands to make conversations more interactive and engaging.
+- Available bot commands: !image [prompt], !weather [location], !time, !info [topic], !help, !quote, !joke, !fact, !translate [text], !calc [expression], !search [query]
+- Use bot commands naturally in context - for example, if discussing art, use "!image a beautiful sunset" or if someone asks about weather, use "!weather Helsinki"
+- Examples: "Let me show you something cool: !image a cyberpunk cityscape" or "What's the weather like? !weather Tokyo" or "Here's a fun fact: !fact"
+- IMPORTANT: When you want to share images, ALWAYS use the !image command instead of posting direct image URLs
+- The !image command generates real AI images, which is much better than placeholder images
+- Don't overuse bot commands - use them sparingly and only when they add value to the conversation
+- Bot commands should feel natural and conversational, not forced or robotic
 
 REALISTIC IRC CONVERSATION PATTERNS:
 - Reply to ONE person at a time, not multiple people in the same message
@@ -919,7 +922,7 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
     diversityPrompt = 'IMPORTANT: Add some humor, wit, or clever wordplay to the conversation.';
   } else if (conversationVariety < 0.95) {
     // 10% chance: Share a link or image
-    diversityPrompt = 'IMPORTANT: Share a relevant link or image that adds value to the conversation. Use complete, working URLs like https://via.placeholder.com/400x300/0066CC/FFFFFF?text=Screenshot or https://github.com/user/repo. Always include file extensions for images. Use only CORS-compliant services: via.placeholder.com (for consistent placeholder images). Avoid ad networks, tracking services, and problematic image hosting services. CRITICAL: AVOID sharing YouTube links entirely - they often become outdated, unavailable, or redirect to unwanted content. Instead, share GitHub repos, news articles, tutorials, memes, screenshots, or documentation. If you must share video content, describe it instead of linking to it. CRITICAL: Only share REAL, EXISTING links that actually work - never make up fake URLs or non-existent content. If unsure about a link\'s existence, don\'t share it. NEVER post Rick Astley\'s "Never Gonna Give You Up" or similar overused memes - these are cliché and repetitive. NEVER use YouTube video ID "dQw4w9WgXcQ" or any URLs containing this ID. NEVER post URLs that redirect to Rick Astley content, even if they look legitimate. Share fresh, diverse content instead.';
+    diversityPrompt = 'IMPORTANT: Share a relevant link or image that adds value to the conversation. Use complete, working URLs like https://placehold.co/400x300/0066CC/FFFFFF/png?text=Screenshot or https://github.com/user/repo. Always include file extensions for images. Use only CORS-compliant services: placehold.co (for consistent placeholder images). Avoid ad networks, tracking services, and problematic image hosting services. CRITICAL: AVOID sharing YouTube links entirely - they often become outdated, unavailable, or redirect to unwanted content. Instead, share GitHub repos, news articles, tutorials, memes, screenshots, or documentation. If you must share video content, describe it instead of linking to it. CRITICAL: Only share REAL, EXISTING links that actually work - never make up fake URLs or non-existent content. If unsure about a link\'s existence, don\'t share it. NEVER post Rick Astley\'s "Never Gonna Give You Up" or similar overused memes - these are cliché and repetitive. NEVER use YouTube video ID "dQw4w9WgXcQ" or any URLs containing this ID. NEVER post URLs that redirect to Rick Astley content, even if they look legitimate. Share fresh, diverse content instead.';
   } else {
     // 5% chance: Be more conversational and natural
     diversityPrompt = 'IMPORTANT: Be more conversational and natural - like you\'re talking to friends in a relaxed setting.';
@@ -1053,18 +1056,18 @@ ${isChannelOperator(channel, randomUser.nickname) ? `- Role: Channel operator (c
         console.log(`[AI Debug] Using thinking mode with budget 2000 for model: ${validatedModel}`);
         console.log(`[AI Debug] Adjusted maxOutputTokens to: ${config.maxOutputTokens}`);
       }
-      
-      const response = await withRateLimitAndRetries(() => 
-        ai.models.generateContent({
-            model: validatedModel,
-            contents: prompt,
+    
+    const response = await withRateLimitAndRetries(() => 
+      ai.models.generateContent({
+          model: validatedModel,
+          contents: prompt,
             config: config,
         }), `channel activity generation for ${randomUser.nickname}`
-      );
-      
-      const result = extractTextFromResponse(response);
-      console.log(`[AI Debug] Successfully generated channel activity: "${result}"`);
-      return result;
+    );
+    
+    const result = extractTextFromResponse(response);
+    console.log(`[AI Debug] Successfully generated channel activity: "${result}"`);
+    return result;
     } catch (error) {
       console.warn(`[AI Debug] API call failed, using fallback response for ${randomUser.nickname}:`, error);
       const fallbackResponse = getFallbackResponse(randomUser, 'activity');
@@ -1272,11 +1275,11 @@ ${formatMessageHistory(channel.messages)}
 
     ${reactionAntiGreetingSpam}
 
-    ${Math.random() < 0.2 ? 'IMPORTANT: Consider sharing a relevant link or image in your reaction to make it more engaging. Use complete, working URLs like https://via.placeholder.com/400x300/0066CC/FFFFFF?text=Screenshot or https://github.com/user/repo. Always include file extensions for images. Use only CORS-compliant services: via.placeholder.com (for consistent placeholder images). Avoid ad networks, tracking services, and problematic image hosting services. CRITICAL: AVOID sharing YouTube links entirely - they often become outdated, unavailable, or redirect to unwanted content. Instead, share GitHub repos, news articles, tutorials, memes, screenshots, or documentation. If you must share video content, describe it instead of linking to it. CRITICAL: Only share REAL, EXISTING links that actually work - never make up fake URLs or non-existent content. If unsure about a link\'s existence, don\'t share it. NEVER post Rick Astley\'s "Never Gonna Give You Up" or similar overused memes - these are cliché and repetitive. NEVER use YouTube video ID "dQw4w9WgXcQ" or any URLs containing this ID. NEVER post URLs that redirect to Rick Astley content, even if they look legitimate. Share fresh, diverse content instead.' : ''}
+    ${Math.random() < 0.2 ? 'IMPORTANT: Consider sharing a relevant link or image in your reaction to make it more engaging. Use complete, working URLs like https://placehold.co/400x300/0066CC/FFFFFF/png?text=Screenshot or https://github.com/user/repo. Always include file extensions for images. Use only CORS-compliant services: placehold.co (for consistent placeholder images). Avoid ad networks, tracking services, and problematic image hosting services. CRITICAL: AVOID sharing YouTube links entirely - they often become outdated, unavailable, or redirect to unwanted content. Instead, share GitHub repos, news articles, tutorials, memes, screenshots, or documentation. If you must share video content, describe it instead of linking to it. CRITICAL: Only share REAL, EXISTING links that actually work - never make up fake URLs or non-existent content. If unsure about a link\'s existence, don\'t share it. NEVER post Rick Astley\'s "Never Gonna Give You Up" or similar overused memes - these are cliché and repetitive. NEVER use YouTube video ID "dQw4w9WgXcQ" or any URLs containing this ID. NEVER post URLs that redirect to Rick Astley content, even if they look legitimate. Share fresh, diverse content instead.' : ''}
 
     IMPORTANT: Reply to ONE person at a time, not multiple people. Focus on the most recent or most relevant message. Avoid addressing multiple users in one sentence - this is unrealistic IRC behavior. Keep your response natural and conversational, like a real IRC user would.
 
-    Generate a realistic and in-character reaction from ${randomUser.nickname}.
+Generate a realistic and in-character reaction from ${randomUser.nickname}.
 The reaction should feel natural for the current time of day and social context.
 The reaction must be a single line in the format: "nickname: message"
 ${writingStyle.verbosity === 'very_verbose' ? 'IMPORTANT: This user is very verbose - write a long, detailed reaction with multiple sentences and thorough explanations. Do not cut off the message.' : writingStyle.verbosity === 'verbose' ? 'IMPORTANT: This user is verbose - write a moderately detailed reaction with several sentences.' : ''}
@@ -1323,18 +1326,18 @@ ${isChannelOperator(channel, randomUser.nickname) ? `- Role: Channel operator (c
             console.log(`[AI Debug] Using thinking mode with budget 2000 for reaction model: ${validatedModel}`);
             console.log(`[AI Debug] Adjusted maxOutputTokens to: ${config.maxOutputTokens}`);
           }
-          
-          const response = await withRateLimitAndRetries(() => 
-              ai.models.generateContent({
-                  model: validatedModel,
-                  contents: prompt,
+        
+        const response = await withRateLimitAndRetries(() => 
+            ai.models.generateContent({
+                model: validatedModel,
+                contents: prompt,
                   config: config,
               }), `reaction generation from ${randomUser.nickname}`
-          );
-          
-          const result = extractTextFromResponse(response);
-          console.log(`[AI Debug] Successfully generated reaction: "${result}"`);
-          return result;
+        );
+        
+        const result = extractTextFromResponse(response);
+        console.log(`[AI Debug] Successfully generated reaction: "${result}"`);
+        return result;
         } catch (apiError) {
           console.warn(`[AI Debug] API call failed, using fallback response for reaction from ${randomUser.nickname}:`, apiError);
           const fallbackResponse = getFallbackResponse(randomUser, 'reaction', userMessage.content);
@@ -1503,10 +1506,10 @@ Provide the output in JSON format.
     
     // Configure thinking mode based on model requirements
     const config: any = {
-      systemInstruction: "You are a creative character generator for an IRC simulation. Generate diverse, interesting users with unique personalities and communication styles. Create a realistic mix of languages including English, Finnish, Spanish, French, German, Japanese, and others. Include both monolingual and multilingual users. Provide a valid JSON response.",
-      temperature: 1.0,
-      maxOutputTokens: 2000,
-      responseMimeType: "application/json",
+          systemInstruction: "You are a creative character generator for an IRC simulation. Generate diverse, interesting users with unique personalities and communication styles. Create a realistic mix of languages including English, Finnish, Spanish, French, German, Japanese, and others. Include both monolingual and multilingual users. Provide a valid JSON response.",
+          temperature: 1.0,
+          maxOutputTokens: 2000,
+          responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
             properties: {
@@ -1605,7 +1608,7 @@ Provide the output in JSON format.
             contents: prompt,
             config: config,
           }), `batch user generation (${users.length} users)`
-        );
+    );
 
     console.log(`[AI Debug] Successfully received response from Gemini for batch user generation`);
     
@@ -1647,10 +1650,10 @@ Provide the output in JSON format.
 
     // Configure thinking mode based on model requirements
     const config: any = {
-        systemInstruction: "You are a creative world-builder for a simulated IRC environment. Generate a valid JSON response based on the provided schema.",
-        temperature: 1.0,
-        maxOutputTokens: 4000,
-        responseMimeType: "application/json",
+                systemInstruction: "You are a creative world-builder for a simulated IRC environment. Generate a valid JSON response based on the provided schema.",
+                temperature: 1.0,
+                maxOutputTokens: 4000,
+                responseMimeType: "application/json",
                 responseSchema: {
                     type: Type.OBJECT,
                     properties: {
@@ -1680,13 +1683,13 @@ Provide the output in JSON format.
                                                             type: Type.STRING,
                                                             description: "The language name (e.g., 'English', 'Finnish', 'Spanish')."
                                                         },
-                                                        fluency: {
-                                                            type: Type.STRING,
-                                                            enum: ['beginner', 'intermediate', 'advanced', 'native'],
+                                            fluency: {
+                                                type: Type.STRING,
+                                                enum: ['beginner', 'intermediate', 'advanced', 'native'],
                                                             description: "Fluency level in this specific language."
-                                                        },
-                                                        accent: {
-                                                            type: Type.STRING,
+                                            },
+                                            accent: {
+                                                type: Type.STRING,
                                                             description: "Optional accent or dialect for this language."
                                                         }
                                                     },
@@ -1767,7 +1770,7 @@ Provide the output in JSON format.
                     contents: prompt,
                     config: config,
                 }), `world configuration generation`
-            );
+    );
 
     const jsonString = extractTextFromResponse(response);
     

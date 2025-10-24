@@ -9,9 +9,11 @@ interface UserListProps {
   currentUserNickname: string;
   channel?: Channel;
   onToggleOperator?: (nickname: string) => void;
+  networkNickname?: string | null;
+  isNetworkConnected?: boolean;
 }
 
-export const UserList: React.FC<UserListProps> = ({ users, onUserClick, currentUserNickname, channel, onToggleOperator }) => {
+export const UserList: React.FC<UserListProps> = ({ users, onUserClick, currentUserNickname, channel, onToggleOperator, networkNickname, isNetworkConnected }) => {
   const isOperator = (nickname: string) => channel && isChannelOperator(channel, nickname);
   
   return (
@@ -31,23 +33,58 @@ export const UserList: React.FC<UserListProps> = ({ users, onUserClick, currentU
       )}
       
       <div className="flex flex-col gap-0.5 lg:gap-1">
-        {users.map((user, index) => (
-          user.nickname === currentUserNickname ? (
-            <div key={`${user.nickname}-${index}-current`} className="px-2 lg:px-3 py-1 lg:py-1.5 text-xs lg:text-sm text-cyan-400 font-bold flex items-center gap-1 lg:gap-2">
-              <span className={`h-1.5 w-1.5 lg:h-2 lg:w-2 rounded-full ${user.status === 'online' ? 'bg-green-500' : 'bg-yellow-500'}`}></span>
-              <span className="truncate">{user.nickname} (You)</span>
+        {users.map((user, index) => {
+          const isCurrentUser = user.nickname === currentUserNickname;
+          const isNetworkUser = user.personality === 'Network User';
+          const isCurrentNetworkUser = isNetworkConnected && networkNickname && user.nickname === networkNickname;
+          
+          return isCurrentUser ? (
+            <div key={`${user.nickname}-${index}-current`} className={`px-2 lg:px-3 py-2 lg:py-2.5 text-xs lg:text-sm rounded-md font-bold flex items-center gap-1 lg:gap-2 ${
+              isCurrentNetworkUser 
+                ? 'bg-blue-900/40 border border-blue-500/50 text-blue-200' 
+                : 'bg-cyan-900/30 border border-cyan-500/30 text-cyan-300'
+            }`}>
+              <span className={`h-1.5 w-1.5 lg:h-2 lg:w-2 rounded-full ${
+                user.status === 'online' 
+                  ? (isNetworkUser ? 'bg-blue-500' : 'bg-green-500')
+                  : 'bg-yellow-500'
+              }`}></span>
+              <span className="truncate flex items-center gap-1">
+                <span className="font-bold">{user.nickname}</span>
+                <span className={`text-xs font-normal ${
+                  isCurrentNetworkUser ? 'text-blue-300' : 'text-cyan-400'
+                }`}>
+                  {isCurrentNetworkUser ? '(Network)' : '(You)'}
+                </span>
+              </span>
+              {isNetworkUser && (
+                <span className="text-blue-400 text-xs">🌐</span>
+              )}
+              {isCurrentNetworkUser && (
+                <span className="text-blue-300 text-xs">🔗</span>
+              )}
               {isOperator(user.nickname) && (
                 <span className="text-yellow-400 text-xs">@</span>
               )}
             </div>
           ) : (
-            <div key={`${user.nickname}-${index}`} className="flex items-center gap-1 lg:gap-2 group">
+            <div key={user.nickname} className="flex items-center gap-1 lg:gap-2 group">
               <button
                 onClick={() => onUserClick(user.nickname)}
                 className="flex-1 text-left px-2 lg:px-3 py-1 lg:py-1.5 text-xs lg:text-sm text-gray-300 hover:bg-gray-700 rounded-md flex items-center gap-1 lg:gap-2 transition-colors"
               >
-                <span className={`h-1.5 w-1.5 lg:h-2 lg:w-2 rounded-full ${user.status === 'online' ? 'bg-green-500' : 'bg-yellow-500'}`}></span>
+                <span className={`h-1.5 w-1.5 lg:h-2 lg:w-2 rounded-full ${
+                  user.status === 'online' 
+                    ? (isNetworkUser ? 'bg-blue-500' : 'bg-green-500')
+                    : 'bg-yellow-500'
+                }`}></span>
                 <span className="truncate">{user.nickname}</span>
+                {isNetworkUser && (
+                  <span className="text-blue-400 text-xs">🌐</span>
+                )}
+                {isCurrentNetworkUser && (
+                  <span className="text-blue-300 text-xs">🔗</span>
+                )}
                 {isOperator(user.nickname) && (
                   <span className="text-yellow-400 text-xs">@</span>
                 )}
@@ -66,8 +103,8 @@ export const UserList: React.FC<UserListProps> = ({ users, onUserClick, currentU
                 </button>
               )}
             </div>
-          )
-        ))}
+          );
+        })}
       </div>
     </aside>
   );

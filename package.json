@@ -1,23 +1,27 @@
 {
   "name": "station-v-virtual-chat-simulator",
   "private": true,
-  "version": "1.14.0",
+  "version": "1.15.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "server": "node server/station-v-server-simple.js",
+    "dev:full": "concurrently \"npm run server\" \"npm run dev\""
   },
   "dependencies": {
     "@google/genai": "^1.27.0",
     "irc-framework": "^4.14.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/node": "^22.18.12",
     "@vitejs/plugin-react": "^5.0.0",
     "typescript": "~5.8.2",
-    "vite": "^6.4.0"
+    "vite": "^6.4.0",
+    "concurrently": "^8.2.2"
   }
 }

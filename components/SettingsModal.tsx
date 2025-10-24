@@ -507,7 +507,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Image Generation Provider</label>
                 <select
-                  value={config.imageGeneration?.provider || 'placeholder'}
+                  value={config.imageGeneration?.provider || 'nano-banana'}
                   onChange={(e) => setConfig(prev => ({
                     ...prev,
                     imageGeneration: {
@@ -517,8 +517,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   }))}
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="placeholder">Placeholder (Default - No API key needed)</option>
-                  <option value="nano-banana">Nano Banana (Stable Diffusion API)</option>
+                  <option value="nano-banana">Gemini AI (Default - Real AI-generated images)</option>
+                  <option value="placeholder">Placeholder (Simple placeholder images)</option>
                   <option value="imagen">Google Imagen (Coming Soon)</option>
                   <option value="dalle">OpenAI DALLE (Coming Soon)</option>
                 </select>
@@ -563,7 +563,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   {config.imageGeneration?.provider === 'nano-banana' && (
                     <div className="bg-blue-900/20 border border-blue-500/30 p-3 rounded-lg">
                       <p className="text-xs text-blue-300">
-                        <strong>ℹ️ Nano Banana Info:</strong> Nano Banana uses the Google GenAI SDK with the <code className="bg-gray-800 px-1 rounded">gemini-2.5-flash-image-preview</code> model. 
+                        <strong>ℹ️ Nano Banana Info:</strong> Nano Banana uses the Google GenAI SDK with the <code className="bg-gray-800 px-1 rounded">gemini-2.0-flash-exp</code> model. 
                         No base URL configuration needed - it uses Google's infrastructure directly.
                       </p>
                     </div>
@@ -574,17 +574,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="bg-gray-700 p-3 rounded-lg">
                 <p className="text-xs text-gray-400">
                   <strong>Image Generation Services:</strong><br/>
-                  • <strong>Placeholder:</strong> Uses placeholder images (no API key needed, no CORS issues)<br/>
-                  • <strong>Nano Banana:</strong> Google GenAI SDK with gemini-2.5-flash-image-preview model<br/>
-                  • <strong>Imagen:</strong> Google's image generation (coming soon)<br/>
+                  • <strong>Gemini AI:</strong> Real AI-generated images using Google's Gemini model (requires API key)<br/>
+                  • <strong>Placeholder:</strong> Simple placeholder images (no API key needed, no CORS issues)<br/>
+                  • <strong>Imagen:</strong> Google's dedicated image generation (coming soon)<br/>
                   • <strong>DALLE:</strong> OpenAI's image generation (coming soon)
                 </p>
               </div>
               
-              <div className="bg-yellow-900/20 border border-yellow-500/30 p-3 rounded-lg">
-                <p className="text-xs text-yellow-300">
-                  <strong>⚠️ CORS Warning:</strong> External image generation APIs (like Nano Banana) may not work due to CORS restrictions. 
-                  If you encounter CORS errors, try using the Placeholder service instead.
+              <div className="bg-blue-900/20 border border-blue-500/30 p-3 rounded-lg">
+                <p className="text-xs text-blue-300">
+                  <strong>ℹ️ Gemini AI Info:</strong> Gemini AI uses the Google GenAI SDK with the <code className="bg-gray-800 px-1 rounded">gemini-2.5-flash-image-preview</code> model. 
+                  This provides real AI-generated images based on your prompts. If you encounter issues, the system will automatically fall back to placeholder images.
                 </p>
               </div>
               
