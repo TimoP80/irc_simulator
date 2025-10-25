@@ -575,7 +575,13 @@ const App: React.FC = () => {
   }, [virtualUsers]);
 
   const handleSaveSettings = (config: AppConfig) => {
+    console.log('[Settings Debug] handleSaveSettings called with config:', config);
+    console.log('[Settings Debug] Config keys:', Object.keys(config));
+    console.log('[Settings Debug] Config aiModel:', config.aiModel);
+    console.log('[Settings Debug] Config simulationSpeed:', config.simulationSpeed);
+    
     saveConfig(config);
+    console.log('[Settings Debug] saveConfig called successfully');
     
     // Initialize state from the new config
     const { nickname, virtualUsers, channels: newChannels, simulationSpeed, aiModel: savedAiModel, typingDelay } = initializeStateFromConfig(config);
@@ -2008,28 +2014,36 @@ The response must be a single line in the format: "nickname: greeting message"
           return updatedChannel;
         });
         
-        // Add join messages for new users in all channels using updated channels
-        addedUsers.forEach((newUser) => {
-          updatedChannels.forEach(updatedChannel => {
-            // Check if user is now in this channel (was added)
-            const isNowInChannel = updatedChannel.users.some(u => u.nickname === newUser.nickname);
-            // Check if user was in this channel before (using original channel data)
-            const wasInChannelBefore = prevChannels.find(c => c.name === updatedChannel.name)?.users.some(u => u.nickname === newUser.nickname) || false;
-            
-            if (isNowInChannel && !wasInChannelBefore) {
-              const joinMessage: Message = {
-                id: generateUniqueMessageId(),
-                nickname: newUser.nickname,
-                content: updatedChannel.name,
-                timestamp: new Date(),
-                type: 'join'
-              };
-              console.log(`[Join Debug] Creating join message for ${newUser.nickname} in ${updatedChannel.name}:`, joinMessage);
-              console.log(`[Join Debug] Calling addMessageToContext with context:`, { type: 'channel', name: updatedChannel.name });
-              addMessageToContext(joinMessage, { type: 'channel', name: updatedChannel.name });
-            }
-          });
-        });
+        // Only add join messages for actual user joins, not channel data synchronization
+        // Check if this is a real user join (not just channel data sync)
+        const isRealUserJoin = addedUsers.length === 1 && 
+          addedUsers[0].personality === 'Network User' && 
+          !prevChannels.some(channel => 
+            channel.users.some(user => user.nickname === addedUsers[0].nickname)
+          );
+        
+        if (isRealUserJoin) {
+          // Find which channel the user actually joined
+          const joinedChannel = updatedChannels.find(channel => 
+            channel.users.some(user => user.nickname === addedUsers[0].nickname) &&
+            !prevChannels.find(prevChannel => 
+              prevChannel.name === channel.name && 
+              prevChannel.users.some(user => user.nickname === addedUsers[0].nickname)
+            )
+          );
+          
+          if (joinedChannel) {
+            const joinMessage: Message = {
+              id: generateUniqueMessageId(),
+              nickname: addedUsers[0].nickname,
+              content: joinedChannel.name,
+              timestamp: new Date(),
+              type: 'join'
+            };
+            console.log(`[Join Debug] Creating join message for ${addedUsers[0].nickname} in ${joinedChannel.name}:`, joinMessage);
+            addMessageToContext(joinMessage, { type: 'channel', name: joinedChannel.name });
+          }
+        }
         
         return updatedChannels;
       });
@@ -2528,9 +2542,11 @@ The response must be a single line in the format: "nickname: greeting message"
   const usersInContext: User[] = useMemo(() => {
     if (activeContext?.type === 'channel' && activeChannel) {
       // Get network users in this channel
-      const networkUsersInChannel = networkUsers.filter(networkUser => 
-        networkUser.channels.includes(activeChannel.name)
-      );
+      const networkUsersInChannel = networkUsers.filter(networkUser => {
+        // Ensure channels is an array before checking
+        const channels = Array.isArray(networkUser.channels) ? networkUser.channels : Array.from(networkUser.channels || []);
+        return channels.includes(activeChannel.name);
+      });
       
       // Convert network users to User objects
       const convertedNetworkUsers: User[] = networkUsersInChannel.map(networkUser => ({
@@ -2756,28 +2772,75 @@ The response must be a single line in the format: "nickname: greeting message"
         // Only trigger AI reaction to network messages from OTHER users (not the current user)
         // This prevents double AI reactions when the user's own message comes back through the network
         if (channel && networkMessage.nickname !== currentUserNickname) {
-          generateReactionToMessage(channel, networkMessage, currentUserNickname, aiModel)
-            .then(aiResponse => {
-              if (aiResponse && aiResponse.trim()) {
-                const [nickname, ...contentParts] = aiResponse.split(':');
-                const content = contentParts.join(':').trim();
-                
-                if (nickname && content && nickname.trim()) {
-                  const aiMessage: Message = {
-                    id: generateUniqueMessageId(),
-                    nickname: nickname.trim(),
-                    content,
-                    timestamp: new Date(),
-                    type: 'ai'
-                  };
+          // In network mode, create a channel object with only local virtual users for AI reactions
+          // This ensures AI reactions use only the locally configured virtual users, not network users
+          const localVirtualUsers = virtualUsers.filter(user => 
+            channel.users.some(channelUser => channelUser.nickname === user.nickname)
+          );
+          
+          if (localVirtualUsers.length > 0) {
+            const localChannel = {
+              ...channel,
+              users: localVirtualUsers
+            };
+            
+            console.log(`[Network AI] Generating reaction using ${localVirtualUsers.length} local virtual users:`, localVirtualUsers.map(u => u.nickname));
+            
+            generateReactionToMessage(localChannel, networkMessage, currentUserNickname, aiModel)
+              .then(aiResponse => {
+                if (aiResponse && aiResponse.trim()) {
+                  const [nickname, ...contentParts] = aiResponse.split(':');
+                  const content = contentParts.join(':').trim();
                   
-                  addMessageToContextRef.current(aiMessage, { type: 'channel', name: channelName });
+                  if (nickname && content && nickname.trim()) {
+                    // Verify the nickname is from a local virtual user
+                    const isValidLocalUser = localVirtualUsers.some(user => user.nickname === nickname.trim());
+                    
+                    if (isValidLocalUser) {
+                      const aiMessage: Message = {
+                        id: generateUniqueMessageId(),
+                        nickname: nickname.trim(),
+                        content,
+                        timestamp: new Date(),
+                        type: 'ai'
+                      };
+                      
+                      // Add message to channel directly without triggering network broadcast
+                      // This prevents infinite loops where AI responses get broadcast back to network
+                      setChannels(prev => {
+                        const updatedChannels = prev.map(c => {
+                          if (c.name === channelName) {
+                            // Check if message already exists to prevent duplicates
+                            const existingMessage = c.messages?.find(m => m.id === aiMessage.id);
+                            if (existingMessage) {
+                              return c;
+                            }
+                            return { ...c, messages: [...(c.messages || []), aiMessage].slice(-1000) };
+                          }
+                          return c;
+                        });
+                        return updatedChannels;
+                      });
+                      
+                      // Save to chat logs
+                      const chatLogService = getChatLogService();
+                      chatLogService.saveMessage(channelName, aiMessage).catch(error => {
+                        console.error('[Chat Log] Failed to save AI reaction message:', error);
+                      });
+                      
+                      console.log(`[Network AI] Generated reaction from local virtual user: ${nickname.trim()}`);
+                    } else {
+                      console.warn(`[Network AI] AI generated response from non-local user: ${nickname.trim()}, skipping`);
+                    }
+                  }
                 }
-              }
-            })
-            .catch(error => {
-              console.error('[App] Error generating AI reaction to network message:', error);
-            });
+              })
+              .catch(error => {
+                console.error('[App] Error generating AI reaction to network message:', error);
+              });
+          } else {
+            console.log(`[Network AI] No local virtual users found in channel ${channelName}, skipping AI reaction`);
+          }
         }
       }
     };

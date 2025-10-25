@@ -37,6 +37,44 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 - **Type Safety**: Enhanced TypeScript types for network users and messages
 - **Error Handling**: Robust error handling for network disconnections and reconnections
 
+## 1.16.2 - 2025-10-25
+
+### Fixed
+- **Network Mode AI Response Bug**: Fixed critical issue where AI responses in network mode were generated from non-existent users
+  - **Root Cause**: AI reactions to network messages were using mixed user lists (local + network users) instead of only local virtual users
+  - **Solution**: Implemented local virtual user filtering to ensure AI reactions only use locally configured users
+  - **Impact**: AI responses now consistently use configured virtual users with correct personalities and languages
+  - **User Experience**: Eliminated English responses from non-existent users in network mode
+
+- **Network Mode Infinite Loop**: Fixed infinite loop caused by AI responses being broadcast back to network
+  - **Root Cause**: AI reactions were added via `addMessageToContext()` which automatically broadcasts to network, creating message echo loops
+  - **Solution**: Implemented direct channel state updates for AI reactions to network messages, bypassing network broadcast
+  - **Impact**: Stable network mode operation without infinite message loops
+  - **Performance**: Eliminated excessive network traffic and message processing
+
+- **WebSocket Server Channels Error**: Fixed `TypeError: user.channels.includes is not a function` in WebSocket server
+  - **Root Cause**: Server was using `Array.includes()` method on `Set` objects for channel membership checking
+  - **Solution**: Changed `user.channels.includes(channel)` to `user.channels.has(channel)` for proper Set operations
+  - **Impact**: Server no longer crashes when processing user join events after extended runtime
+
+### Enhanced
+- **HTML Export Templates**: Added comprehensive template system with 5 different export styles
+  - **Modern Dark**: Dark theme with gradients and modern styling (default)
+  - **Classic Light**: Clean light theme with traditional styling
+  - **Minimal Clean**: Ultra-minimal design focused on content
+  - **Compact Table**: Dense table-like layout for maximum information density
+  - **Web Client Style**: Mimics actual web client interface with colored nicknames
+  - **Live Preview**: Full-screen preview modal with template selection
+  - **Chronological Ordering**: All templates ensure messages are ordered oldest to newest
+  - **Image Support**: Enhanced image rendering with responsive sizing and click-to-open functionality
+
+### Technical Improvements
+- **Template System Architecture**: Centralized template management with consistent styling and functionality
+- **Network User Validation**: Enhanced validation to prevent AI responses from non-local users
+- **Message Loop Prevention**: Robust loop prevention for network AI responses
+- **Export Preview System**: Interactive preview with download functionality
+- **Color-Coded Nicknames**: Hash-based consistent color assignment for web client template
+
 ## 1.16.1 - 2025-01-24
 
 ### Fixed

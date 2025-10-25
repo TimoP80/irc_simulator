@@ -39,13 +39,24 @@ const checkLocalStorageQuota = (): { available: number; used: number; total: num
 export const loadConfig = (): AppConfig | null => {
   try {
     const savedConfig = localStorage.getItem(CONFIG_STORAGE_KEY);
-    if (!savedConfig) return null;
+    console.log('[Config Debug] loadConfig called, savedConfig exists:', !!savedConfig);
+    if (!savedConfig) {
+      console.log('[Config Debug] No saved config found, returning null');
+      return null;
+    }
     
     const parsed = JSON.parse(savedConfig);
-    return {
+    console.log('[Config Debug] Loaded config:', parsed);
+    console.log('[Config Debug] Loaded config aiModel:', parsed.aiModel);
+    console.log('[Config Debug] Loaded config simulationSpeed:', parsed.simulationSpeed);
+    
+    const result = {
       ...parsed,
       typingDelay: parsed.typingDelay || DEFAULT_TYPING_DELAY
     };
+    
+    console.log('[Config Debug] Returning processed config:', result);
+    return result;
   } catch (error) {
     console.error("Failed to load config from localStorage:", error);
     return null;
@@ -58,7 +69,24 @@ export const loadConfig = (): AppConfig | null => {
  */
 export const saveConfig = (config: AppConfig) => {
   try {
-    localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(config));
+    console.log('[Config Debug] saveConfig called with config:', config);
+    console.log('[Config Debug] Config keys:', Object.keys(config));
+    console.log('[Config Debug] Config aiModel:', config.aiModel);
+    console.log('[Config Debug] Config simulationSpeed:', config.simulationSpeed);
+    
+    const configString = JSON.stringify(config);
+    console.log('[Config Debug] Serialized config length:', configString.length);
+    
+    localStorage.setItem(CONFIG_STORAGE_KEY, configString);
+    console.log('[Config Debug] Config saved successfully to localStorage');
+    
+    // Verify the save worked
+    const savedConfig = localStorage.getItem(CONFIG_STORAGE_KEY);
+    if (savedConfig) {
+      console.log('[Config Debug] Config verification successful, saved config exists');
+    } else {
+      console.error('[Config Debug] Config verification failed, no saved config found');
+    }
   } catch (error) {
     console.error("Failed to save config to localStorage:", error);
   }
@@ -148,6 +176,7 @@ const parseVirtualUsers = (usersString: string): User[] => {
                 nickname: nickname.trim(),
                 personality: personalityParts.join(',').trim(),
                 status: 'online' as const,
+                userType: 'virtual' as const,
                 languageSkills: {
                     languages: [{
                         language: 'English',
@@ -208,6 +237,7 @@ const parseChannels = (channelsString: string, allVirtualUsers: User[], currentU
                         nickname: currentUserNickname, 
                         status: 'online' as const,
                         personality: 'The human user',
+                        userType: 'virtual' as const,
                         languageSkills: { 
                             languages: [{
                                 language: 'English',
@@ -248,6 +278,7 @@ export const initializeStateFromConfig = (config: AppConfig) => {
                     nickname, 
                     status: 'online' as const,
                     personality: 'The human user',
+                    userType: 'virtual' as const,
                     languageSkills: { 
                         languages: [{
                             language: 'English',
@@ -270,6 +301,7 @@ export const initializeStateFromConfig = (config: AppConfig) => {
                     nickname, 
                     status: 'online' as const,
                     personality: 'The human user',
+                    userType: 'virtual' as const,
                     languageSkills: { 
                         languages: [{
                             language: 'English',
