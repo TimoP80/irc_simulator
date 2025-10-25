@@ -57,7 +57,8 @@ export const DEFAULT_VIRTUAL_USERS: User[] = [
     userType: 'virtual',
     personality: 'A very curious and tech-savvy individual, loves discussing new gadgets and programming.',
     languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
-    writingStyle: { formality: 'informal', verbosity: 'neutral', humor: 'none', emojiUsage: 'low', punctuation: 'standard' }
+    writingStyle: { formality: 'informal', verbosity: 'neutral', humor: 'none', emojiUsage: 'low', punctuation: 'standard' },
+    profilePicture: 'https://placehold.co/100x100/4F46E5/FFFFFF/png?text=N'
   },
   { 
     nickname: 'seraph', 
@@ -65,7 +66,8 @@ export const DEFAULT_VIRTUAL_USERS: User[] = [
     userType: 'virtual',
     personality: 'Calm, wise, and often speaks in philosophical or poetic terms.',
     languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
-    writingStyle: { formality: 'formal', verbosity: 'verbose', humor: 'none', emojiUsage: 'none', punctuation: 'standard' }
+    writingStyle: { formality: 'formal', verbosity: 'verbose', humor: 'none', emojiUsage: 'none', punctuation: 'standard' },
+    profilePicture: 'https://placehold.co/100x100/059669/FFFFFF/png?text=S'
   },
   { 
     nickname: 'jinx', 
@@ -73,7 +75,8 @@ export const DEFAULT_VIRTUAL_USERS: User[] = [
     userType: 'virtual',
     personality: 'A chaotic, funny, and unpredictable prankster who loves jokes and memes.',
     languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
-    writingStyle: { formality: 'informal', verbosity: 'neutral', humor: 'slapstick', emojiUsage: 'high', punctuation: 'excessive' }
+    writingStyle: { formality: 'informal', verbosity: 'neutral', humor: 'slapstick', emojiUsage: 'high', punctuation: 'excessive' },
+    profilePicture: 'https://placehold.co/100x100/DC2626/FFFFFF/png?text=J'
   },
   { 
     nickname: 'rex', 
@@ -81,7 +84,8 @@ export const DEFAULT_VIRTUAL_USERS: User[] = [
     userType: 'virtual',
     personality: 'Gruff but helpful, an expert in system administration and network security.',
     languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
-    writingStyle: { formality: 'neutral', verbosity: 'terse', humor: 'none', emojiUsage: 'none', punctuation: 'minimal' }
+    writingStyle: { formality: 'neutral', verbosity: 'terse', humor: 'none', emojiUsage: 'none', punctuation: 'minimal' },
+    profilePicture: 'https://placehold.co/100x100/EA580C/FFFFFF/png?text=R'
   },
   { 
     nickname: 'luna', 
@@ -89,7 +93,8 @@ export const DEFAULT_VIRTUAL_USERS: User[] = [
     userType: 'virtual',
     personality: 'An artist who is dreamy, creative, and talks about music, art, and nature.',
     languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
-    writingStyle: { formality: 'informal', verbosity: 'verbose', humor: 'none', emojiUsage: 'high', punctuation: 'standard' }
+    writingStyle: { formality: 'informal', verbosity: 'verbose', humor: 'none', emojiUsage: 'high', punctuation: 'standard' },
+    profilePicture: 'https://placehold.co/100x100/7C3AED/FFFFFF/png?text=L'
   },
   { 
     nickname: 'cypher', 
@@ -97,7 +102,8 @@ export const DEFAULT_VIRTUAL_USERS: User[] = [
     userType: 'virtual',
     personality: 'Mysterious and speaks in cryptic messages, interested in privacy and cryptography.',
     languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
-    writingStyle: { formality: 'formal', verbosity: 'terse', humor: 'none', emojiUsage: 'none', punctuation: 'minimal' }
+    writingStyle: { formality: 'formal', verbosity: 'terse', humor: 'none', emojiUsage: 'none', punctuation: 'minimal' },
+    profilePicture: 'https://placehold.co/100x100/374151/FFFFFF/png?text=C'
   },
   { 
     nickname: 'glitch', 
@@ -105,7 +111,8 @@ export const DEFAULT_VIRTUAL_USERS: User[] = [
     userType: 'virtual',
     personality: 'Excitable and easily distracted, often making typos and using internet slang.',
     languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
-    writingStyle: { formality: 'informal', verbosity: 'neutral', humor: 'slapstick', emojiUsage: 'high', punctuation: 'excessive' }
+    writingStyle: { formality: 'informal', verbosity: 'neutral', humor: 'slapstick', emojiUsage: 'high', punctuation: 'excessive' },
+    profilePicture: 'https://placehold.co/100x100/DB2777/FFFFFF/png?text=G'
   },
   { 
     nickname: 'root', 
@@ -113,7 +120,8 @@ export const DEFAULT_VIRTUAL_USERS: User[] = [
     userType: 'virtual',
     personality: 'The silent observer, only speaks when something is very important.',
     languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
-    writingStyle: { formality: 'formal', verbosity: 'terse', humor: 'none', emojiUsage: 'none', punctuation: 'standard' }
+    writingStyle: { formality: 'formal', verbosity: 'terse', humor: 'none', emojiUsage: 'none', punctuation: 'standard' },
+    profilePicture: 'https://placehold.co/100x100/1F2937/FFFFFF/png?text=R'
   },
 ];
 
@@ -177,7 +185,8 @@ export const DEFAULT_CHANNELS: Channel[] = [
         userType: 'virtual',
         personality: 'The human user',
         languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
-        writingStyle: { formality: 'informal', verbosity: 'neutral', humor: 'none', emojiUsage: 'low', punctuation: 'standard' }
+        writingStyle: { formality: 'informal', verbosity: 'neutral', humor: 'none', emojiUsage: 'low', punctuation: 'standard' },
+        profilePicture: 'https://placehold.co/100x100/6B7280/FFFFFF/png?text=U'
       }, 
       ...DEFAULT_VIRTUAL_USERS.slice(0, 5)
     ],
@@ -197,7 +206,8 @@ export const DEFAULT_CHANNELS: Channel[] = [
         userType: 'virtual',
         personality: 'The human user',
         languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
-        writingStyle: { formality: 'informal', verbosity: 'neutral', humor: 'none', emojiUsage: 'low', punctuation: 'standard' }
+        writingStyle: { formality: 'informal', verbosity: 'neutral', humor: 'none', emojiUsage: 'low', punctuation: 'standard' },
+        profilePicture: 'https://placehold.co/100x100/6B7280/FFFFFF/png?text=U'
       },
       DEFAULT_VIRTUAL_USERS.find(u => u.nickname === 'nova')!,
       DEFAULT_VIRTUAL_USERS.find(u => u.nickname === 'rex')!,
@@ -220,7 +230,8 @@ export const DEFAULT_CHANNELS: Channel[] = [
         userType: 'virtual',
         personality: 'The human user',
         languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
-        writingStyle: { formality: 'informal', verbosity: 'neutral', humor: 'none', emojiUsage: 'low', punctuation: 'standard' }
+        writingStyle: { formality: 'informal', verbosity: 'neutral', humor: 'none', emojiUsage: 'low', punctuation: 'standard' },
+        profilePicture: 'https://placehold.co/100x100/6B7280/FFFFFF/png?text=U'
       },
       DEFAULT_VIRTUAL_USERS.find(u => u.nickname === 'jinx')!,
       DEFAULT_VIRTUAL_USERS.find(u => u.nickname === 'luna')!,

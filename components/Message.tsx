@@ -1,10 +1,12 @@
 import React from 'react';
-import type { Message } from '../types';
+import type { Message, User } from '../types';
 import { parseFormattedText } from '../utils/textFormatter';
+import { ProfilePicture } from './ProfilePicture';
 
 interface MessageProps {
   message: Message;
   currentUserNickname: string;
+  user?: User; // Optional user object for profile picture
 }
 
 const userColorMap: { [key: string]: string } = {};
@@ -25,7 +27,7 @@ const getUserColor = (nickname: string, currentUserNickname: string) => {
   return userColorMap[nickname];
 };
 
-export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickname }) => {
+export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickname, user }) => {
   const { nickname, content, timestamp, type, command, images, links, botCommand } = message;
   const time = new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   
@@ -366,7 +368,12 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
     <div className="flex items-start gap-2 lg:gap-4 text-xs lg:text-sm">
       <span className="text-gray-600 font-semibold flex-shrink-0 w-12 lg:w-14 text-right">{time}</span>
       <div className="flex-1">
-        <span className={`${nicknameColor} font-bold mr-2`}>{nickname}</span>
+        <div className="flex items-center gap-2 mb-1">
+          {user && (
+            <ProfilePicture user={user} size="sm" className="flex-shrink-0" />
+          )}
+          <span className={`${nicknameColor} font-bold`}>{nickname}</span>
+        </div>
         <div className="text-gray-200 break-words whitespace-pre-wrap">
           {renderContent(content)}
         </div>

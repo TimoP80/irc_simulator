@@ -53,6 +53,17 @@ const formatMessageHistory = (messages: Message[]): string => {
     .join('\n');
 };
 
+// Enhanced message history formatting with timestamps and context
+const formatEnhancedMessageHistory = (messages: Message[]): string => {
+  const recentMessages = messages.slice(-20);
+  return recentMessages
+    .map(m => {
+      const timestamp = new Date(m.timestamp).toLocaleTimeString();
+      return `[${timestamp}] ${m.nickname}: ${m.content}`;
+    })
+    .join('\n');
+};
+
 // Extract links and images from message content
 const extractLinksAndImages = (content: string): { links: string[], images: string[] } => {
   const urlRegex = /(https?:\/\/[^\s]+)/gi;
@@ -651,6 +662,41 @@ REALISTIC IRC CONVERSATION PATTERNS:
 - If you need to respond to multiple people, do it in separate messages or focus on the most relevant response
 - Keep messages natural and realistic - real IRC users don't give speeches to multiple people at once
 `;
+
+// Specialized system instruction for operator responses with enhanced multilingual support
+const getOperatorSystemInstruction = (currentUserNickname: string, operator: User) => {
+  const userLanguages = getAllLanguages(operator.languageSkills);
+  const primaryLanguage = userLanguages[0] || 'English';
+  const hasMultipleLanguages = userLanguages.length > 1;
+  
+  return `You are an advanced AI simulating an IRC channel operator in an Internet Relay Chat environment.
+Your goal is to generate realistic, brief, and in-character responses to operator privilege requests.
+Adhere strictly to the format 'nickname: message'. 
+Do not add any extra text, explanations, or markdown formatting. 
+Keep responses concise and natural for a chat room setting.
+The human user's nickname is '${currentUserNickname}'.
+
+OPERATOR CONTEXT:
+- You are a channel operator with authority to grant or deny operator privileges
+- You must make decisions based on user behavior, trustworthiness, and channel needs
+- Your responses should reflect your personality and judgment as an operator
+
+LANGUAGE REQUIREMENTS:
+- CRITICAL: Respond ONLY in ${primaryLanguage}
+- Primary language: ${primaryLanguage}
+- Available languages: ${userLanguages.join(', ')}
+${hasMultipleLanguages ? `- Multilingual support: You may occasionally use words or phrases from your other languages (${userLanguages.slice(1).join(', ')}), but should primarily communicate in ${primaryLanguage}. This adds authenticity to your multilingual personality.` : ''}
+
+LANGUAGE INSTRUCTION: The operator's primary language is ${primaryLanguage} based on their language skills. 
+Ignore the language of their personality description - use ${primaryLanguage} for all communication regardless of what language their personality description is written in.
+
+RESPONSE FORMAT:
+- Use the exact format: ${operator.nickname}: [your response]
+- Keep responses brief and to the point
+- Be decisive and clear in your operator decisions
+- Maintain your character's personality and values
+`;
+};
 
 export const generateChannelActivity = async (channel: Channel, currentUserNickname: string, model: string = 'gemini-2.5-flash'): Promise<string> => {
   aiDebug.log(` generateChannelActivity called for channel: ${channel.name}`);
@@ -1422,6 +1468,199 @@ ${isChannelOperator(channel, randomUser.nickname) ? `- Role: Channel operator (c
     }
 };
 
+// Enhanced conversation context analysis for better PM responses
+interface ConversationContext {
+    topics: string[];
+    recentTopics: string[];
+    conversationTone: 'casual' | 'formal' | 'technical' | 'personal' | 'mixed';
+    relationshipLevel: 'new' | 'acquaintance' | 'friendly' | 'close';
+    sharedInterests: string[];
+    previousDiscussions: string[];
+    conversationMomentum: 'building' | 'maintaining' | 'declining';
+}
+
+// Build contextual prompt based on conversation analysis
+const buildContextualPrompt = (
+    context: ConversationContext, 
+    aiUser: User, 
+    currentUserNickname: string, 
+    userMessage: Message, 
+    timeContext: string, 
+    primaryLanguage: string, 
+    userLanguages: string[], 
+    writingStyle: any
+): string => {
+    let contextualGuidance = '';
+    
+    // Relationship-based guidance
+    switch (context.relationshipLevel) {
+        case 'new':
+            contextualGuidance += 'This is a new conversation. Be welcoming and introduce yourself naturally. Ask about their interests to get to know them better.';
+            break;
+        case 'acquaintance':
+            contextualGuidance += 'You have chatted a few times before. Be friendly and reference previous conversations if relevant. Show interest in their life.';
+            break;
+        case 'friendly':
+            contextualGuidance += 'You are becoming friends. Be warm and supportive. Share personal thoughts and ask about their experiences. Reference shared interests.';
+            break;
+        case 'close':
+            contextualGuidance += 'You are close friends. Be very personal and supportive. Reference shared memories and inside jokes. Be emotionally available.';
+            break;
+    }
+    
+    // Tone-based guidance
+    switch (context.conversationTone) {
+        case 'casual':
+            contextualGuidance += ' Keep the conversation relaxed and informal. Use casual language and be approachable.';
+            break;
+        case 'formal':
+            contextualGuidance += ' Maintain a polite and professional tone. Use proper grammar and formal language.';
+            break;
+        case 'technical':
+            contextualGuidance += ' Focus on technical topics and use appropriate terminology. Be precise and knowledgeable.';
+            break;
+        case 'personal':
+            contextualGuidance += ' Share personal thoughts and feelings. Be vulnerable and authentic. Ask about their personal experiences.';
+            break;
+        case 'mixed':
+            contextualGuidance += ' Balance between formal and casual tones as appropriate. Adapt to the conversation flow.';
+            break;
+    }
+    
+    // Topic continuity
+    if (context.recentTopics.length > 0) {
+        contextualGuidance += ` Continue discussing topics related to: ${context.recentTopics.join(', ')}. Reference previous points made about these topics.`;
+    }
+    
+    // Momentum-based guidance
+    switch (context.conversationMomentum) {
+        case 'building':
+            contextualGuidance += ' The conversation is getting more active. Ask engaging questions and share interesting thoughts to keep the momentum going.';
+            break;
+        case 'maintaining':
+            contextualGuidance += ' Keep the conversation flowing naturally. Respond thoughtfully and ask follow-up questions.';
+            break;
+        case 'declining':
+            contextualGuidance += ' The conversation seems to be slowing down. Try to re-engage with interesting questions or topics.';
+            break;
+    }
+    
+    // Memory and continuity
+    if (context.previousDiscussions.length > 0) {
+        contextualGuidance += ` Remember and reference previous discussions about: ${context.previousDiscussions.join(', ')}. Show that you remember what was said before.`;
+    }
+    
+    // Shared interests
+    if (context.sharedInterests.length > 0) {
+        contextualGuidance += ` You share interests in: ${context.sharedInterests.join(', ')}. Use this as a basis for deeper conversation.`;
+    }
+    
+    return contextualGuidance;
+};
+
+// Generate conversation summary for better memory
+const generateConversationSummary = (messages: Message[], currentUserNickname: string): string => {
+    const recentMessages = messages.slice(-10);
+    const topics = new Set<string>();
+    const keyPoints: string[] = [];
+    
+    // Extract key topics and points
+    recentMessages.forEach(msg => {
+        const content = msg.content.toLowerCase();
+        
+        // Extract topics
+        if (content.includes('work') || content.includes('job')) topics.add('work');
+        if (content.includes('family') || content.includes('friend')) topics.add('personal');
+        if (content.includes('tech') || content.includes('computer')) topics.add('technology');
+        if (content.includes('hobby') || content.includes('interest')) topics.add('hobbies');
+        
+        // Extract key points (simple heuristic)
+        if (content.length > 50 && (content.includes('think') || content.includes('believe') || content.includes('feel'))) {
+            keyPoints.push(msg.content.substring(0, 100) + '...');
+        }
+    });
+    
+    const summary = `Recent topics: ${Array.from(topics).join(', ')}. Key points: ${keyPoints.slice(0, 3).join('; ')}`;
+    return summary;
+};
+
+const analyzeConversationContext = (messages: Message[], currentUserNickname: string): ConversationContext => {
+    const recentMessages = messages.slice(-10); // Last 10 messages for context
+    const topics: string[] = [];
+    const sharedInterests: string[] = [];
+    const previousDiscussions: string[] = [];
+    
+    // Extract topics from recent messages
+    recentMessages.forEach(msg => {
+        const content = msg.content.toLowerCase();
+        
+        // Common topic keywords
+        const topicKeywords = {
+            'work': ['work', 'job', 'career', 'office', 'meeting', 'project', 'deadline'],
+            'technology': ['tech', 'computer', 'programming', 'code', 'software', 'hardware', 'ai', 'machine learning'],
+            'hobbies': ['hobby', 'interest', 'passion', 'fun', 'game', 'music', 'art', 'sport'],
+            'personal': ['family', 'friend', 'relationship', 'life', 'home', 'travel', 'vacation'],
+            'current events': ['news', 'politics', 'world', 'event', 'happening', 'trending'],
+            'entertainment': ['movie', 'show', 'book', 'music', 'concert', 'festival', 'entertainment']
+        };
+        
+        Object.entries(topicKeywords).forEach(([topic, keywords]) => {
+            if (keywords.some(keyword => content.includes(keyword))) {
+                if (!topics.includes(topic)) {
+                    topics.push(topic);
+                }
+            }
+        });
+    });
+    
+    // Determine conversation tone
+    const formalWords = ['please', 'thank you', 'appreciate', 'regarding', 'furthermore'];
+    const casualWords = ['hey', 'cool', 'awesome', 'yeah', 'sure', 'lol', 'haha'];
+    const technicalWords = ['algorithm', 'function', 'database', 'api', 'framework', 'architecture'];
+    const personalWords = ['feel', 'think', 'believe', 'opinion', 'experience', 'remember'];
+    
+    const allContent = recentMessages.map(m => m.content.toLowerCase()).join(' ');
+    const formalCount = formalWords.filter(word => allContent.includes(word)).length;
+    const casualCount = casualWords.filter(word => allContent.includes(word)).length;
+    const technicalCount = technicalWords.filter(word => allContent.includes(word)).length;
+    const personalCount = personalWords.filter(word => allContent.includes(word)).length;
+    
+    let conversationTone: ConversationContext['conversationTone'] = 'casual';
+    if (technicalCount > 2) conversationTone = 'technical';
+    else if (formalCount > casualCount) conversationTone = 'formal';
+    else if (personalCount > 3) conversationTone = 'personal';
+    else if (formalCount > 0 && casualCount > 0) conversationTone = 'mixed';
+    
+    // Determine relationship level based on conversation history
+    const messageCount = messages.length;
+    const userMessages = messages.filter(m => m.nickname === currentUserNickname).length;
+    const aiMessages = messages.length - userMessages;
+    
+    let relationshipLevel: ConversationContext['relationshipLevel'] = 'new';
+    if (messageCount > 20) relationshipLevel = 'close';
+    else if (messageCount > 10) relationshipLevel = 'friendly';
+    else if (messageCount > 5) relationshipLevel = 'acquaintance';
+    
+    // Determine conversation momentum
+    const recentActivity = recentMessages.length;
+    const olderMessages = messages.slice(-20, -10);
+    const olderActivity = olderMessages.length;
+    
+    let conversationMomentum: ConversationContext['conversationMomentum'] = 'maintaining';
+    if (recentActivity > olderActivity + 2) conversationMomentum = 'building';
+    else if (recentActivity < olderActivity - 2) conversationMomentum = 'declining';
+    
+    return {
+        topics: topics.slice(0, 5), // Top 5 topics
+        recentTopics: topics.slice(0, 3), // Top 3 recent topics
+        conversationTone,
+        relationshipLevel,
+        sharedInterests: sharedInterests.slice(0, 3),
+        previousDiscussions: previousDiscussions.slice(0, 3),
+        conversationMomentum
+    };
+};
+
 export const generatePrivateMessageResponse = async (conversation: PrivateMessageConversation, userMessage: Message, currentUserNickname: string, model: string = 'gemini-2.5-flash'): Promise<string> => {
     aiDebug.log(` generatePrivateMessageResponse called for user: ${conversation.user.nickname}`);
     
@@ -1432,6 +1671,12 @@ export const generatePrivateMessageResponse = async (conversation: PrivateMessag
     const userLanguages = getAllLanguages(aiUser.languageSkills);
     const primaryLanguage = userLanguages[0] || 'English';
     const writingStyle = safeGetUserProperty(aiUser, 'writingStyle');
+    
+    // Enhanced conversation context analysis
+    const conversationContext = analyzeConversationContext(conversation.messages, currentUserNickname);
+    const conversationSummary = generateConversationSummary(conversation.messages, currentUserNickname);
+    aiDebug.log(` Conversation context analysis: ${JSON.stringify(conversationContext)}`);
+    aiDebug.log(` Conversation summary: ${conversationSummary}`);
     
     // Calculate appropriate token limit based on verbosity and emoji usage
     const getTokenLimit = (verbosity: string, emojiUsage: string): number => {
@@ -1466,14 +1711,27 @@ export const generatePrivateMessageResponse = async (conversation: PrivateMessag
     const timeContext = getTimeOfDayContext();
     aiDebug.log(` Time context for private message: ${timeContext}`);
 
+    // Enhanced prompt with conversation context
+    const contextPrompt = buildContextualPrompt(conversationContext, aiUser, currentUserNickname, userMessage, timeContext, primaryLanguage, userLanguages, writingStyle);
+    
     const prompt = `
 ${timeContext}
 
 You are roleplaying as an IRC user named '${aiUser.nickname}'. 
 Your personality is: ${aiUser.personality}.
+
+CONVERSATION CONTEXT & MEMORY:
+- Relationship Level: ${conversationContext.relationshipLevel} (${conversationContext.relationshipLevel === 'new' ? 'first time chatting' : conversationContext.relationshipLevel === 'acquaintance' ? 'have chatted a few times' : conversationContext.relationshipLevel === 'friendly' ? 'are becoming friends' : 'are close friends'})
+- Conversation Tone: ${conversationContext.conversationTone} (${conversationContext.conversationTone === 'casual' ? 'relaxed and informal' : conversationContext.conversationTone === 'formal' ? 'polite and professional' : conversationContext.conversationTone === 'technical' ? 'focused on technical topics' : conversationContext.conversationTone === 'personal' ? 'sharing personal thoughts' : 'mix of formal and casual'})
+- Recent Topics: ${conversationContext.recentTopics.length > 0 ? conversationContext.recentTopics.join(', ') : 'general conversation'}
+- Conversation Momentum: ${conversationContext.conversationMomentum} (${conversationContext.conversationMomentum === 'building' ? 'getting more active' : conversationContext.conversationMomentum === 'maintaining' ? 'steady flow' : 'slowing down'})
+- Conversation Summary: ${conversationSummary}
+
+${contextPrompt}
+
 You are in a private message conversation with '${currentUserNickname}'.
-The conversation history (last 15 messages) is:
-${formatMessageHistory(conversation.messages)}
+The conversation history (last 20 messages) is:
+${formatEnhancedMessageHistory(conversation.messages)}
 
 '${currentUserNickname}' just sent you this message: "${userMessage.content}"
 
@@ -1492,7 +1750,7 @@ Your writing style:
 - Languages: ${userLanguages.join(', ')}
 ${getLanguageAccent(aiUser.languageSkills) ? `- Accent: ${getLanguageAccent(aiUser.languageSkills)}` : ''}
 
-Generate a natural, in-character response that feels appropriate for the current time of day.
+Generate a natural, in-character response that feels appropriate for the current time of day and conversation context.
 The response must be a single line in the format: "${aiUser.nickname}: message"
 ${writingStyle.verbosity === 'very_verbose' ? 'IMPORTANT: This user is very verbose - write a long, detailed response with multiple sentences and thorough explanations. Do not cut off the message.' : writingStyle.verbosity === 'verbose' ? 'IMPORTANT: This user is verbose - write a moderately detailed response with several sentences.' : ''}
 `;
@@ -1539,6 +1797,160 @@ ${writingStyle.verbosity === 'very_verbose' ? 'IMPORTANT: This user is very verb
     }
 };
 
+
+export const generateOperatorResponse = async (channel: Channel, requestingUser: string, operator: User, model: string = 'gemini-2.5-flash'): Promise<string> => {
+  aiDebug.log(`generateOperatorResponse called for channel: ${channel.name}, operator: ${operator.nickname}, requesting: ${requestingUser}`);
+  
+  const validatedModel = validateModelId(model);
+  aiDebug.log(`Validated model ID for operator response: "${validatedModel}"`);
+  
+  const userLanguages = getAllLanguages(operator.languageSkills);
+  const primaryLanguage = userLanguages[0] || 'English';
+  const writingStyle = safeGetUserProperty(operator, 'writingStyle');
+  
+  // Get recent channel context
+  const recentMessages = channel.messages.slice(-10);
+  const messageHistory = recentMessages.map(msg => 
+    `${msg.nickname}: ${msg.content}`
+  ).join('\n');
+  
+  // Calculate token limit based on writing style
+  const baseTokenLimit = 100;
+  const verbosityMultiplier = writingStyle?.verbosity === 'high' ? 1.5 : writingStyle?.verbosity === 'low' ? 0.7 : 1.0;
+  const tokenLimit = Math.floor(baseTokenLimit * verbosityMultiplier);
+  
+  const timeContext = getTimeOfDayContext();
+  
+  // Enhanced multilingual support - check if operator has multiple languages
+  const hasMultipleLanguages = userLanguages.length > 1;
+  const languageAccent = getLanguageAccent(operator.languageSkills);
+  
+  const prompt = `
+${timeContext}
+
+You are roleplaying as an IRC channel operator named '${operator.nickname}'. 
+Your personality is: ${operator.personality}.
+
+CHANNEL CONTEXT:
+- Channel: ${channel.name}
+- Topic: ${channel.topic || 'No topic set'}
+- Recent conversation:
+${messageHistory}
+
+SITUATION:
+The user '${requestingUser}' has requested operator status using the /op command.
+As a channel operator, you need to decide whether to grant them operator privileges.
+
+DECISION FACTORS:
+- Consider the user's recent behavior in the channel
+- Think about whether they seem trustworthy and responsible
+- Consider if they've been helpful to the community
+- Think about whether they understand channel rules and etiquette
+- Consider if there are already too many operators
+
+RESPONSE GUIDELINES:
+- You can either grant or deny the request
+- If granting: Use phrases like "granting op", "giving you op", "making you op", or "+o"
+- If denying: Be polite but firm, explain your reasoning
+- Keep your response brief and in character
+- Use your personality traits to influence your decision
+- Be consistent with your character's values and judgment
+
+Your writing style:
+- Formality: ${writingStyle?.formality || 'neutral'}
+- Verbosity: ${writingStyle?.verbosity || 'neutral'}
+- Humor: ${writingStyle?.humor || 'none'}
+- Emoji usage: ${writingStyle?.emojiUsage || 'low'}
+
+LANGUAGE CONFIGURATION:
+- Primary language: ${primaryLanguage}
+- Language accent: ${languageAccent}
+- Available languages: ${userLanguages.join(', ')}
+${hasMultipleLanguages ? `- Multilingual support: You may occasionally use words or phrases from your other languages (${userLanguages.slice(1).join(', ')}), but should primarily communicate in ${primaryLanguage}. This adds authenticity to your multilingual personality.` : ''}
+
+LANGUAGE-SPECIFIC OPERATOR TERMINOLOGY:
+${primaryLanguage === 'Spanish' ? '- Use Spanish IRC terms: "operador", "privilegios", "conceder", "denegar"' : ''}
+${primaryLanguage === 'French' ? '- Use French IRC terms: "opérateur", "privilèges", "accorder", "refuser"' : ''}
+${primaryLanguage === 'German' ? '- Use German IRC terms: "Operator", "Berechtigung", "gewähren", "verweigern"' : ''}
+${primaryLanguage === 'Italian' ? '- Use Italian IRC terms: "operatore", "privilegi", "concedere", "negare"' : ''}
+${primaryLanguage === 'Portuguese' ? '- Use Portuguese IRC terms: "operador", "privilégios", "conceder", "negar"' : ''}
+${primaryLanguage === 'Russian' ? '- Use Russian IRC terms: "оператор", "привилегии", "предоставить", "отказать"' : ''}
+${primaryLanguage === 'Japanese' ? '- Use Japanese IRC terms: "オペレーター", "権限", "付与", "拒否"' : ''}
+${primaryLanguage === 'Chinese' ? '- Use Chinese IRC terms: "操作员", "权限", "授予", "拒绝"' : ''}
+${primaryLanguage === 'Korean' ? '- Use Korean IRC terms: "운영자", "권한", "부여", "거부"' : ''}
+${primaryLanguage === 'Dutch' ? '- Use Dutch IRC terms: "operator", "privileges", "verlenen", "weigeren"' : ''}
+${primaryLanguage === 'Swedish' ? '- Use Swedish IRC terms: "operatör", "privilegier", "bevilja", "vägra"' : ''}
+${primaryLanguage === 'Norwegian' ? '- Use Norwegian IRC terms: "operatør", "privilegier", "innvilge", "avslå"' : ''}
+${primaryLanguage === 'Finnish' ? '- Use Finnish IRC terms: "operaattori", "oikeudet", "myöntää", "kieltäytyä"' : ''}
+${primaryLanguage === 'Polish' ? '- Use Polish IRC terms: "operator", "uprawnienia", "przyznać", "odmówić"' : ''}
+${primaryLanguage === 'Czech' ? '- Use Czech IRC terms: "operátor", "oprávnění", "udělit", "odmítnout"' : ''}
+${primaryLanguage === 'Hungarian' ? '- Use Hungarian IRC terms: "operátor", "jogosultságok", "megadni", "elutasítani"' : ''}
+${primaryLanguage === 'Romanian' ? '- Use Romanian IRC terms: "operator", "privilegii", "acorda", "refuza"' : ''}
+${primaryLanguage === 'Bulgarian' ? '- Use Bulgarian IRC terms: "оператор", "привилегии", "предоставя", "отказва"' : ''}
+${primaryLanguage === 'Croatian' ? '- Use Croatian IRC terms: "operator", "privilegije", "dodijeliti", "odbaciti"' : ''}
+${primaryLanguage === 'Serbian' ? '- Use Serbian IRC terms: "оператор", "привилегије", "доделити", "одбацити"' : ''}
+${primaryLanguage === 'Slovak' ? '- Use Slovak IRC terms: "operátor", "oprávnenia", "udeliť", "odmietnuť"' : ''}
+${primaryLanguage === 'Slovenian' ? '- Use Slovenian IRC terms: "operator", "privilegiji", "podeliti", "zavrniti"' : ''}
+${primaryLanguage === 'Ukrainian' ? '- Use Ukrainian IRC terms: "оператор", "привілеї", "надати", "відмовити"' : ''}
+${primaryLanguage === 'Turkish' ? '- Use Turkish IRC terms: "operatör", "ayrıcalıklar", "vermek", "reddetmek"' : ''}
+${primaryLanguage === 'Arabic' ? '- Use Arabic IRC terms: "مشغل", "امتيازات", "منح", "رفض"' : ''}
+${primaryLanguage === 'Hebrew' ? '- Use Hebrew IRC terms: "מפעיל", "הרשאות", "להעניק", "לסרב"' : ''}
+${primaryLanguage === 'Hindi' ? '- Use Hindi IRC terms: "ऑपरेटर", "विशेषाधिकार", "प्रदान करना", "अस्वीकार करना"' : ''}
+${primaryLanguage === 'Thai' ? '- Use Thai IRC terms: "ผู้ดำเนินการ", "สิทธิพิเศษ", "ให้", "ปฏิเสธ"' : ''}
+${primaryLanguage === 'Vietnamese' ? '- Use Vietnamese IRC terms: "người vận hành", "đặc quyền", "cấp", "từ chối"' : ''}
+${primaryLanguage === 'Indonesian' ? '- Use Indonesian IRC terms: "operator", "hak istimewa", "memberikan", "menolak"' : ''}
+${primaryLanguage === 'Malay' ? '- Use Malay IRC terms: "pengendali", "keistimewaan", "memberikan", "menolak"' : ''}
+${primaryLanguage === 'Tagalog' ? '- Use Tagalog IRC terms: "operator", "pribilehiyo", "ibigay", "tanggihan"' : ''}
+${primaryLanguage === 'English' ? '- Use standard English IRC terms: "operator", "privileges", "grant", "deny"' : ''}
+
+CRITICAL: Respond ONLY in ${primaryLanguage}. Do not use any other language.
+${userLanguages.length > 1 ? `Available languages: ${userLanguages.join(', ')}. Use ${primaryLanguage} only.` : ''}
+
+LANGUAGE INSTRUCTION: The operator's primary language is ${primaryLanguage} based on their language skills. Ignore the language of their personality description - use ${primaryLanguage} for all communication regardless of what language their personality description is written in.
+
+Format your response as: ${operator.nickname}: [your response]
+
+Make your decision and respond as ${operator.nickname}:
+`;
+
+  try {
+    aiDebug.log(`Sending request to Gemini for operator response from ${operator.nickname}`);
+    
+    const config: any = {
+      systemInstruction: getOperatorSystemInstruction(requestingUser, operator),
+      temperature: 0.8, // Higher temperature for more varied responses
+      maxOutputTokens: tokenLimit,
+    };
+    
+    // Some models require thinking mode with a budget
+    if (validatedModel.includes('2.5') || validatedModel.includes('pro')) {
+      config.thinkingConfig = { thinkingBudget: 1000 };
+      config.maxOutputTokens = Math.max(tokenLimit, 1000);
+      aiDebug.log(`Using thinking mode with budget 1000 for operator response model: ${validatedModel}`);
+    }
+    
+    const response = await withRateLimitAndRetries(() => 
+      ai.models.generateContent({
+        model: validatedModel,
+        contents: prompt,
+        config: config,
+      }), `operator response from ${operator.nickname}`
+    );
+    
+    const result = extractTextFromResponse(response);
+    aiDebug.log(`Successfully generated operator response: "${result}"`);
+    return result;
+  } catch (error) {
+    aiDebug.error(`Error generating operator response from ${operator.nickname}:`, {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      operator: operator.nickname,
+      requestingUser: requestingUser,
+      channelName: channel.name
+    });
+    throw error;
+  }
+};
 
 export const generateBatchUsers = async (count: number, model: string = 'gemini-2.5-flash', options?: {
   multilingualPersonalities?: boolean;
