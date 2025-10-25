@@ -1,6 +1,8 @@
 // Network Service for Station V
 // Handles WebSocket connections to the Station V server
 
+import { networkDebug } from '../utils/debugLogger';
+
 export interface NetworkUser {
   nickname: string;
   type: 'human' | 'virtual' | 'bot';
@@ -20,7 +22,8 @@ export interface NetworkMessage {
   nickname: string;
   content: string;
   timestamp: Date;
-  type: 'user' | 'system' | 'bot';
+  type: 'user' | 'system' | 'bot' | 'ai';
+  channel?: string;
 }
 
 export interface NetworkConfig {
@@ -63,9 +66,9 @@ class NetworkService {
         const { type, data } = event.data;
         
         if (type === 'userUpdate') {
-          console.log('[Network] Received user update from another tab:', data);
-          console.log('[Network] Updating local users from', this.users.size, 'to', data.users.length);
-          console.log('[Network] Received users:', data.users.map((u: NetworkUser) => u.nickname));
+          networkDebug.log('Received user update from another tab:', data);
+          networkDebug.log('Updating local users from', this.users.size, 'to', data.users.length);
+          networkDebug.log('Received users:', data.users.map((u: NetworkUser) => u.nickname));
           
           // Update local users map
           this.users.clear();
@@ -84,11 +87,11 @@ class NetworkService {
           this.notifyUserHandlers(Array.from(this.users.values()));
         } else if (type === 'message') {
           const message = data.message;
-          console.log(`[Network] Received message ${message.id} from another tab:`, message);
+          networkDebug.log(`Received message ${message.id} from another tab:`, message);
           
           // Check if we've already processed this message
           if (this.receivedMessageIds.has(message.id)) {
-            console.log(`[Network] Message ${message.id} already processed from broadcast, skipping`);
+            networkDebug.log(`Message ${message.id} already processed from broadcast, skipping`);
             return;
           }
           
@@ -106,7 +109,7 @@ class NetworkService {
         }
       });
     } catch (error) {
-      console.warn('[Network] BroadcastChannel not supported:', error);
+      networkDebug.warn('BroadcastChannel not supported:', error);
     }
   }
 
@@ -115,7 +118,7 @@ class NetworkService {
       this.config = config;
       const wsUrl = `ws://${config.serverHost}:${config.serverPort}/station-v`;
       
-      console.log(`[Network] Connecting to ${wsUrl}`);
+      networkDebug.log(`Connecting to ${wsUrl}`);
       
       this.ws = new WebSocket(wsUrl);
       
@@ -126,7 +129,7 @@ class NetworkService {
         }
 
         this.ws.onopen = () => {
-          console.log('[Network] Connected to Station V server');
+          networkDebug.log('Connected to Station V server');
           this.connected = true;
           this.notifyConnectionHandlers(true);
           
@@ -143,23 +146,23 @@ class NetworkService {
             const message = JSON.parse(event.data);
             this.handleServerMessage(message);
           } catch (error) {
-            console.error('[Network] Failed to parse server message:', error);
+            networkDebug.error('Failed to parse server message:', error);
           }
         };
 
         this.ws.onclose = () => {
-          console.log('[Network] Disconnected from server');
+          networkDebug.log('Disconnected from server');
           this.connected = false;
           this.notifyConnectionHandlers(false);
         };
 
         this.ws.onerror = (error) => {
-          console.error('[Network] WebSocket error:', error);
+          networkDebug.error('WebSocket error:', error);
           reject(error);
         };
       });
     } catch (error) {
-      console.error('[Network] Connection failed:', error);
+      networkDebug.error('Connection failed:', error);
       return false;
     }
   }
@@ -183,7 +186,7 @@ class NetworkService {
   }
 
   private handleServerMessage(message: any): void {
-    console.log('[Network] Received server message:', message);
+    networkDebug.log('Received server message:', message);
 
     switch (message.type) {
       case 'joined':
@@ -208,19 +211,19 @@ class NetworkService {
         this.handleNickChange(message);
         break;
       case 'error':
-        console.error('[Network] Server error:', message.message);
+        networkDebug.error('Server error:', message.message);
         break;
       default:
-        console.log('[Network] Unknown message type:', message.type);
+        networkDebug.log('Unknown message type:', message.type);
     }
   }
 
   private handleJoined(message: any): void {
-    console.log(`[Network] Joined channel: ${message.channel}`);
+    networkDebug.log(`Joined channel: ${message.channel}`);
     
     // Process channel data if provided
     if (message.channelData) {
-      console.log(`[Network] Received channel data for ${message.channel}:`, message.channelData);
+      networkDebug.log(`Received channel data for ${message.channel}:`, message.channelData);
       
       // Update channel with received data
       const channel = this.channels.get(message.channel);
@@ -247,7 +250,7 @@ class NetworkService {
           channel.topic = message.channelData.topic;
         }
         
-        console.log(`[Network] Updated channel ${message.channel} with ${message.channelData.users?.length || 0} users and ${message.channelData.messages?.length || 0} messages`);
+        networkDebug.log(`Updated channel ${message.channel} with ${message.channelData.users?.length || 0} users and ${message.channelData.messages?.length || 0} messages`);
         
         // Notify handlers about the updated channel state
         this.notifyUserHandlers(Array.from(this.users.values()));
@@ -262,7 +265,7 @@ class NetworkService {
         
         // Notify about any messages that were loaded
         if (message.channelData.messages && message.channelData.messages.length > 0) {
-          console.log(`[Network] Notifying about ${message.channelData.messages.length} loaded messages`);
+          networkDebug.log(`Notifying about ${message.channelData.messages.length} loaded messages`);
           message.channelData.messages.forEach((msg: any) => {
             this.notifyMessageHandlers({
               ...msg,
@@ -275,7 +278,7 @@ class NetworkService {
   }
 
   private handleMessage(message: any): void {
-    console.log('[Network] handleMessage received:', message);
+    networkDebug.log('handleMessage received:', message);
     
     const networkMessage: NetworkMessage = {
       id: message.message.id,
@@ -285,11 +288,11 @@ class NetworkService {
       type: message.message.type
     };
 
-    console.log('[Network] Converted to networkMessage:', networkMessage);
+    networkDebug.log('Converted to networkMessage:', networkMessage);
 
     // Don't store messages here - let the App handle message storage
     // Just notify message handlers with channel information
-    console.log('[Network] Notifying message handlers, count:', this.messageHandlers.length);
+    networkDebug.log('Notifying message handlers, count:', this.messageHandlers.length);
     this.notifyMessageHandlers({
       ...networkMessage,
       channel: message.channel
@@ -297,7 +300,7 @@ class NetworkService {
   }
 
   private handleAIMessage(message: any): void {
-    console.log('[Network] handleAIMessage received:', message);
+    networkDebug.log('handleAIMessage received:', message);
     
     const networkMessage: NetworkMessage = {
       id: message.message.id,
@@ -307,10 +310,10 @@ class NetworkService {
       type: 'ai'
     };
 
-    console.log('[Network] Converted to AI networkMessage:', networkMessage);
+    networkDebug.log('Converted to AI networkMessage:', networkMessage);
 
     // Notify message handlers with channel information
-    console.log('[Network] Notifying message handlers for AI message, count:', this.messageHandlers.length);
+    networkDebug.log('Notifying message handlers for AI message, count:', this.messageHandlers.length);
     this.notifyMessageHandlers({
       ...networkMessage,
       channel: message.channel
@@ -318,7 +321,7 @@ class NetworkService {
   }
 
   private handleUserJoined(message: any): void {
-    console.log(`[Network] User joined: ${message.nickname} in ${message.channel}`);
+    networkDebug.log(`User joined: ${message.nickname} in ${message.channel}`);
     
     // Add user to channel
     const channel = this.channels.get(message.channel);
@@ -355,7 +358,7 @@ class NetworkService {
   }
 
   private handleUserParted(message: any): void {
-    console.log(`[Network] User parted: ${message.nickname} from ${message.channel}`);
+    networkDebug.log(`User parted: ${message.nickname} from ${message.channel}`);
     
     // Remove user from channel
     const user = this.users.get(message.nickname);
@@ -381,7 +384,7 @@ class NetworkService {
   }
 
   private handleUserQuit(message: any): void {
-    console.log(`[Network] User quit: ${message.nickname}`);
+    networkDebug.log(`User quit: ${message.nickname}`);
     this.users.delete(message.nickname);
     
     // Update all channels
@@ -394,7 +397,7 @@ class NetworkService {
   }
 
   private handleNickChange(message: any): void {
-    console.log(`[Network] Nick change: ${message.oldNickname} -> ${message.newNickname}`);
+    networkDebug.log(`Nick change: ${message.oldNickname} -> ${message.newNickname}`);
     
     const user = this.users.get(message.oldNickname);
     if (user) {
@@ -410,11 +413,11 @@ class NetworkService {
   // Public methods
   joinChannel(channelName: string): void {
     if (!this.connected || !this.ws) {
-      console.error('[Network] Not connected to server');
+      networkDebug.error('Not connected to server');
       return;
     }
 
-    console.log(`[Network] Joining channel: ${channelName}`);
+    networkDebug.log(`Joining channel: ${channelName}`);
     
     this.ws.send(JSON.stringify({
       type: 'join',
@@ -434,11 +437,11 @@ class NetworkService {
 
   partChannel(channelName: string): void {
     if (!this.connected || !this.ws) {
-      console.error('[Network] Not connected to server');
+      networkDebug.error('Not connected to server');
       return;
     }
 
-    console.log(`[Network] Parting channel: ${channelName}`);
+    networkDebug.log(`Parting channel: ${channelName}`);
     
     this.ws.send(JSON.stringify({
       type: 'part',
@@ -448,11 +451,11 @@ class NetworkService {
 
   sendMessage(channelName: string, content: string): void {
     if (!this.connected || !this.ws) {
-      console.error('[Network] Not connected to server');
+      networkDebug.error('Not connected to server');
       return;
     }
 
-    console.log(`[Network] Sending message to ${channelName}: ${content}`);
+    networkDebug.log(`Sending message to ${channelName}: ${content}`);
     
     this.ws.send(JSON.stringify({
       type: 'message',
@@ -463,11 +466,11 @@ class NetworkService {
 
   sendAIMessage(channelName: string, content: string, nickname: string): void {
     if (!this.connected || !this.ws) {
-      console.error('[Network] Not connected to server');
+      networkDebug.error('Not connected to server');
       return;
     }
 
-    console.log(`[Network] Sending AI message from ${nickname} to ${channelName}: ${content}`);
+    networkDebug.log(`Sending AI message from ${nickname} to ${channelName}: ${content}`);
     
     this.ws.send(JSON.stringify({
       type: 'ai_message',
@@ -479,11 +482,11 @@ class NetworkService {
 
   changeNickname(newNickname: string): void {
     if (!this.connected || !this.ws) {
-      console.error('[Network] Not connected to server');
+      networkDebug.error('Not connected to server');
       return;
     }
 
-    console.log(`[Network] Changing nickname to: ${newNickname}`);
+    networkDebug.log(`Changing nickname to: ${newNickname}`);
     
     this.ws.send(JSON.stringify({
       type: 'nick',
@@ -591,7 +594,7 @@ class NetworkService {
           data: { message }
         });
       } catch (error) {
-        console.warn('[Network] Failed to broadcast message:', error);
+        networkDebug.warn('Failed to broadcast message:', error);
       }
     }
   }
@@ -618,9 +621,9 @@ class NetworkService {
           type: 'userUpdate',
           data: { users: Array.from(users) }
         });
-        console.log(`[Network] Broadcasted user update to other tabs with ${users.length} users:`, users.map(u => u.nickname));
+        networkDebug.log(`Broadcasted user update to other tabs with ${users.length} users:`, users.map(u => u.nickname));
       } catch (error) {
-        console.warn('[Network] Failed to broadcast user update:', error);
+        networkDebug.warn('Failed to broadcast user update:', error);
       }
     }
   }

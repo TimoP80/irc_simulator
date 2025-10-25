@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { getNetworkService, type NetworkConfig, type NetworkUser } from '../services/networkService';
+import { networkDebug } from '../utils/debugLogger';
 
 interface NetworkConnectionProps {
   onConnected: (connected: boolean) => void;
@@ -19,17 +20,28 @@ export const NetworkConnection: React.FC<NetworkConnectionProps> = ({ onConnecte
   const [showConfig, setShowConfig] = useState(false);
 
   const networkService = getNetworkService();
+  const onConnectedRef = useRef(onConnected);
+  const onUsersUpdateRef = useRef(onUsersUpdate);
 
-  const handleConnectionChange = useCallback((connected: boolean) => {
-    console.log('[NetworkConnection] Connection status changed:', connected);
-    setIsConnected(connected);
-    onConnected(connected);
+  // Update refs when props change
+  useEffect(() => {
+    onConnectedRef.current = onConnected;
   }, [onConnected]);
 
-  const handleUsersUpdate = useCallback((users: NetworkUser[]) => {
-    console.log('[NetworkConnection] Users updated:', users.length, 'users:', users.map(u => u.nickname));
-    onUsersUpdate(users);
+  useEffect(() => {
+    onUsersUpdateRef.current = onUsersUpdate;
   }, [onUsersUpdate]);
+
+  const handleConnectionChange = useCallback((connected: boolean) => {
+    networkDebug.log('Connection status changed:', connected);
+    setIsConnected(connected);
+    onConnectedRef.current(connected);
+  }, []);
+
+  const handleUsersUpdate = useCallback((users: NetworkUser[]) => {
+    networkDebug.log('Users updated:', users.length, 'users:', users.map(u => u.nickname));
+    onUsersUpdateRef.current(users);
+  }, []);
 
   useEffect(() => {
     // Set up event handlers
@@ -43,7 +55,7 @@ export const NetworkConnection: React.FC<NetworkConnectionProps> = ({ onConnecte
         const parsed = JSON.parse(savedConfig);
         setConfig(parsed);
       } catch (error) {
-        console.error('Failed to load network config:', error);
+        networkDebug.error('Failed to load network config:', error);
       }
     }
 
