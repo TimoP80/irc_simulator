@@ -27,6 +27,22 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
     - German: "Ich gewähre dir die Operator-Berechtigung, du hast dich bewährt."
     - Japanese: "権限を付与します。あなたは信頼できるユーザーです。"
 
+### Enhanced Personality Attributes
+- **Revolutionary Personality Control**: Unprecedented granular control over AI personality traits
+  - **7 Formality Levels**: Ultra-casual to ultra-formal communication styles
+  - **7 Verbosity Levels**: Terse to novel-length response patterns
+  - **9 Humor Styles**: None to unhinged humor expressions
+  - **7 Emoji Usage Patterns**: None to emoji-only communication
+  - **7 Punctuation Styles**: Minimal to experimental punctuation use
+- **Backward Compatibility**: Seamless migration from old attribute system
+  - **Automatic Migration**: Old values automatically converted to new format
+  - **Data Preservation**: No loss of existing user configurations
+  - **Smart Detection**: Automatic detection and conversion of legacy data
+- **Enhanced AI Expression**: More nuanced and realistic AI personality responses
+  - **Granular Control**: 37 total attribute combinations for unique personalities
+  - **Realistic Behavior**: AI responses match their configured personality traits
+  - **Improved Token Management**: Optimized token limits based on verbosity and emoji usage
+
 ### Technical Improvements
 - **Enhanced AI Response Generation**: New `generateOperatorResponse` function with advanced multilingual support
 - **Specialized System Instructions**: New `getOperatorSystemInstruction` function for operator-specific responses

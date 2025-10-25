@@ -16,11 +16,11 @@ export interface User {
     }>;
   };
   writingStyle: {
-    formality: 'very_informal' | 'informal' | 'neutral' | 'formal' | 'very_formal';
-    verbosity: 'very_terse' | 'terse' | 'neutral' | 'verbose' | 'very_verbose';
-    humor: 'none' | 'dry' | 'sarcastic' | 'witty' | 'slapstick';
-    emojiUsage: 'none' | 'low' | 'medium' | 'high' | 'excessive';
-    punctuation: 'minimal' | 'standard' | 'creative' | 'excessive';
+    formality: 'ultra_casual' | 'very_casual' | 'casual' | 'semi_formal' | 'formal' | 'very_formal' | 'ultra_formal';
+    verbosity: 'terse' | 'brief' | 'moderate' | 'detailed' | 'verbose' | 'extremely_verbose' | 'novel_length';
+    humor: 'none' | 'dry' | 'mild' | 'moderate' | 'witty' | 'sarcastic' | 'absurd' | 'chaotic' | 'unhinged';
+    emojiUsage: 'none' | 'rare' | 'occasional' | 'moderate' | 'frequent' | 'excessive' | 'emoji_only';
+    punctuation: 'minimal' | 'standard' | 'expressive' | 'dramatic' | 'chaotic' | 'artistic' | 'experimental';
   };
   pmProbability?: number; // Probability (0-100) for autonomous private messages
   assignedChannels?: string[]; // Track which channels this user is assigned to
@@ -229,6 +229,104 @@ export const removeChannelOperator = (channel: Channel, nickname: string): Chann
 
 export const canUserPerformAction = (channel: Channel, nickname: string, action: 'kick' | 'ban' | 'topic' | 'mode'): boolean => {
   return isChannelOperator(channel, nickname);
+};
+
+// Migration functions for enhanced writing style attributes
+export const migrateWritingStyle = (oldStyle: any): User['writingStyle'] => {
+  if (!oldStyle || typeof oldStyle !== 'object') {
+    return {
+      formality: 'neutral',
+      verbosity: 'moderate',
+      humor: 'none',
+      emojiUsage: 'low',
+      punctuation: 'standard'
+    };
+  }
+
+  // Map old formality values to new ones
+  const formalityMap: { [key: string]: User['writingStyle']['formality'] } = {
+    'very_informal': 'ultra_casual',
+    'informal': 'very_casual',
+    'neutral': 'semi_formal',
+    'formal': 'formal',
+    'very_formal': 'very_formal'
+  };
+
+  // Map old verbosity values to new ones
+  const verbosityMap: { [key: string]: User['writingStyle']['verbosity'] } = {
+    'very_terse': 'terse',
+    'terse': 'brief',
+    'neutral': 'moderate',
+    'verbose': 'detailed',
+    'very_verbose': 'verbose'
+  };
+
+  // Map old humor values to new ones
+  const humorMap: { [key: string]: User['writingStyle']['humor'] } = {
+    'none': 'none',
+    'dry': 'dry',
+    'sarcastic': 'sarcastic',
+    'witty': 'witty',
+    'slapstick': 'moderate'
+  };
+
+  // Map old emoji usage values to new ones
+  const emojiUsageMap: { [key: string]: User['writingStyle']['emojiUsage'] } = {
+    'none': 'none',
+    'low': 'rare',
+    'medium': 'occasional',
+    'high': 'frequent',
+    'excessive': 'excessive'
+  };
+
+  // Map old punctuation values to new ones
+  const punctuationMap: { [key: string]: User['writingStyle']['punctuation'] } = {
+    'minimal': 'minimal',
+    'standard': 'standard',
+    'creative': 'expressive',
+    'excessive': 'dramatic'
+  };
+
+  return {
+    formality: formalityMap[oldStyle.formality] || 'semi_formal',
+    verbosity: verbosityMap[oldStyle.verbosity] || 'moderate',
+    humor: humorMap[oldStyle.humor] || 'none',
+    emojiUsage: emojiUsageMap[oldStyle.emojiUsage] || 'rare',
+    punctuation: punctuationMap[oldStyle.punctuation] || 'standard'
+  };
+};
+
+// Helper function to safely get writing style with migration
+export const getWritingStyle = (user: User): User['writingStyle'] => {
+  if (!user.writingStyle) {
+    return {
+      formality: 'semi_formal',
+      verbosity: 'moderate',
+      humor: 'none',
+      emojiUsage: 'rare',
+      punctuation: 'standard'
+    };
+  }
+
+  // Check if this is an old format that needs migration
+  const oldFormalityValues = ['very_informal', 'informal', 'neutral', 'formal', 'very_formal'];
+  const oldVerbosityValues = ['very_terse', 'terse', 'neutral', 'verbose', 'very_verbose'];
+  const oldHumorValues = ['none', 'dry', 'sarcastic', 'witty', 'slapstick'];
+  const oldEmojiValues = ['none', 'low', 'medium', 'high', 'excessive'];
+  const oldPunctuationValues = ['minimal', 'standard', 'creative', 'excessive'];
+
+  const needsMigration = 
+    oldFormalityValues.includes(user.writingStyle.formality) ||
+    oldVerbosityValues.includes(user.writingStyle.verbosity) ||
+    oldHumorValues.includes(user.writingStyle.humor) ||
+    oldEmojiValues.includes(user.writingStyle.emojiUsage) ||
+    oldPunctuationValues.includes(user.writingStyle.punctuation);
+
+  if (needsMigration) {
+    return migrateWritingStyle(user.writingStyle);
+  }
+
+  return user.writingStyle;
 };
 
 export interface ModelsListResponse {

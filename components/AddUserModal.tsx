@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Channel, isPerLanguageFormat, isLegacyFormat } from '../types';
+import { User, Channel, isPerLanguageFormat, isLegacyFormat, getWritingStyle, migrateWritingStyle } from '../types';
 import { generateRandomNicknameAsync } from '../utils/personalityTemplates';
 
 interface AddUserModalProps {
@@ -35,11 +35,11 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
     accent: ''
   }]);
   const [writingStyle, setWritingStyle] = useState({
-    formality: 'neutral' as 'very_informal' | 'informal' | 'neutral' | 'formal' | 'very_formal',
-    verbosity: 'neutral' as 'very_terse' | 'terse' | 'neutral' | 'verbose' | 'very_verbose',
-    humor: 'none' as 'none' | 'dry' | 'sarcastic' | 'witty' | 'slapstick',
-    emojiUsage: 'low' as 'none' | 'low' | 'medium' | 'high' | 'excessive',
-    punctuation: 'standard' as 'minimal' | 'standard' | 'creative' | 'excessive'
+    formality: 'semi_formal' as User['writingStyle']['formality'],
+    verbosity: 'moderate' as User['writingStyle']['verbosity'],
+    humor: 'none' as User['writingStyle']['humor'],
+    emojiUsage: 'rare' as User['writingStyle']['emojiUsage'],
+    punctuation: 'standard' as User['writingStyle']['punctuation']
   });
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [isRandomizing, setIsRandomizing] = useState(false);
@@ -97,13 +97,9 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
             }]);
           }
         }
-        setWritingStyle({
-          formality: editingUser.writingStyle?.formality || 'neutral',
-          verbosity: editingUser.writingStyle?.verbosity || 'neutral',
-          humor: editingUser.writingStyle?.humor || 'none',
-          emojiUsage: editingUser.writingStyle?.emojiUsage || 'low',
-          punctuation: editingUser.writingStyle?.punctuation || 'standard'
-        });
+        // Use migration function to handle backward compatibility
+        const migratedStyle = getWritingStyle(editingUser);
+        setWritingStyle(migratedStyle);
         setPmProbability(editingUser.pmProbability ?? 25);
         setProfilePicture(editingUser.profilePicture || '');
         // Get channels where this user is assigned
@@ -120,10 +116,10 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
           accent: ''
         }]);
         setWritingStyle({
-          formality: 'neutral',
-          verbosity: 'neutral',
+          formality: 'semi_formal',
+          verbosity: 'moderate',
           humor: 'none',
-          emojiUsage: 'low',
+          emojiUsage: 'rare',
           punctuation: 'standard'
         });
         setPmProbability(10);
@@ -191,6 +187,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
     const newUser: User = {
       nickname: nickname.trim(),
       status: 'online',
+      userType: 'virtual',
       personality: personality.trim(),
       languageSkills: {
         languages: filteredLanguages.length > 0 ? filteredLanguages : [{ 
@@ -263,10 +260,10 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
       accent: ''
     }]);
     setWritingStyle({
-      formality: 'neutral',
-      verbosity: 'neutral',
+      formality: 'semi_formal',
+      verbosity: 'moderate',
       humor: 'none',
-      emojiUsage: 'low',
+      emojiUsage: 'rare',
       punctuation: 'standard'
     });
     setPmProbability(10);
@@ -532,15 +529,17 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
                 </label>
                 <select
                   id="formality"
-                  value={writingStyle.formality || 'neutral'}
-                  onChange={(e) => setWritingStyle(prev => ({ ...prev, formality: e.target.value as any }))}
+                  value={writingStyle.formality || 'semi_formal'}
+                  onChange={(e) => setWritingStyle(prev => ({ ...prev, formality: e.target.value as User['writingStyle']['formality'] }))}
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
-                  <option value="very_informal">Very Informal</option>
-                  <option value="informal">Informal</option>
-                  <option value="neutral">Neutral</option>
+                  <option value="ultra_casual">Ultra Casual</option>
+                  <option value="very_casual">Very Casual</option>
+                  <option value="casual">Casual</option>
+                  <option value="semi_formal">Semi-formal</option>
                   <option value="formal">Formal</option>
                   <option value="very_formal">Very Formal</option>
+                  <option value="ultra_formal">Ultra Formal</option>
                 </select>
               </div>
 
@@ -550,15 +549,17 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
                 </label>
                 <select
                   id="verbosity"
-                  value={writingStyle.verbosity || 'neutral'}
-                  onChange={(e) => setWritingStyle(prev => ({ ...prev, verbosity: e.target.value as any }))}
+                  value={writingStyle.verbosity || 'moderate'}
+                  onChange={(e) => setWritingStyle(prev => ({ ...prev, verbosity: e.target.value as User['writingStyle']['verbosity'] }))}
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
-                  <option value="very_terse">Very Terse</option>
                   <option value="terse">Terse</option>
-                  <option value="neutral">Neutral</option>
+                  <option value="brief">Brief</option>
+                  <option value="moderate">Moderate</option>
+                  <option value="detailed">Detailed</option>
                   <option value="verbose">Verbose</option>
-                  <option value="very_verbose">Very Verbose</option>
+                  <option value="extremely_verbose">Extremely Verbose</option>
+                  <option value="novel_length">Novel-length</option>
                 </select>
               </div>
 
@@ -569,14 +570,18 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
                 <select
                   id="humor"
                   value={writingStyle.humor || 'none'}
-                  onChange={(e) => setWritingStyle(prev => ({ ...prev, humor: e.target.value as any }))}
+                  onChange={(e) => setWritingStyle(prev => ({ ...prev, humor: e.target.value as User['writingStyle']['humor'] }))}
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   <option value="none">None</option>
                   <option value="dry">Dry</option>
-                  <option value="sarcastic">Sarcastic</option>
+                  <option value="mild">Mild</option>
+                  <option value="moderate">Moderate</option>
                   <option value="witty">Witty</option>
-                  <option value="slapstick">Slapstick</option>
+                  <option value="sarcastic">Sarcastic</option>
+                  <option value="absurd">Absurd</option>
+                  <option value="chaotic">Chaotic</option>
+                  <option value="unhinged">Unhinged</option>
                 </select>
               </div>
 
@@ -586,15 +591,17 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
                 </label>
                 <select
                   id="emojiUsage"
-                  value={writingStyle.emojiUsage || 'low'}
-                  onChange={(e) => setWritingStyle(prev => ({ ...prev, emojiUsage: e.target.value as any }))}
+                  value={writingStyle.emojiUsage || 'rare'}
+                  onChange={(e) => setWritingStyle(prev => ({ ...prev, emojiUsage: e.target.value as User['writingStyle']['emojiUsage'] }))}
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   <option value="none">None</option>
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
+                  <option value="rare">Rare</option>
+                  <option value="occasional">Occasional</option>
+                  <option value="moderate">Moderate</option>
+                  <option value="frequent">Frequent</option>
                   <option value="excessive">Excessive</option>
+                  <option value="emoji_only">Emoji-only responses</option>
                 </select>
               </div>
 
@@ -605,13 +612,16 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
                 <select
                   id="punctuation"
                   value={writingStyle.punctuation || 'standard'}
-                  onChange={(e) => setWritingStyle(prev => ({ ...prev, punctuation: e.target.value as any }))}
+                  onChange={(e) => setWritingStyle(prev => ({ ...prev, punctuation: e.target.value as User['writingStyle']['punctuation'] }))}
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   <option value="minimal">Minimal</option>
                   <option value="standard">Standard</option>
-                  <option value="creative">Creative</option>
-                  <option value="excessive">Excessive</option>
+                  <option value="expressive">Expressive</option>
+                  <option value="dramatic">Dramatic</option>
+                  <option value="chaotic">Chaotic</option>
+                  <option value="artistic">Artistic</option>
+                  <option value="experimental">Experimental</option>
                 </select>
               </div>
             </div>

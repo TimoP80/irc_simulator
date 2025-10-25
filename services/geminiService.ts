@@ -1,6 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import type { Channel, Message, PrivateMessageConversation, RandomWorldConfig, GeminiModel, ModelsListResponse, User } from '../types';
-import { getLanguageFluency, getAllLanguages, getLanguageAccent, isChannelOperator, isPerLanguageFormat, isLegacyFormat } from '../types';
+import { getLanguageFluency, getAllLanguages, getLanguageAccent, isChannelOperator, isPerLanguageFormat, isLegacyFormat, getWritingStyle } from '../types';
 import { withRateLimitAndRetries } from '../utils/config';
 import { aiDebug } from '../utils/debugLogger';
 
@@ -112,9 +112,10 @@ const getFallbackResponse = (user: User, context: 'activity' | 'reaction', origi
   const randomResponse = contextResponses[Math.floor(Math.random() * contextResponses.length)];
   
   // Add some personality-based variation
-  if (user.writingStyle && user.writingStyle.verbosity === 'very_verbose') {
+  const writingStyle = getWritingStyle(user);
+  if (writingStyle.verbosity === 'extremely_verbose' || writingStyle.verbosity === 'novel_length') {
     return `${randomResponse} ${randomResponse} ${randomResponse}`;
-  } else if (user.writingStyle && user.writingStyle.verbosity === 'very_terse') {
+  } else if (writingStyle.verbosity === 'terse') {
     return randomResponse.split(' ')[0];
   }
   
@@ -129,13 +130,7 @@ const safeGetUserProperty = (user: User, property: string, fallback: any = null)
     case 'personality':
       return user.personality || '';
     case 'writingStyle':
-      return user.writingStyle || {
-        formality: 'neutral',
-        verbosity: 'neutral',
-        humor: 'none',
-        emojiUsage: 'low',
-        punctuation: 'standard'
-      };
+      return getWritingStyle(user);
     case 'languageSkills':
       return user.languageSkills || {
         fluency: 'native',
@@ -789,8 +784,10 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
       (user.personality && user.personality.toLowerCase().includes('energetic')) ||
       (user.personality && user.personality.toLowerCase().includes('optimistic')) ||
       (user.personality && user.personality.toLowerCase().includes('morning')) ||
-      (user.writingStyle && user.writingStyle.verbosity === 'verbose') ||
-      (user.writingStyle && user.writingStyle.verbosity === 'very_verbose')
+      (getWritingStyle(user).verbosity === 'detailed') ||
+      (getWritingStyle(user).verbosity === 'verbose') ||
+      (getWritingStyle(user).verbosity === 'extremely_verbose') ||
+      (getWritingStyle(user).verbosity === 'novel_length')
     );
     // If we have energetic users, use them with 60% probability, otherwise use all users
     timeBasedUsers = energeticUsers.length > 0 && Math.random() < 0.6 ? energeticUsers : shuffledUsers;
@@ -800,8 +797,8 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
       (user.personality && user.personality.toLowerCase().includes('quiet')) ||
       (user.personality && user.personality.toLowerCase().includes('introspective')) ||
       (user.personality && user.personality.toLowerCase().includes('night')) ||
-      (user.writingStyle && user.writingStyle.verbosity === 'terse') ||
-      (user.writingStyle && user.writingStyle.verbosity === 'very_terse')
+      (getWritingStyle(user).verbosity === 'terse') ||
+      (getWritingStyle(user).verbosity === 'brief')
     );
   // If we have introspective users, use them with 20% probability, otherwise use all users
   timeBasedUsers = introspectiveUsers.length > 0 && Math.random() < 0.2 ? introspectiveUsers : shuffledUsers;
@@ -903,22 +900,26 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
   const getTokenLimit = (verbosity: string, emojiUsage: string): number => {
     let baseLimit: number;
     switch (verbosity) {
-      case 'very_terse': baseLimit = 150;  // Increased from 100
-      case 'terse': baseLimit = 200;       // Increased from 150
-      case 'neutral': baseLimit = 300;     // Increased from 200
-      case 'verbose': baseLimit = 600;     // Increased from 400
-      case 'very_verbose': baseLimit = 900; // Increased from 600
-      default: baseLimit = 300;            // Increased from 200
+      case 'terse': baseLimit = 150;
+      case 'brief': baseLimit = 200;
+      case 'moderate': baseLimit = 300;
+      case 'detailed': baseLimit = 500;
+      case 'verbose': baseLimit = 600;
+      case 'extremely_verbose': baseLimit = 900;
+      case 'novel_length': baseLimit = 1200;
+      default: baseLimit = 300;
     }
     
     // Apply emoji usage multiplier
     let emojiMultiplier: number;
     switch (emojiUsage) {
       case 'none': emojiMultiplier = 1.0;
-      case 'low': emojiMultiplier = 1.2;
-      case 'medium': emojiMultiplier = 1.5;
-      case 'high': emojiMultiplier = 2.0;
+      case 'rare': emojiMultiplier = 1.1;
+      case 'occasional': emojiMultiplier = 1.2;
+      case 'moderate': emojiMultiplier = 1.5;
+      case 'frequent': emojiMultiplier = 2.0;
       case 'excessive': emojiMultiplier = 2.5;
+      case 'emoji_only': emojiMultiplier = 3.0;
       default: emojiMultiplier = 1.0;
     }
     
@@ -1107,7 +1108,7 @@ Generate a new, single, in-character message from ${randomUser.nickname} that is
 The message should feel natural for the current time of day and social context.
 The message must be a single line in the format: "nickname: message"
 
-${writingStyle.verbosity === 'very_verbose' ? 'IMPORTANT: This user is very verbose - write a long, detailed message with multiple sentences and thorough explanations. Do not cut off the message.' : writingStyle.verbosity === 'verbose' ? 'IMPORTANT: This user is verbose - write a moderately detailed message with several sentences.' : ''}
+${writingStyle.verbosity === 'extremely_verbose' || writingStyle.verbosity === 'novel_length' ? 'IMPORTANT: This user is extremely verbose - write a long, detailed message with multiple sentences and thorough explanations. Do not cut off the message.' : writingStyle.verbosity === 'verbose' || writingStyle.verbosity === 'detailed' ? 'IMPORTANT: This user is verbose - write a moderately detailed message with several sentences.' : ''}
 
 CRITICAL: Respond ONLY in ${primaryLanguage}. Do not use any other language.
 ${userLanguages.length > 1 ? `Available languages: ${userLanguages.join(', ')}. Use ${primaryLanguage} only.` : ''}
@@ -1117,7 +1118,7 @@ LANGUAGE INSTRUCTION: The user's primary language is ${primaryLanguage} based on
 
 Consider ${randomUser.nickname}'s writing style:
 - Formality: ${writingStyle.formality}
-- Verbosity: ${writingStyle.verbosity} ${writingStyle.verbosity === 'very_verbose' ? '(write very long, detailed messages with multiple sentences and thorough explanations)' : writingStyle.verbosity === 'verbose' ? '(write moderately detailed messages with several sentences)' : writingStyle.verbosity === 'terse' ? '(write brief, concise messages)' : writingStyle.verbosity === 'very_terse' ? '(write very brief messages - short phrases or single sentences, but make them complete and meaningful)' : ''}
+- Verbosity: ${writingStyle.verbosity} ${writingStyle.verbosity === 'extremely_verbose' || writingStyle.verbosity === 'novel_length' ? '(write very long, detailed messages with multiple sentences and thorough explanations)' : writingStyle.verbosity === 'verbose' || writingStyle.verbosity === 'detailed' ? '(write moderately detailed messages with several sentences)' : writingStyle.verbosity === 'terse' ? '(write very brief messages - short phrases or single sentences, but make them complete and meaningful)' : writingStyle.verbosity === 'brief' ? '(write brief, concise messages)' : ''}
 - Humor: ${writingStyle.humor}
 - Emoji usage: ${writingStyle.emojiUsage}
 - Punctuation: ${writingStyle.punctuation}
@@ -1326,22 +1327,26 @@ export const generateReactionToMessage = async (channel: Channel, userMessage: M
     const getTokenLimit = (verbosity: string, emojiUsage: string): number => {
       let baseLimit: number;
       switch (verbosity) {
-        case 'very_terse': baseLimit = 150;  // Increased from 100
-        case 'terse': baseLimit = 200;       // Increased from 150
-        case 'neutral': baseLimit = 300;     // Increased from 200
-        case 'verbose': baseLimit = 600;     // Increased from 400
-        case 'very_verbose': baseLimit = 900; // Increased from 600
-        default: baseLimit = 300;            // Increased from 200
+        case 'terse': baseLimit = 150;
+        case 'brief': baseLimit = 200;
+        case 'moderate': baseLimit = 300;
+        case 'detailed': baseLimit = 500;
+        case 'verbose': baseLimit = 600;
+        case 'extremely_verbose': baseLimit = 900;
+        case 'novel_length': baseLimit = 1200;
+        default: baseLimit = 300;
       }
       
       // Apply emoji usage multiplier
       let emojiMultiplier: number;
       switch (emojiUsage) {
         case 'none': emojiMultiplier = 1.0;
-        case 'low': emojiMultiplier = 1.2;
-        case 'medium': emojiMultiplier = 1.5;
-        case 'high': emojiMultiplier = 2.0;
+        case 'rare': emojiMultiplier = 1.1;
+        case 'occasional': emojiMultiplier = 1.2;
+        case 'moderate': emojiMultiplier = 1.5;
+        case 'frequent': emojiMultiplier = 2.0;
         case 'excessive': emojiMultiplier = 2.5;
+        case 'emoji_only': emojiMultiplier = 3.0;
         default: emojiMultiplier = 1.0;
       }
       
@@ -1392,7 +1397,7 @@ ${formatMessageHistory(channel.messages)}
 Generate a realistic and in-character reaction from ${randomUser.nickname}.
 The reaction should feel natural for the current time of day and social context.
 The reaction must be a single line in the format: "nickname: message"
-${writingStyle.verbosity === 'very_verbose' ? 'IMPORTANT: This user is very verbose - write a long, detailed reaction with multiple sentences and thorough explanations. Do not cut off the message.' : writingStyle.verbosity === 'verbose' ? 'IMPORTANT: This user is verbose - write a moderately detailed reaction with several sentences.' : ''}
+${writingStyle.verbosity === 'extremely_verbose' || writingStyle.verbosity === 'novel_length' ? 'IMPORTANT: This user is extremely verbose - write a long, detailed reaction with multiple sentences and thorough explanations. Do not cut off the message.' : writingStyle.verbosity === 'verbose' || writingStyle.verbosity === 'detailed' ? 'IMPORTANT: This user is verbose - write a moderately detailed reaction with several sentences.' : ''}
 
 CRITICAL: Respond ONLY in ${primaryLanguage}. Do not use any other language.
 ${userLanguages.length > 1 ? `Available languages: ${userLanguages.join(', ')}. Use ${primaryLanguage} only.` : ''}
@@ -1401,7 +1406,7 @@ LANGUAGE INSTRUCTION: The user's primary language is ${primaryLanguage} based on
 
 Consider ${randomUser.nickname}'s writing style:
 - Formality: ${writingStyle.formality}
-- Verbosity: ${writingStyle.verbosity} ${writingStyle.verbosity === 'very_verbose' ? '(write very long, detailed messages with multiple sentences and thorough explanations)' : writingStyle.verbosity === 'verbose' ? '(write moderately detailed messages with several sentences)' : writingStyle.verbosity === 'terse' ? '(write brief, concise messages)' : writingStyle.verbosity === 'very_terse' ? '(write very brief messages - short phrases or single sentences, but make them complete and meaningful)' : ''}
+- Verbosity: ${writingStyle.verbosity} ${writingStyle.verbosity === 'extremely_verbose' || writingStyle.verbosity === 'novel_length' ? '(write very long, detailed messages with multiple sentences and thorough explanations)' : writingStyle.verbosity === 'verbose' || writingStyle.verbosity === 'detailed' ? '(write moderately detailed messages with several sentences)' : writingStyle.verbosity === 'terse' ? '(write very brief messages - short phrases or single sentences, but make them complete and meaningful)' : writingStyle.verbosity === 'brief' ? '(write brief, concise messages)' : ''}
 - Humor: ${writingStyle.humor}
 - Emoji usage: ${writingStyle.emojiUsage}
 - Punctuation: ${writingStyle.punctuation}
@@ -1682,22 +1687,26 @@ export const generatePrivateMessageResponse = async (conversation: PrivateMessag
     const getTokenLimit = (verbosity: string, emojiUsage: string): number => {
       let baseLimit: number;
       switch (verbosity) {
-        case 'very_terse': baseLimit = 150;  // Increased from 100
-        case 'terse': baseLimit = 200;       // Increased from 150
-        case 'neutral': baseLimit = 300;     // Increased from 200
-        case 'verbose': baseLimit = 600;     // Increased from 400
-        case 'very_verbose': baseLimit = 900; // Increased from 600
-        default: baseLimit = 300;            // Increased from 200
+        case 'terse': baseLimit = 150;
+        case 'brief': baseLimit = 200;
+        case 'moderate': baseLimit = 300;
+        case 'detailed': baseLimit = 500;
+        case 'verbose': baseLimit = 600;
+        case 'extremely_verbose': baseLimit = 900;
+        case 'novel_length': baseLimit = 1200;
+        default: baseLimit = 300;
       }
       
       // Apply emoji usage multiplier
       let emojiMultiplier: number;
       switch (emojiUsage) {
         case 'none': emojiMultiplier = 1.0;
-        case 'low': emojiMultiplier = 1.2;
-        case 'medium': emojiMultiplier = 1.5;
-        case 'high': emojiMultiplier = 2.0;
+        case 'rare': emojiMultiplier = 1.1;
+        case 'occasional': emojiMultiplier = 1.2;
+        case 'moderate': emojiMultiplier = 1.5;
+        case 'frequent': emojiMultiplier = 2.0;
         case 'excessive': emojiMultiplier = 2.5;
+        case 'emoji_only': emojiMultiplier = 3.0;
         default: emojiMultiplier = 1.0;
       }
       
@@ -1742,7 +1751,7 @@ LANGUAGE INSTRUCTION: The user's primary language is ${primaryLanguage} based on
 
 Your writing style:
 - Formality: ${writingStyle.formality}
-- Verbosity: ${writingStyle.verbosity} ${writingStyle.verbosity === 'very_verbose' ? '(write very long, detailed messages with multiple sentences and thorough explanations)' : writingStyle.verbosity === 'verbose' ? '(write moderately detailed messages with several sentences)' : writingStyle.verbosity === 'terse' ? '(write brief, concise messages)' : writingStyle.verbosity === 'very_terse' ? '(write very brief messages - short phrases or single sentences, but make them complete and meaningful)' : ''}
+- Verbosity: ${writingStyle.verbosity} ${writingStyle.verbosity === 'extremely_verbose' || writingStyle.verbosity === 'novel_length' ? '(write very long, detailed messages with multiple sentences and thorough explanations)' : writingStyle.verbosity === 'verbose' || writingStyle.verbosity === 'detailed' ? '(write moderately detailed messages with several sentences)' : writingStyle.verbosity === 'terse' ? '(write very brief messages - short phrases or single sentences, but make them complete and meaningful)' : writingStyle.verbosity === 'brief' ? '(write brief, concise messages)' : ''}
 - Humor: ${writingStyle.humor}
 - Emoji usage: ${writingStyle.emojiUsage}
 - Punctuation: ${writingStyle.punctuation}
@@ -1752,7 +1761,7 @@ ${getLanguageAccent(aiUser.languageSkills) ? `- Accent: ${getLanguageAccent(aiUs
 
 Generate a natural, in-character response that feels appropriate for the current time of day and conversation context.
 The response must be a single line in the format: "${aiUser.nickname}: message"
-${writingStyle.verbosity === 'very_verbose' ? 'IMPORTANT: This user is very verbose - write a long, detailed response with multiple sentences and thorough explanations. Do not cut off the message.' : writingStyle.verbosity === 'verbose' ? 'IMPORTANT: This user is verbose - write a moderately detailed response with several sentences.' : ''}
+${writingStyle.verbosity === 'extremely_verbose' || writingStyle.verbosity === 'novel_length' ? 'IMPORTANT: This user is extremely verbose - write a long, detailed response with multiple sentences and thorough explanations. Do not cut off the message.' : writingStyle.verbosity === 'verbose' || writingStyle.verbosity === 'detailed' ? 'IMPORTANT: This user is verbose - write a moderately detailed response with several sentences.' : ''}
 `;
 
     try {
@@ -2073,27 +2082,27 @@ Provide the output in JSON format.
                       properties: {
                         formality: {
                           type: Type.STRING,
-                          enum: ['very_informal', 'informal', 'neutral', 'formal', 'very_formal'],
+                          enum: ['ultra_casual', 'very_casual', 'casual', 'semi_formal', 'formal', 'very_formal', 'ultra_formal'],
                           description: "Writing formality level."
                         },
                         verbosity: {
                           type: Type.STRING,
-                          enum: ['very_terse', 'terse', 'neutral', 'verbose', 'very_verbose'],
+                          enum: ['terse', 'brief', 'moderate', 'detailed', 'verbose', 'extremely_verbose', 'novel_length'],
                           description: "Writing verbosity level."
                         },
                         humor: {
                           type: Type.STRING,
-                          enum: ['none', 'dry', 'sarcastic', 'witty', 'slapstick'],
+                          enum: ['none', 'dry', 'mild', 'moderate', 'witty', 'sarcastic', 'absurd', 'chaotic', 'unhinged'],
                           description: "Humor level in writing."
                         },
                         emojiUsage: {
                           type: Type.STRING,
-                          enum: ['none', 'low', 'medium', 'high', 'excessive'],
+                          enum: ['none', 'rare', 'occasional', 'moderate', 'frequent', 'excessive', 'emoji_only'],
                           description: "Emoji usage frequency."
                         },
                         punctuation: {
                           type: Type.STRING,
-                          enum: ['minimal', 'standard', 'creative', 'excessive'],
+                          enum: ['minimal', 'standard', 'expressive', 'dramatic', 'chaotic', 'artistic', 'experimental'],
                           description: "Punctuation style."
                         }
                       },
@@ -2154,7 +2163,7 @@ Create a list of 8 unique virtual users with distinct, concise, and interesting 
 
 For each user, also generate:
 - Language skills: fluency level (beginner/intermediate/advanced/native), languages they speak, and optional accent/dialect
-- Writing style: formality (very_informal/informal/neutral/formal/very_formal), verbosity (very_terse/terse/neutral/verbose/very_verbose), humor level (none/dry/sarcastic/witty/slapstick), emoji usage (none/low/medium/high/excessive), and punctuation style (minimal/standard/creative/excessive)
+- Writing style: formality (ultra_casual/very_casual/casual/semi_formal/formal/very_formal/ultra_formal), verbosity (terse/brief/moderate/detailed/verbose/extremely_verbose/novel_length), humor level (none/dry/mild/moderate/witty/sarcastic/absurd/chaotic/unhinged), emoji usage (none/rare/occasional/moderate/frequent/excessive/emoji_only), and punctuation style (minimal/standard/expressive/dramatic/chaotic/artistic/experimental)
 
 Create a list of 4 unique and thematic IRC channels with creative topics. Channel names must start with #.
 
@@ -2218,27 +2227,27 @@ Provide the output in JSON format.
                                         properties: {
                                             formality: {
                                                 type: Type.STRING,
-                                                enum: ['very_informal', 'informal', 'neutral', 'formal', 'very_formal'],
+                                                enum: ['ultra_casual', 'very_casual', 'casual', 'semi_formal', 'formal', 'very_formal', 'ultra_formal'],
                                                 description: "Writing formality level."
                                             },
                                             verbosity: {
                                                 type: Type.STRING,
-                                                enum: ['very_terse', 'terse', 'neutral', 'verbose', 'very_verbose'],
+                                                enum: ['terse', 'brief', 'moderate', 'detailed', 'verbose', 'extremely_verbose', 'novel_length'],
                                                 description: "Writing verbosity level."
                                             },
                                             humor: {
                                                 type: Type.STRING,
-                                                enum: ['none', 'dry', 'sarcastic', 'witty', 'slapstick'],
+                                                enum: ['none', 'dry', 'mild', 'moderate', 'witty', 'sarcastic', 'absurd', 'chaotic', 'unhinged'],
                                                 description: "Humor level in writing."
                                             },
                                             emojiUsage: {
                                                 type: Type.STRING,
-                                                enum: ['none', 'low', 'medium', 'high', 'excessive'],
+                                                enum: ['none', 'rare', 'occasional', 'moderate', 'frequent', 'excessive', 'emoji_only'],
                                                 description: "Emoji usage frequency."
                                             },
                                             punctuation: {
                                                 type: Type.STRING,
-                                                enum: ['minimal', 'standard', 'creative', 'excessive'],
+                                                enum: ['minimal', 'standard', 'expressive', 'dramatic', 'chaotic', 'artistic', 'experimental'],
                                                 description: "Punctuation style."
                                             }
                                         },
@@ -2354,10 +2363,10 @@ Provide the output in JSON format.
                         }]
                     },
                     writingStyle: {
-                        formality: 'informal',
-                        verbosity: 'neutral',
+                        formality: 'casual',
+                        verbosity: 'moderate',
                         humor: 'witty',
-                        emojiUsage: 'low',
+                        emojiUsage: 'rare',
                         punctuation: 'standard'
                     },
                     status: 'online' as const,
@@ -2376,7 +2385,7 @@ Provide the output in JSON format.
                     },
                     writingStyle: {
                         formality: 'formal',
-                        verbosity: 'neutral',
+                        verbosity: 'moderate',
                         humor: 'none',
                         emojiUsage: 'none',
                         punctuation: 'standard'
@@ -2396,11 +2405,11 @@ Provide the output in JSON format.
                         }]
                     },
                     writingStyle: {
-                        formality: 'informal',
-                        verbosity: 'neutral',
-                        humor: 'slapstick',
-                        emojiUsage: 'high',
-                        punctuation: 'excessive'
+                        formality: 'casual',
+                        verbosity: 'moderate',
+                        humor: 'moderate',
+                        emojiUsage: 'frequent',
+                        punctuation: 'dramatic'
                     },
                     status: 'online' as const,
                     userType: 'virtual' as const,
@@ -2417,7 +2426,7 @@ Provide the output in JSON format.
                         }]
                     },
                     writingStyle: {
-                        formality: 'informal',
+                        formality: 'casual',
                         verbosity: 'terse',
                         humor: 'dry',
                         emojiUsage: 'none',
@@ -2438,10 +2447,10 @@ Provide the output in JSON format.
                         }]
                     },
                     writingStyle: {
-                        formality: 'informal',
+                        formality: 'casual',
                         verbosity: 'verbose',
                         humor: 'witty',
-                        emojiUsage: 'high',
+                        emojiUsage: 'frequent',
                         punctuation: 'standard'
                     },
                     status: 'online' as const,

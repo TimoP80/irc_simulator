@@ -1,6 +1,6 @@
 # Station V - Virtual IRC Simulator
 
-**Version 1.18.0** - AI-powered chat simulation with multilingual personalities, network support, and AI operator system.
+**Version 1.18.0** - AI-powered chat simulation with enhanced personality attributes, multilingual support, network capabilities, and AI operator system.
 
 ## Overview
 
@@ -39,6 +39,7 @@ Station V is a web application that simulates a classic IRC chat environment whe
 - **Fully AI-driven world** - Every user besides you is an AI agent with unique personalities
 - **Real-time conversations** - AI users chat autonomously and respond to your messages
 - **Advanced personalities** - Detailed language skills, writing styles, and cultural traits
+- **Enhanced personality attributes** - 7 formality levels, 7 verbosity levels, 9 humor styles, 7 emoji usage patterns, 7 punctuation styles
 - **Multilingual support** - AI users can communicate in multiple languages
 
 ### 🎭 User Management
@@ -69,6 +70,57 @@ Station V is a web application that simulates a classic IRC chat environment whe
 - **Language-specific terminology** - Authentic IRC terms for each supported language
 - **Personality-driven responses** - Each AI operator responds based on their unique personality
 
+### 🎨 Enhanced Personality Attributes
+
+Station V offers unprecedented control over AI personality traits with 7 distinct attribute categories:
+
+#### **Formality Levels (7 levels)**
+- **Ultra Casual** - Most informal, slang-heavy communication
+- **Very Casual** - Very informal, relaxed tone
+- **Casual** - Informal, friendly approach
+- **Semi-formal** - Balanced, professional but approachable
+- **Formal** - Professional, structured communication
+- **Very Formal** - Highly professional, academic tone
+- **Ultra Formal** - Most formal, ceremonial style
+
+#### **Verbosity Levels (7 levels)**
+- **Terse** - Very brief, minimal words
+- **Brief** - Concise, to the point
+- **Moderate** - Balanced length responses
+- **Detailed** - Thorough explanations
+- **Verbose** - Long, comprehensive responses
+- **Extremely Verbose** - Very long, extensive responses
+- **Novel-length** - Extremely long, narrative style
+
+#### **Humor Styles (9 levels)**
+- **None** - No humor in communication
+- **Dry** - Subtle, understated humor
+- **Mild** - Light, gentle humor
+- **Moderate** - Balanced humor
+- **Witty** - Clever, quick humor
+- **Sarcastic** - Sharp, ironic humor
+- **Absurd** - Bizarre, surreal humor
+- **Chaotic** - Random, unpredictable humor
+- **Unhinged** - Extreme, wild humor
+
+#### **Emoji Usage Patterns (7 levels)**
+- **None** - No emojis used
+- **Rare** - Occasional emoji use
+- **Occasional** - Some emojis in responses
+- **Moderate** - Regular emoji usage
+- **Frequent** - Many emojis in messages
+- **Excessive** - Overuse of emojis
+- **Emoji-only responses** - Primarily emoji communication
+
+#### **Punctuation Styles (7 levels)**
+- **Minimal** - Basic punctuation only
+- **Standard** - Normal punctuation usage
+- **Expressive** - Enhanced punctuation for emphasis
+- **Dramatic** - Exaggerated punctuation
+- **Chaotic** - Random, inconsistent punctuation
+- **Artistic** - Creative punctuation patterns
+- **Experimental** - Unconventional punctuation use
+
 ### 📊 Data Management
 - **Chat log database** - Complete message history with search and filtering
 - **Export options** - HTML, JSON, and CSV export formats
@@ -91,6 +143,7 @@ Station V is a web application that simulates a classic IRC chat environment whe
 - **Batch user creation**: Create multiple AI personalities at once using the batch generation feature
 - **Request operator status**: Use `/op` command in any channel to request operator privileges from AI operators
 - **Multilingual operators**: AI operators respond in their configured language with authentic IRC terminology
+- **Enhanced personality control**: Use the new 7-level attribute system for precise AI personality customization
 - **Cursor AI development**: Open `DevelopmentCommands_CursorAI.html` for comprehensive AI development command reference
 
 ### Simulation Speed
