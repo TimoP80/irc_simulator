@@ -60,7 +60,7 @@ const extractLinksAndImages = (content: string): { links: string[], images: stri
   
   const allUrls = content.match(urlRegex) || [];
   const imageUrls = content.match(imageRegex) || [];
-  const linkUrls = allUrls.filter(url => !imageUrls.includes(url));
+  const linkUrls = allUrls.filter(url => !(imageUrls as string[]).includes(url));
   
   return {
     links: linkUrls,
@@ -134,6 +134,41 @@ const safeGetUserProperty = (user: User, property: string, fallback: any = null)
     default:
       return user[property as keyof User] || fallback;
   }
+};
+
+// Helper function to get detailed language examples for personality generation
+const getLanguageExamples = (language: string): string => {
+  const examples: { [key: string]: string } = {
+    'English': `- "A passionate software engineer from Seattle who loves indie music, hiking in the Pacific Northwest, and late-night coding sessions. Known for their dry humor and tendency to overthink everything. Dreams of starting their own tech company but is too comfortable in their current job. Obsessed with coffee and has strong opinions about code formatting."
+- "A creative graphic designer from Portland who's into sustainable living, vintage cameras, and experimental art. Very introverted but opens up when discussing design theory. Collects vinyl records and has a small garden on their apartment balcony. Often speaks in metaphors and has a habit of doodling during conversations."
+- "A university student studying psychology in Boston, originally from a small town in Maine. Loves true crime podcasts, thrift shopping, and deep philosophical discussions. Very empathetic but can be overly analytical about social situations. Dreams of becoming a therapist and helping people with anxiety disorders."`,
+    
+    'Spanish': `- "Un ingeniero de software apasionado de Madrid que adora la música indie española, el senderismo en la sierra y las sesiones de programación nocturnas. Conocido por su humor sarcástico y tendencia a sobreanalizar todo. Sueña con crear su propia startup pero está demasiado cómodo en su trabajo actual. Obsesionado con el café y tiene opiniones muy firmes sobre el formato del código."
+- "Una diseñadora gráfica creativa de Barcelona que se interesa por la vida sostenible, las cámaras vintage y el arte experimental. Muy introvertida pero se abre cuando habla de teoría del diseño. Colecciona vinilos y tiene un pequeño jardín en el balcón de su apartamento. A menudo habla en metáforas y tiene la costumbre de garabatear durante las conversaciones."
+- "Un estudiante universitario de psicología en Valencia, originario de un pueblo pequeño de Andalucía. Le encantan los podcasts de crímenes reales, las compras de segunda mano y las discusiones filosóficas profundas. Muy empático pero puede ser demasiado analítico con las situaciones sociales. Sueña con convertirse en terapeuta y ayudar a personas con trastornos de ansiedad."`,
+    
+    'Chinese': `- "一位来自北京的软件工程师，热爱独立音乐、北京郊区的徒步旅行和深夜编程。以冷幽默和过度思考一切而闻名。梦想创办自己的科技公司，但对目前的工作过于舒适。痴迷于咖啡，对代码格式有强烈的观点。"
+- "一位来自上海的创意平面设计师，热衷于可持续生活、复古相机和实验艺术。非常内向，但在讨论设计理论时会敞开心扉。收集黑胶唱片，在公寓阳台上有一个小花园。经常用比喻说话，在对话中有涂鸦的习惯。"
+- "一位在深圳学习心理学的大学学生，来自湖南的一个小镇。喜欢真实犯罪播客、二手购物和深刻的哲学讨论。非常善解人意，但可能对社会情况过度分析。梦想成为一名治疗师，帮助焦虑症患者。"`,
+    
+    'Japanese': `- "東京のソフトウェアエンジニアで、インディーミュージック、関東のハイキング、深夜のコーディングセッションを愛する情熱的な人。皮肉なユーモアとすべてを過度に考える傾向で知られている。自分のテック会社を始めることを夢見ているが、現在の仕事に満足しすぎている。コーヒーに夢中で、コードフォーマットについて強い意見を持っている。"
+- "ポートランドのクリエイティブなグラフィックデザイナーで、持続可能な生活、ヴィンテージカメラ、実験的なアートに興味がある。非常に内向的だが、デザイン理論について話すときは心を開く。レコードを収集し、アパートのバルコニーに小さな庭を持っている。よく比喩で話し、会話中に落書きする習慣がある。"
+- "ボストンで心理学を学ぶ大学生で、メイン州の小さな町の出身。トゥルークライムポッドキャスト、古着屋、深い哲学的議論を愛する。非常に共感的だが、社会的状況について過度に分析的になることがある。セラピストになることを夢見ており、不安障害の人々を助けたいと思っている。"`,
+    
+    'German': `- "Ein leidenschaftlicher Software-Ingenieur aus Berlin, der Indie-Musik, Wandern im Schwarzwald und nächtliche Programmier-Sessions liebt. Bekannt für seinen trockenen Humor und die Tendenz, alles zu überdenken. Träumt davon, sein eigenes Tech-Unternehmen zu gründen, ist aber zu bequem in seinem aktuellen Job. Besessen von Kaffee und hat starke Meinungen über Code-Formatierung."
+- "Ein kreativer Grafikdesigner aus München, der sich für nachhaltiges Leben, Vintage-Kameras und experimentelle Kunst interessiert. Sehr introvertiert, aber öffnet sich, wenn es um Designtheorie geht. Sammelt Vinyl-Schallplatten und hat einen kleinen Garten auf seinem Wohnungsbalkon. Spricht oft in Metaphern und hat die Angewohnheit, während Gesprächen zu kritzeln."
+- "Ein Psychologie-Student in Hamburg, ursprünglich aus einer kleinen Stadt in Bayern. Liebt True-Crime-Podcasts, Second-Hand-Shopping und tiefgreifende philosophische Diskussionen. Sehr einfühlsam, kann aber bei sozialen Situationen überanalytisch sein. Träumt davon, Therapeut zu werden und Menschen mit Angststörungen zu helfen."`,
+    
+    'French': `- "Un ingénieur logiciel passionné de Paris qui adore la musique indie française, la randonnée dans les Alpes et les sessions de programmation nocturnes. Connu pour son humour sarcastique et sa tendance à tout suranalyser. Rêve de créer sa propre startup mais est trop à l'aise dans son travail actuel. Obsédé par le café et a des opinions très arrêtées sur le formatage du code."
+- "Une graphiste créative de Lyon qui s'intéresse à la vie durable, aux appareils photo vintage et à l'art expérimental. Très introvertie mais s'ouvre quand on parle de théorie du design. Collectionne les vinyles et a un petit jardin sur le balcon de son appartement. Parle souvent par métaphores et a l'habitude de griffonner pendant les conversations."
+- "Un étudiant en psychologie à Marseille, originaire d'une petite ville de Provence. Aime les podcasts de vrais crimes, le shopping d'occasion et les discussions philosophiques profondes. Très empathique mais peut être trop analytique avec les situations sociales. Rêve de devenir thérapeute et d'aider les personnes souffrant de troubles anxieux."`,
+    
+    'Finnish': `- "Intoiminen ohjelmistosuunnittelija Helsingistä, joka rakastaa indie-musiikkia, vaellusta Keski-Suomessa ja yöaikaista koodausta. Tunnettu kuivasta huumoristaan ja taipumuksestaan miettiä kaikkea liikaa. Unelmoi oman teknologia-yrityksen perustamisesta, mutta on liian mukava nykyisessä työssään. Pakkomielteinen kahvista ja on vahvoja mielipiteitä koodin muotoilusta."
+- "Luova graafinen suunnittelija Turusta, joka on kiinnostunut kestävästä elämästä, vintage-kameroista ja kokeellisesta taiteesta. Erittäin sisäänpäin kääntynyt, mutta avautuu puhuessaan suunnitteluteoriasta. Kerää vinyylilevyjä ja on pieni puutarha asuntonsa parvekkeella. Puhuu usein metaforoilla ja on tapa piirrellä keskustelujen aikana."
+- "Psykologiaa opiskeleva yliopisto-opiskelija Tampereelta, alun perin pienestä kaupungista Lapista. Rakastaa tosielämän rikos-podcasteja, kirpputoria ja syvällisiä filosofisia keskusteluja. Erittäin empaattinen, mutta voi olla liian analyyttinen sosiaalisissa tilanteissa. Unelmoi tulevansa terapeutiksi ja auttavansa ahdistuneisuushäiriöitä sairastavia ihmisiä."`
+  };
+  
+  return examples[language] || examples['English'];
 };
 
 // Helper function to get greeting phrases for detection
@@ -1473,32 +1508,54 @@ export const generateBatchUsers = async (count: number, model: string = 'gemini-
   aiDebug.log(` Validated model ID for batch users: "${validatedModel}"`);
   
   const multilingualPrompt = options?.multilingualPersonalities && options?.personalityLanguage 
-    ? `IMPORTANT: Generate personality descriptions in ${options.personalityLanguage}. For example:
-- English: "Passionate about technology and loves helping others"
-- Spanish: "Apasionado por la tecnología y le encanta ayudar a otros"
-- Chinese: "熱愛技術，喜歡幫助他人"
-- Japanese: "技術に情熱を持ち、他人を助けることが好き"
-- German: "Leidenschaftlich für Technik und liebt es, anderen zu helfen"
-- French: "Passionné par la technologie et aime aider les autres"
+    ? `CRITICAL: Generate ALL personality descriptions in ${options.personalityLanguage} ONLY. Do not use English.
 
-Use the target language naturally and authentically for personality descriptions.`
+PERSONALITY DIVERSITY REQUIREMENTS (${options.personalityLanguage}):
+- Create 500-character detailed personalities with rich cultural backgrounds
+- Include specific interests, quirks, communication styles, and cultural traits
+- Vary personality types: introverts, extroverts, technical experts, artists, gamers, students, professionals
+- Add cultural references, regional characteristics, and authentic personality traits
+- Include hobbies, passions, fears, dreams, and unique characteristics
+- Make each personality feel like a real person from that culture
+
+EXAMPLES FOR ${options.personalityLanguage}:
+${getLanguageExamples(options.personalityLanguage)}
+
+PERSONALITY STRUCTURE (in ${options.personalityLanguage}):
+- Background: Cultural/regional background, profession/student status
+- Interests: Specific hobbies, passions, areas of expertise
+- Personality traits: Communication style, social behavior, quirks
+- Cultural elements: Regional references, cultural practices, local interests
+- Unique characteristics: Memorable traits, special skills, distinctive features
+
+Generate diverse, authentic personalities that feel natural in ${options.personalityLanguage}.`
     : '';
   
   const prompt = `
 Generate ${count} unique IRC users with diverse personalities, language skills, and writing styles.
 Each user should have:
 - A unique nickname (lowercase, creative, tech-inspired)
-- A detailed personality description
+- A detailed personality description (aim for 400-500 characters with rich detail)
 - Language skills with fluency level, languages spoken, and optional accent
 - Writing style preferences for formality, verbosity, humor, emoji usage, and punctuation
 
-IMPORTANT: Create a diverse mix of languages including English, Finnish, Spanish, French, German, Japanese, etc.
-Include users who speak only one language (e.g., only Finnish) and users who speak multiple languages.
-Make the language distribution realistic and varied.
+PERSONALITY DETAIL REQUIREMENTS:
+- Include specific cultural backgrounds, regional origins, and local references
+- Add detailed interests, hobbies, passions, and areas of expertise
+- Include personality quirks, communication styles, and social behaviors
+- Add personal goals, dreams, fears, and unique characteristics
+- Include profession/student status, lifestyle details, and personal preferences
+- Make each personality feel like a real, complex person with depth
+
+LANGUAGE DIVERSITY:
+- Create a realistic mix of languages including English, Finnish, Spanish, French, German, Japanese, Chinese, etc.
+- Include users who speak only one language (e.g., only Finnish) and users who speak multiple languages
+- Make the language distribution authentic and varied
+- Consider regional accents and dialects where appropriate
 
 ${multilingualPrompt}
 
-Make each user distinct and interesting for an IRC chat environment.
+Make each user distinct, interesting, and authentic for an IRC chat environment.
 Provide the output in JSON format.
 `;
 
@@ -1507,9 +1564,9 @@ Provide the output in JSON format.
     
     // Configure thinking mode based on model requirements
     const config: any = {
-          systemInstruction: "You are a creative character generator for an IRC simulation. Generate diverse, interesting users with unique personalities and communication styles. Create a realistic mix of languages including English, Finnish, Spanish, French, German, Japanese, and others. Include both monolingual and multilingual users. Provide a valid JSON response.",
+          systemInstruction: "You are a creative character generator for an IRC simulation. Generate diverse, detailed users with rich, complex personalities and authentic communication styles. Create detailed personality descriptions (400-500 characters) that include cultural backgrounds, specific interests, personality quirks, and unique characteristics. Generate a realistic mix of languages including English, Finnish, Spanish, French, German, Japanese, Chinese, and others. Include both monolingual and multilingual users with authentic cultural traits. Make each personality feel like a real person with depth and authenticity. Provide a valid JSON response.",
           temperature: 1.0,
-          maxOutputTokens: 2000,
+          maxOutputTokens: 4000,
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
@@ -1599,8 +1656,8 @@ Provide the output in JSON format.
         
         // Some models require thinking mode with a budget
         if (validatedModel.includes('2.5') || validatedModel.includes('pro')) {
-          config.thinkingConfig = { thinkingBudget: 2000 }; // Higher budget for batch generation
-          aiDebug.log(` Using thinking mode with budget 2000 for batch generation model: ${validatedModel}`);
+          config.thinkingConfig = { thinkingBudget: 4000 }; // Higher budget for detailed batch generation
+          aiDebug.log(` Using thinking mode with budget 4000 for batch generation model: ${validatedModel}`);
         }
         
         const response = await withRateLimitAndRetries(() =>
@@ -1608,7 +1665,7 @@ Provide the output in JSON format.
             model: validatedModel,
             contents: prompt,
             config: config,
-          }), `batch user generation (${users.length} users)`
+          }), `batch user generation (${count} users)`
     );
 
     aiDebug.log(` Successfully received response from Gemini for batch user generation`);
@@ -1842,12 +1899,14 @@ Provide the output in JSON format.
                         }]
                     },
                     writingStyle: {
-                        formality: 'casual',
-                        verbosity: 'moderate',
-                        humor: 'light',
-                        emojiUsage: 'minimal',
+                        formality: 'informal',
+                        verbosity: 'neutral',
+                        humor: 'witty',
+                        emojiUsage: 'low',
                         punctuation: 'standard'
-                    }
+                    },
+                    status: 'online' as const,
+                    userType: 'virtual' as const
                 },
                 {
                     nickname: 'seraph',
@@ -1861,11 +1920,13 @@ Provide the output in JSON format.
                     },
                     writingStyle: {
                         formality: 'formal',
-                        verbosity: 'moderate',
+                        verbosity: 'neutral',
                         humor: 'none',
                         emojiUsage: 'none',
                         punctuation: 'standard'
-                    }
+                    },
+                    status: 'online' as const,
+                    userType: 'virtual' as const
                 },
                 {
                     nickname: 'jinx',
@@ -1878,12 +1939,14 @@ Provide the output in JSON format.
                         }]
                     },
                     writingStyle: {
-                        formality: 'casual',
-                        verbosity: 'moderate',
-                        humor: 'heavy',
-                        emojiUsage: 'frequent',
+                        formality: 'informal',
+                        verbosity: 'neutral',
+                        humor: 'slapstick',
+                        emojiUsage: 'high',
                         punctuation: 'excessive'
-                    }
+                    },
+                    status: 'online' as const,
+                    userType: 'virtual' as const
                 },
                 {
                     nickname: 'rex',
@@ -1896,12 +1959,14 @@ Provide the output in JSON format.
                         }]
                     },
                     writingStyle: {
-                        formality: 'casual',
-                        verbosity: 'concise',
-                        humor: 'light',
+                        formality: 'informal',
+                        verbosity: 'terse',
+                        humor: 'dry',
                         emojiUsage: 'none',
                         punctuation: 'minimal'
-                    }
+                    },
+                    status: 'online' as const,
+                    userType: 'virtual' as const
                 },
                 {
                     nickname: 'luna',
@@ -1914,136 +1979,32 @@ Provide the output in JSON format.
                         }]
                     },
                     writingStyle: {
-                        formality: 'casual',
+                        formality: 'informal',
                         verbosity: 'verbose',
-                        humor: 'light',
-                        emojiUsage: 'frequent',
+                        humor: 'witty',
+                        emojiUsage: 'high',
                         punctuation: 'standard'
-                    }
+                    },
+                    status: 'online' as const,
+                    userType: 'virtual' as const
                 }
             ],
             channels: [
                 { 
                     name: '#general', 
-                    topic: 'General chit-chat about anything and everything.',
-                    users: [
-                        { 
-                            nickname: 'nova',
-                            status: 'online' as const,
-                            personality: 'A curious tech-savvy individual who loves gadgets.',
-                            languageSkills: {
-                                fluency: 'native' as const,
-                                languages: ['English'],
-                                accent: ''
-                            },
-                            writingStyle: {
-                                formality: 'casual' as const,
-                                verbosity: 'moderate' as const,
-                                humor: 'light' as const,
-                                emojiUsage: 'minimal' as const,
-                                punctuation: 'standard' as const
-                            }
-                        },
-                        { 
-                            nickname: 'seraph',
-                            status: 'online' as const,
-                            personality: 'Calm, wise, and often speaks in poetic terms.',
-                            languageSkills: {
-                                fluency: 'native' as const,
-                                languages: ['English'],
-                                accent: ''
-                            },
-                            writingStyle: {
-                                formality: 'formal' as const,
-                                verbosity: 'moderate' as const,
-                                humor: 'none' as const,
-                                emojiUsage: 'none' as const,
-                                punctuation: 'standard' as const
-                            }
-                        },
-                        { 
-                            nickname: 'jinx',
-                            status: 'online' as const,
-                            personality: 'A chaotic, funny, and unpredictable prankster.',
-                            languageSkills: {
-                                fluency: 'native' as const,
-                                languages: ['English'],
-                                accent: ''
-                            },
-                            writingStyle: {
-                                formality: 'casual' as const,
-                                verbosity: 'moderate' as const,
-                                humor: 'heavy' as const,
-                                emojiUsage: 'frequent' as const,
-                                punctuation: 'excessive' as const
-                            }
-                        },
-                        { 
-                            nickname: 'rex',
-                            status: 'online' as const,
-                            personality: 'Gruff but helpful, an expert in system administration.',
-                            languageSkills: {
-                                fluency: 'native' as const,
-                                languages: ['English'],
-                                accent: ''
-                            },
-                            writingStyle: {
-                                formality: 'casual' as const,
-                                verbosity: 'concise' as const,
-                                humor: 'light' as const,
-                                emojiUsage: 'none' as const,
-                                punctuation: 'minimal' as const
-                            }
-                        },
-                        { 
-                            nickname: 'luna',
-                            status: 'online' as const,
-                            personality: 'An artist who is dreamy, creative, and talks about music.',
-                            languageSkills: {
-                                fluency: 'native' as const,
-                                languages: ['English'],
-                                accent: ''
-                            },
-                            writingStyle: {
-                                formality: 'casual' as const,
-                                verbosity: 'verbose' as const,
-                                humor: 'light' as const,
-                                emojiUsage: 'frequent' as const,
-                                punctuation: 'standard' as const
-                            }
-                        }
-                    ],
-                    messages: [
-                        { id: Date.now(), nickname: 'system', content: 'You have joined #general', timestamp: new Date(), type: 'system' as const }
-                    ],
-                    operators: []
+                    topic: 'General chit-chat about anything and everything.'
                 },
                 { 
                     name: '#tech-talk', 
-                    topic: 'Discussing the latest in technology and software.',
-                    users: [],
-                    messages: [
-                        { id: Date.now() + 1, nickname: 'system', content: 'You have joined #tech-talk', timestamp: new Date(), type: 'system' as const }
-                    ],
-                    operators: []
+                    topic: 'Discussing the latest in technology and software.'
                 },
                 { 
                     name: '#random', 
-                    topic: 'For off-topic conversations and random thoughts.',
-                    users: [],
-                    messages: [
-                        { id: Date.now() + 2, nickname: 'system', content: 'You have joined #random', timestamp: new Date(), type: 'system' as const }
-                    ],
-                    operators: []
+                    topic: 'For off-topic conversations and random thoughts.'
                 },
                 { 
                     name: '#help', 
-                    topic: 'Ask for help with the simulator here.',
-                    users: [],
-                    messages: [
-                        { id: Date.now() + 3, nickname: 'system', content: 'You have joined #help', timestamp: new Date(), type: 'system' as const }
-                    ],
-                    operators: []
+                    topic: 'Ask for help with the simulator here.'
                 }
             ]
         };

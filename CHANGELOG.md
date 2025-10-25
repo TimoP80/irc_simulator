@@ -4,6 +4,73 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 
 *Note: This project was previously known as "Gemini IRC Simulator" and was renamed to "Station V - Virtual IRC Simulator" as of v1.5.1.*
 
+## 1.17.0 - 2025-10-25
+
+### Enhanced
+- **Multilingual Personality Generator**: Significantly improved personality generation quality and diversity
+  - **Detailed Personality Descriptions**: Now generates 400-500 character detailed personalities with rich cultural backgrounds
+  - **Enhanced Language Examples**: Added comprehensive examples for 7 languages (English, Spanish, Chinese, Japanese, German, French, Finnish)
+  - **Cultural Authenticity**: Personalities now include specific regional references, cultural traits, and authentic characteristics
+  - **Diverse Personality Types**: Generates varied personality types including introverts, extroverts, technical experts, artists, gamers, students, and professionals
+  - **Rich Character Details**: Includes hobbies, passions, fears, dreams, communication styles, and unique quirks
+  - **Improved AI Prompts**: Enhanced system instructions and prompts for better personality generation
+  - **Higher Token Limits**: Increased token limits and thinking budgets for more detailed generation
+  - **Structured Personality Format**: Clear guidelines for background, interests, traits, cultural elements, and unique characteristics
+
+## 1.16.3 - 2025-10-24
+
+### Added
+- **Emoji Auto-Conversion**: Real-time emoticon to emoji conversion in message input
+  - Automatically converts emoticons like `:)` → `😊`, `:D` → `😃`, `:(` → `😢`, etc.
+  - Supports 20+ common emoticons with comprehensive mapping
+  - Live preview in input field as user types
+  - Enhanced user experience with visual feedback
+
+- **Autonomous Private Messages**: Virtual users now send spontaneous PMs
+  - 10% chance per simulation cycle to generate private messages
+  - Sends 1-2 messages per occurrence (70% chance for 1, 30% for 2)
+  - Messages are marked as unread and appear in PM list
+  - Includes proper delays between multiple messages (2-5 seconds)
+  - Prevents flooding with controlled frequency
+
+- **Debug Log Window**: Comprehensive debugging tool for developers
+  - Real-time log capture from console with filtering capabilities
+  - Filter by log level (debug, info, warn, error) and category
+  - Search functionality across all log messages
+  - Auto-scroll option for live monitoring
+  - Export logs to JSON format for analysis
+  - Clear logs functionality
+  - Configurable maximum log count (100-10,000)
+  - Color-coded log levels for easy identification
+  - Expandable data sections for detailed inspection
+  - Accessible via Settings → Debug Tools → "Open Debug Logs"
+
+### Fixed
+- **Link Rendering Issues**: Improved URL handling to prevent duplicate links
+  - Fixed regex issues with special characters in URLs
+  - Enhanced `removeUrlsFromContent()` function for better URL removal
+  - Prevents duplicate hyperlinks when URLs are extracted and rendered
+  - Handles URLs with special characters more reliably
+
+- **TypeScript Type Safety**: Resolved all linting errors and type mismatches
+  - Added missing debug logger exports to `utils/debugLogger.ts`
+  - Fixed user type definitions in Settings Modal
+  - Corrected writing style enum values to match type definitions
+  - Ensured proper type safety across all new components
+
+### Technical Improvements
+- **Enhanced Debug Logging System**: Added 10 new debug logger categories
+  - `appDebug`, `messageDebug`, `timeDebug`, `inputDebug`, `notificationDebug`
+  - `contextDebug`, `unreadDebug`, `contentDebug`, `mediaDebug`, `ircDebug`
+  - Centralized debug control with category-specific filtering
+  - Improved debugging capabilities for development and troubleshooting
+
+- **Code Organization**: Better separation of concerns
+  - Created dedicated `utils/emojiConverter.ts` for emoji functionality
+  - Modular `components/DebugLogWindow.tsx` for debug interface
+  - Clean integration with existing codebase architecture
+  - Maintained backward compatibility with all existing features
+
 ## 1.16.2 - 2025-10-25
 
 ### Fixed

@@ -12,7 +12,9 @@ import { loadConfig, saveConfig, initializeStateFromConfig, saveChannelLogs, loa
 import { 
   aiDebug, simulationDebug, networkDebug, settingsDebug, pmDebug, rateLimiterDebug, 
   urlFilterDebug, userListDebug, joinDebug, configDebug, chatLogDebug, ircExportDebug, 
-  botDebug, imageDebug, disableAllDebugLogging, enableAllDebugLogging, getDebugConfig 
+  botDebug, imageDebug, disableAllDebugLogging, enableAllDebugLogging, getDebugConfig,
+  appDebug, messageDebug, timeDebug, inputDebug, notificationDebug, contextDebug, 
+  unreadDebug, contentDebug, mediaDebug, ircDebug
 } from './utils/debugLogger';
 import { getIRCExportService, getDefaultIRCExportConfig, type IRCExportConfig, type IRCExportStatus, type IRCExportMessage } from './services/ircExportService';
 import { getChatLogService, initializeChatLogs } from './services/chatLogService';
@@ -436,6 +438,7 @@ const App: React.FC = () => {
     messageIdCounterRef.current += 1;
     return Date.now() + messageIdCounterRef.current;
   }, []);
+
 
   // Auto-join users to channels that only have the current user
   // Function to reset last speakers tracking to force more diverse user selection
@@ -1415,15 +1418,18 @@ const App: React.FC = () => {
   const removeUrlsFromContent = useCallback((content: string, extractedUrls: string[]): string => {
     if (extractedUrls.length === 0) return content;
     
-    // Create a regex pattern that matches any of the extracted URLs
-    // Escape special regex characters and join with | for alternation
-    const escapedUrls = extractedUrls.map(url => 
-      url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    );
-    const urlPattern = new RegExp(`\\b(${escapedUrls.join('|')})\\b`, 'gi');
+    let cleanedContent = content;
     
-    // Replace URLs with empty string, but preserve spacing
-    let cleanedContent = content.replace(urlPattern, '');
+    // Remove each URL individually to avoid regex issues with special characters
+    for (const url of extractedUrls) {
+      // Escape special regex characters
+      const escapedUrl = url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      
+      // Create a more flexible pattern that handles URLs with special characters
+      // Look for the URL with optional whitespace around it
+      const urlPattern = new RegExp(`\\s*${escapedUrl}\\s*`, 'gi');
+      cleanedContent = cleanedContent.replace(urlPattern, ' ');
+    }
     
     // Clean up extra whitespace that might be left behind
     cleanedContent = cleanedContent.replace(/\s+/g, ' ').trim();
@@ -1632,6 +1638,64 @@ const App: React.FC = () => {
       }
     }
   }, [virtualUsers, ircExportStatus.connected, broadcastChannel]);
+
+  // Generate autonomous private messages from virtual users
+  const generateAutonomousPM = useCallback(async () => {
+    // Only generate PMs if there are virtual users and the current user is not in a PM context
+    if (!activeContext || activeContext.type !== 'channel') {
+      return;
+    }
+
+    const activeChannel = channels.find(c => c.name === activeContext.name);
+    if (!activeChannel) return;
+
+    // Get virtual users from the active channel
+    const virtualUsers = migrateUsers(activeChannel.users).filter(u => u.userType === 'virtual');
+    if (virtualUsers.length === 0) return;
+
+    // Randomly select a virtual user to send a PM
+    const randomUser = virtualUsers[Math.floor(Math.random() * virtualUsers.length)];
+    
+    // Generate 1-2 PM messages
+    const numMessages = Math.random() < 0.7 ? 1 : 2; // 70% chance for 1 message, 30% for 2
+    
+    for (let i = 0; i < numMessages; i++) {
+      try {
+        // Generate PM content
+        const pmContent = await generatePrivateMessageResponse(
+          randomUser,
+          currentUserNickname,
+          privateMessages[randomUser.nickname]?.messages || [],
+          aiModel
+        );
+
+        if (pmContent) {
+          const pmMessage: Message = {
+            id: generateUniqueMessageId(),
+            nickname: randomUser.nickname,
+            content: pmContent,
+            timestamp: new Date(),
+            type: 'ai'
+          };
+
+          // Add to PM conversation
+          addMessageToContext(pmMessage, { type: 'pm', with: randomUser.nickname });
+          
+          // Mark as unread
+          setUnreadPMUsers(prev => new Set([...prev, randomUser.nickname]));
+          
+          simulationDebug.log(`Generated autonomous PM from ${randomUser.nickname}: "${pmContent}"`);
+        }
+
+        // Add delay between multiple messages
+        if (i < numMessages - 1) {
+          await new Promise(resolve => setTimeout(resolve, Math.random() * 3000 + 2000)); // 2-5 seconds
+        }
+      } catch (error) {
+        simulationDebug.error(`Failed to generate PM message ${i + 1} from ${randomUser.nickname}:`, error);
+      }
+    }
+  }, [activeContext, channels, currentUserNickname, privateMessages, aiModel, addMessageToContext, setUnreadPMUsers, generateUniqueMessageId]);
 
   // Refs to avoid circular dependencies in useEffect
   const channelsRef = useRef(channels);
@@ -2850,7 +2914,16 @@ The response must be a single line in the format: "nickname: greeting message"
         simulationDebug.debug(`Resuming simulation after API error pause`);
       }, 30000);
     }
-  }, [channels, activeContext, addMessageToContext, currentUserNickname, isSettingsOpen, autoJoinUsersToEmptyChannels]);
+
+    // Generate autonomous private messages (1-2 messages, no flooding)
+    if (Math.random() < 0.1) { // 10% chance to generate a PM
+      try {
+        await generateAutonomousPM();
+      } catch (error) {
+        simulationDebug.error('Failed to generate autonomous PM:', error);
+      }
+    }
+  }, [channels, activeContext, addMessageToContext, currentUserNickname, isSettingsOpen, autoJoinUsersToEmptyChannels, generateAutonomousPM]);
 
   useEffect(() => {
     simulationDebug.debug(`useEffect triggered - simulationSpeed: ${simulationSpeed}, isSettingsOpen: ${isSettingsOpen}`);

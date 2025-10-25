@@ -220,6 +220,16 @@ export const chatLogDebug = new DebugLogger('chatLog');
 export const ircExportDebug = new DebugLogger('ircExport');
 export const botDebug = new DebugLogger('bot');
 export const imageDebug = new DebugLogger('image');
+export const appDebug = new DebugLogger('app');
+export const messageDebug = new DebugLogger('message');
+export const timeDebug = new DebugLogger('time');
+export const inputDebug = new DebugLogger('input');
+export const notificationDebug = new DebugLogger('notification');
+export const contextDebug = new DebugLogger('context');
+export const unreadDebug = new DebugLogger('unread');
+export const contentDebug = new DebugLogger('content');
+export const mediaDebug = new DebugLogger('media');
+export const ircDebug = new DebugLogger('irc');
 
 // Convenience function to check if any debug logging is enabled
 export const isAnyDebugEnabled = (): boolean => {
