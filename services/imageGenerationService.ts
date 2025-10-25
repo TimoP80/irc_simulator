@@ -1,6 +1,8 @@
 // Image Generation Service
 // Supports multiple image generation APIs: Nano Banana, Imagen, and others
 
+import { imageDebug } from '../utils/debugLogger';
+
 export interface ImageGenerationConfig {
   provider: 'nano-banana' | 'imagen' | 'placeholder' | 'dalle';
   apiKey?: string;
@@ -58,7 +60,7 @@ class ImageGenerationService {
           return await this.generatePlaceholder(request);
       }
     } catch (error) {
-      console.error('[Image Generation] Error:', error);
+      imageDebug.error('Error:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error occurred'
@@ -82,7 +84,7 @@ class ImageGenerationService {
       // Use Gemini's image generation model
       const model = this.config.model || 'gemini-2.0-flash-exp';
       
-      console.log(`[Image Generation] Attempting to generate image with model: ${model}`);
+      imageDebug.log(`Attempting to generate image with model: ${model}`);
       
       // Try to generate content with the model
       const response = await ai.models.generateContent({
@@ -98,7 +100,7 @@ class ImageGenerationService {
           const mimeType = part.inlineData.mimeType || 'image/png';
           const dataUrl = `data:${mimeType};base64,${imageData}`;
           
-          console.log(`[Image Generation] Successfully generated image with Gemini`);
+          imageDebug.log(`Successfully generated image with Gemini`);
           
           return {
             success: true,
@@ -113,19 +115,19 @@ class ImageGenerationService {
       }
       
       // If no image data found, fall back to placeholder
-      console.warn('No image data received from Gemini, falling back to placeholder');
+      imageDebug.warn('No image data received from Gemini, falling back to placeholder');
       return await this.generatePlaceholder(request);
       
     } catch (error) {
-      console.error('Gemini image generation failed:', error);
+      imageDebug.error('Gemini image generation failed:', error);
       
       // Check if it's a model not found error
       if (error instanceof Error && error.message.includes('not found')) {
-        console.warn('Gemini model not found or doesn\'t support image generation, falling back to placeholder');
+        imageDebug.warn('Gemini model not found or doesn\'t support image generation, falling back to placeholder');
       }
       
       // Fall back to placeholder on any error
-      console.log('Falling back to placeholder image generation');
+      imageDebug.log('Falling back to placeholder image generation');
       return await this.generatePlaceholder(request);
     }
   }

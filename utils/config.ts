@@ -101,7 +101,10 @@ const isRateLimitError = (error: unknown): boolean => {
            error.message.includes("RESOURCE_EXHAUSTED") ||
            error.message.includes("quota") ||
            error.message.includes("rate limit") ||
-           error.message.includes("too many requests");
+           error.message.includes("too many requests") ||
+           error.message.includes("503") ||
+           error.message.includes("overloaded") ||
+           error.message.includes("UNAVAILABLE");
   }
   return false;
 };
@@ -150,6 +153,8 @@ export const withRateLimitAndRetries = async <T>(apiCall: () => Promise<T>, cont
             throw new Error(`AI service quota exceeded. Please try again later.`);
           } else if (error.message.includes("429")) {
             throw new Error(`Rate limit exceeded. Please wait a moment and try again.`);
+          } else if (error.message.includes("503") || error.message.includes("overloaded") || error.message.includes("UNAVAILABLE")) {
+            throw new Error(`AI service is temporarily overloaded. Please try again in a few moments.`);
           }
         }
         throw error;

@@ -1,140 +1,259 @@
 /**
- * Debug logging utility for Station V - Virtual IRC Simulator
- * Provides centralized control over debug logging with different log levels
+ * Centralized debug logging system
+ * Allows turning off all debug logging for better performance
  */
 
-export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
-
-export interface DebugConfig {
+// Debug logging configuration
+interface DebugConfig {
   enabled: boolean;
-  level: LogLevel;
+  level: 'debug' | 'info' | 'warn' | 'error';
   categories: {
     ai: boolean;
     simulation: boolean;
+    network: boolean;
+    settings: boolean;
+    pm: boolean;
+    rateLimiter: boolean;
+    urlFilter: boolean;
+    userList: boolean;
+    join: boolean;
     config: boolean;
-    username: boolean;
+    chatLog: boolean;
+    ircExport: boolean;
+    bot: boolean;
+    image: boolean;
+    all: boolean; // Master switch for all categories
   };
 }
 
-// Default debug configuration
-const DEFAULT_CONFIG: DebugConfig = {
+// Default configuration - debug logging enabled by default
+const defaultDebugConfig: DebugConfig = {
   enabled: true,
   level: 'debug',
   categories: {
     ai: true,
     simulation: true,
+    network: true,
+    settings: true,
+    pm: true,
+    rateLimiter: true,
+    urlFilter: true,
+    userList: true,
+    join: true,
     config: true,
-    username: true
+    chatLog: true,
+    ircExport: true,
+    bot: true,
+    image: true,
+    all: true
   }
 };
 
-// Load configuration from localStorage or use defaults
+// Load configuration from localStorage or use default
 const loadDebugConfig = (): DebugConfig => {
   try {
     const saved = localStorage.getItem('station-v-debug-config');
     if (saved) {
-      return { ...DEFAULT_CONFIG, ...JSON.parse(saved) };
+      const parsed = JSON.parse(saved);
+      return { ...defaultDebugConfig, ...parsed };
     }
   } catch (error) {
-    console.warn('[Debug Logger] Failed to load debug config from localStorage:', error);
+    console.warn('Failed to load debug config from localStorage:', error);
   }
-  return DEFAULT_CONFIG;
+  return defaultDebugConfig;
 };
 
 // Save configuration to localStorage
-const saveDebugConfig = (config: DebugConfig): void => {
+const saveDebugConfig = (config: DebugConfig) => {
   try {
     localStorage.setItem('station-v-debug-config', JSON.stringify(config));
   } catch (error) {
-    console.warn('[Debug Logger] Failed to save debug config to localStorage:', error);
+    console.warn('Failed to save debug config to localStorage:', error);
+  }
+};
+
+// Global debug configuration
+let debugConfig = loadDebugConfig();
+
+// Update debug configuration
+export const updateDebugConfig = (newConfig: Partial<DebugConfig>) => {
+  debugConfig = { ...debugConfig, ...newConfig };
+  saveDebugConfig(debugConfig);
+  
+  // Dispatch event to notify components of config change
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('debugConfigChanged'));
   }
 };
 
 // Get current debug configuration
-let currentConfig = loadDebugConfig();
+export const getDebugConfig = (): DebugConfig => debugConfig;
 
-// Update debug configuration
-export const updateDebugConfig = (updates: Partial<DebugConfig>): void => {
-  currentConfig = { ...currentConfig, ...updates };
-  saveDebugConfig(currentConfig);
-  console.log('[Debug Logger] Debug configuration updated:', currentConfig);
+// Reset debug configuration to defaults
+export const resetDebugConfig = () => {
+  debugConfig = defaultDebugConfig;
+  saveDebugConfig(debugConfig);
 };
 
-// Get current debug configuration
-export const getDebugConfig = (): DebugConfig => currentConfig;
+// Disable all debug logging for performance
+export const disableAllDebugLogging = () => {
+  debugConfig = {
+    enabled: false,
+    categories: {
+      ai: false,
+      simulation: false,
+      network: false,
+      settings: false,
+      pm: false,
+      rateLimiter: false,
+      urlFilter: false,
+      userList: false,
+      join: false,
+      config: false,
+      chatLog: false,
+      ircExport: false,
+      bot: false,
+      image: false,
+      all: false
+    }
+  };
+  saveDebugConfig(debugConfig);
+};
 
-// Check if logging is enabled for a category and level
-const shouldLog = (category: keyof DebugConfig['categories'], level: LogLevel): boolean => {
-  if (!currentConfig.enabled) return false;
-  if (!currentConfig.categories[category]) return false;
+// Enable all debug logging
+export const enableAllDebugLogging = () => {
+  debugConfig = defaultDebugConfig;
+  saveDebugConfig(debugConfig);
+};
+
+// Set debug enabled state
+export const setDebugEnabled = (enabled: boolean) => {
+  debugConfig.enabled = enabled;
+  saveDebugConfig(debugConfig);
   
-  const levels: LogLevel[] = ['debug', 'info', 'warn', 'error'];
-  const currentLevelIndex = levels.indexOf(currentConfig.level);
-  const messageLevelIndex = levels.indexOf(level);
+  // Dispatch event to notify components of config change
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('debugConfigChanged'));
+  }
+};
+
+// Set log level
+export const setLogLevel = (level: 'debug' | 'info' | 'warn' | 'error') => {
+  debugConfig.level = level;
+  saveDebugConfig(debugConfig);
   
-  return messageLevelIndex >= currentLevelIndex;
+  // Dispatch event to notify components of config change
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('debugConfigChanged'));
+  }
+};
+
+// Toggle category
+export const toggleCategory = (category: keyof DebugConfig['categories']) => {
+  debugConfig.categories[category] = !debugConfig.categories[category];
+  saveDebugConfig(debugConfig);
+  
+  // Dispatch event to notify components of config change
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('debugConfigChanged'));
+  }
+};
+
+// Check if debug logging is enabled for a category
+const isDebugEnabled = (category: keyof DebugConfig['categories']): boolean => {
+  if (!debugConfig.enabled) return false;
+  if (debugConfig.categories.all) return true;
+  return debugConfig.categories[category];
 };
 
 // Debug logger class
 class DebugLogger {
   private category: keyof DebugConfig['categories'];
-  private prefix: string;
 
   constructor(category: keyof DebugConfig['categories']) {
     this.category = category;
-    this.prefix = `[${category.charAt(0).toUpperCase() + category.slice(1)} Debug]`;
   }
 
-  debug(message: string, ...args: any[]): void {
-    if (shouldLog(this.category, 'debug')) {
-      console.log(`${this.prefix} ${message}`, ...args);
+  log(...args: any[]): void {
+    if (isDebugEnabled(this.category)) {
+      console.log(...args);
     }
   }
 
-  info(message: string, ...args: any[]): void {
-    if (shouldLog(this.category, 'info')) {
-      console.info(`${this.prefix} ${message}`, ...args);
+  warn(...args: any[]): void {
+    if (isDebugEnabled(this.category)) {
+      console.warn(...args);
     }
   }
 
-  warn(message: string, ...args: any[]): void {
-    if (shouldLog(this.category, 'warn')) {
-      console.warn(`${this.prefix} ${message}`, ...args);
+  error(...args: any[]): void {
+    if (isDebugEnabled(this.category)) {
+      console.error(...args);
     }
   }
 
-  error(message: string, ...args: any[]): void {
-    if (shouldLog(this.category, 'error')) {
-      console.error(`${this.prefix} ${message}`, ...args);
+  info(...args: any[]): void {
+    if (isDebugEnabled(this.category)) {
+      console.info(...args);
+    }
+  }
+
+  debug(...args: any[]): void {
+    if (isDebugEnabled(this.category)) {
+      console.debug(...args);
     }
   }
 }
 
-// Create logger instances for each category
-export const aiLogger = new DebugLogger('ai');
-export const simulationLogger = new DebugLogger('simulation');
-export const configLogger = new DebugLogger('config');
-export const usernameLogger = new DebugLogger('username');
+// Create debug loggers for different categories
+export const aiDebug = new DebugLogger('ai');
+export const simulationDebug = new DebugLogger('simulation');
+export const networkDebug = new DebugLogger('network');
+export const settingsDebug = new DebugLogger('settings');
+export const pmDebug = new DebugLogger('pm');
+export const rateLimiterDebug = new DebugLogger('rateLimiter');
+export const urlFilterDebug = new DebugLogger('urlFilter');
+export const userListDebug = new DebugLogger('userList');
+export const joinDebug = new DebugLogger('join');
+export const configDebug = new DebugLogger('config');
+export const chatLogDebug = new DebugLogger('chatLog');
+export const ircExportDebug = new DebugLogger('ircExport');
+export const botDebug = new DebugLogger('bot');
+export const imageDebug = new DebugLogger('image');
 
-// Utility function to enable/disable all debug logging
-export const setDebugEnabled = (enabled: boolean): void => {
-  updateDebugConfig({ enabled });
+// Convenience function to check if any debug logging is enabled
+export const isAnyDebugEnabled = (): boolean => {
+  return debugConfig.enabled && (
+    debugConfig.categories.all || 
+    Object.values(debugConfig.categories).some(enabled => enabled)
+  );
 };
 
-// Utility function to set log level
-export const setLogLevel = (level: LogLevel): void => {
-  updateDebugConfig({ level });
-};
-
-// Utility function to toggle specific categories
-export const toggleCategory = (category: keyof DebugConfig['categories'], enabled: boolean): void => {
-  updateDebugConfig({
-    categories: {
-      ...currentConfig.categories,
-      [category]: enabled
+// Performance monitoring
+export const performanceDebug = {
+  log: (...args: any[]) => {
+    if (isDebugEnabled('ai')) {
+      console.log('[Performance]', ...args);
     }
-  });
+  },
+  
+  time: (label: string) => {
+    if (isDebugEnabled('ai')) {
+      console.time(`[Performance] ${label}`);
+    }
+  },
+  
+  timeEnd: (label: string) => {
+    if (isDebugEnabled('ai')) {
+      console.timeEnd(`[Performance] ${label}`);
+    }
+  }
 };
 
-// Log current debug configuration
-console.log('[Debug Logger] Debug logging initialized with config:', currentConfig);
+// Global functions for easy access from console
+if (typeof window !== 'undefined') {
+  (window as any).disableAllDebugLogging = disableAllDebugLogging;
+  (window as any).enableAllDebugLogging = enableAllDebugLogging;
+  (window as any).getDebugConfig = getDebugConfig;
+  (window as any).updateDebugConfig = updateDebugConfig;
+}

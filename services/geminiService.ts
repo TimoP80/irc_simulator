@@ -2,6 +2,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import type { Channel, Message, PrivateMessageConversation, RandomWorldConfig, GeminiModel, ModelsListResponse, User } from '../types';
 import { getLanguageFluency, getAllLanguages, getLanguageAccent, isChannelOperator, isPerLanguageFormat, isLegacyFormat } from '../types';
 import { withRateLimitAndRetries } from '../utils/config';
+import { aiDebug } from '../utils/debugLogger';
 
 const API_KEY = process.env.GEMINI_API_KEY;
 
@@ -13,14 +14,14 @@ const ai = new GoogleGenAI({ apiKey: API_KEY });
 
 // Validate and clean model ID
 const validateModelId = (model: string): string => {
-  console.log(`[AI Debug] validateModelId called with: "${model}" (type: ${typeof model}, length: ${model.length})`);
+  aiDebug.log(`validateModelId called with: "${model}" (type: ${typeof model}, length: ${model.length})`);
   
   // If model contains spaces or looks like a display name, extract the actual model ID
   if (model.includes(' ') || (model.includes('-') && model.length > 20)) {
     // Try to extract model ID from display name
     const match = model.match(/(gemini-[0-9.]+-[a-z]+)/i);
     if (match) {
-      console.log(`[AI Debug] Extracted model ID "${match[1]}" from display name "${model}"`);
+      aiDebug.log(`Extracted model ID "${match[1]}" from display name "${model}"`);
       return match[1];
     }
   }
@@ -30,18 +31,18 @@ const validateModelId = (model: string): string => {
   
   // Check if it's a valid model ID
   if (validModels.includes(model)) {
-    console.log(`[AI Debug] Model ID "${model}" is valid, returning as-is`);
+    aiDebug.log(`Model ID "${model}" is valid, returning as-is`);
     return model;
   }
   
   // If it looks like a valid model ID pattern, return as is
   if (model.match(/^gemini-[0-9.]+-[a-z]+$/i)) {
-    console.log(`[AI Debug] Model ID "${model}" matches pattern, returning as-is`);
+    aiDebug.log(`Model ID "${model}" matches pattern, returning as-is`);
     return model;
   }
   
   // Fallback to default
-  console.log(`[AI Debug] Invalid model ID "${model}", falling back to default`);
+  aiDebug.log(`Invalid model ID "${model}", falling back to default`);
   return 'gemini-2.5-flash';
 };
 
@@ -334,7 +335,7 @@ const extractTextFromResponse = (response: any): string => {
     throw new Error("No response received from AI service");
   }
   
-  console.log("[AI Debug] Response structure:", {
+  aiDebug.log("Response structure:", {
     hasText: !!response.text,
     hasCandidates: !!response.candidates,
     candidatesLength: response.candidates?.length,
@@ -347,11 +348,11 @@ const extractTextFromResponse = (response: any): string => {
   
   if (response.text) {
     // Old format
-    console.log("[AI Debug] Using old format (response.text)");
+    aiDebug.log("Using old format (response.text)");
     return response.text.trim();
   } else if (response.candidates && response.candidates.length > 0) {
     const candidate = response.candidates[0];
-    console.log("[AI Debug] Candidate structure:", {
+    aiDebug.log("Candidate structure:", {
       hasContent: !!candidate.content,
       hasParts: !!candidate.content?.parts,
       partsLength: candidate.content?.parts?.length,
@@ -371,12 +372,12 @@ const extractTextFromResponse = (response: any): string => {
     
     // Check if response was truncated due to token limits
     if (candidate.finishReason === 'MAX_TOKENS') {
-      console.warn("[AI Debug] Response was truncated due to MAX_TOKENS limit");
+      aiDebug.warn(" Response was truncated due to MAX_TOKENS limit");
       // Try to extract any partial text that might be available
       if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
         const partialText = candidate.content.parts[0].text?.trim() || '';
         if (partialText) {
-          console.log("[AI Debug] Using partial text from truncated response");
+          aiDebug.log(" Using partial text from truncated response");
           return partialText;
         }
       }
@@ -385,7 +386,7 @@ const extractTextFromResponse = (response: any): string => {
     // Try different extraction paths
     if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
       const text = candidate.content.parts[0].text?.trim() || '';
-      console.log("[AI Debug] Extracted text length:", text.length);
+      aiDebug.log(" Extracted text length:", text.length);
       if (text) {
         return text;
       }
@@ -393,13 +394,13 @@ const extractTextFromResponse = (response: any): string => {
     
     // Try direct text extraction from candidate
     if (candidate.text) {
-      console.log("[AI Debug] Using candidate.text");
+      aiDebug.log(" Using candidate.text");
       return candidate.text.trim();
     }
     
     // Try content.text extraction
     if (candidate.content && candidate.content.text) {
-      console.log("[AI Debug] Using candidate.content.text");
+      aiDebug.log(" Using candidate.content.text");
       return candidate.content.text.trim();
     }
     
@@ -407,7 +408,7 @@ const extractTextFromResponse = (response: any): string => {
     if (candidate.content && candidate.content.parts) {
       for (const part of candidate.content.parts) {
         if (part.text) {
-          console.log("[AI Debug] Using part.text from parts array");
+          aiDebug.log(" Using part.text from parts array");
           return part.text.trim();
         }
       }
@@ -416,7 +417,7 @@ const extractTextFromResponse = (response: any): string => {
     // For thinking mode models, the response might be in a different structure
     // Check if there's a response property or similar
     if (candidate.response) {
-      console.log("[AI Debug] Using candidate.response");
+      aiDebug.log(" Using candidate.response");
       return candidate.response.trim();
     }
     
@@ -424,7 +425,7 @@ const extractTextFromResponse = (response: any): string => {
     const possibleTextProperties = ['output', 'result', 'message', 'content', 'text'];
     for (const prop of possibleTextProperties) {
       if (candidate[prop] && typeof candidate[prop] === 'string') {
-        console.log(`[AI Debug] Using candidate.${prop}`);
+        aiDebug.log(` Using candidate.${prop}`);
         return candidate[prop].trim();
       }
     }
@@ -433,7 +434,7 @@ const extractTextFromResponse = (response: any): string => {
     if (candidate.content) {
       for (const prop of possibleTextProperties) {
         if (candidate.content[prop] && typeof candidate.content[prop] === 'string') {
-          console.log(`[AI Debug] Using candidate.content.${prop}`);
+          aiDebug.log(` Using candidate.content.${prop}`);
           return candidate.content[prop].trim();
         }
       }
@@ -442,17 +443,17 @@ const extractTextFromResponse = (response: any): string => {
   
   // Try alternative extraction methods
   if (response.candidates?.[0]?.content?.parts?.[0]?.text) {
-    console.log("[AI Debug] Using alternative extraction method");
+    aiDebug.log(" Using alternative extraction method");
     return response.candidates[0].content.parts[0].text.trim();
   }
   
   // Try direct candidate text
   if (response.candidates?.[0]?.text) {
-    console.log("[AI Debug] Using direct candidate text");
+    aiDebug.log(" Using direct candidate text");
     return response.candidates[0].text.trim();
   }
   
-    console.error("Invalid response structure:", response);
+    aiDebug.error("Invalid response structure:", response);
     throw new Error("Invalid response from AI service: unable to extract text content");
 };
 
@@ -617,31 +618,31 @@ REALISTIC IRC CONVERSATION PATTERNS:
 `;
 
 export const generateChannelActivity = async (channel: Channel, currentUserNickname: string, model: string = 'gemini-2.5-flash'): Promise<string> => {
-  console.log(`[AI Debug] generateChannelActivity called for channel: ${channel.name}`);
-  console.log(`[AI Debug] Model parameter: "${model}" (type: ${typeof model}, length: ${model.length})`);
+  aiDebug.log(` generateChannelActivity called for channel: ${channel.name}`);
+  aiDebug.log(` Model parameter: "${model}" (type: ${typeof model}, length: ${model.length})`);
   
   const validatedModel = validateModelId(model);
-  console.log(`[AI Debug] Validated model ID: "${validatedModel}"`);
+  aiDebug.log(` Validated model ID: "${validatedModel}"`);
   
   const usersInChannel = channel.users.filter(u => u.nickname !== currentUserNickname);
-  console.log(`[AI Debug] Channel ${channel.name} users:`, channel.users.map(u => u.nickname));
-  console.log(`[AI Debug] Current user nickname: "${currentUserNickname}"`);
-  console.log(`[AI Debug] Filtered users (excluding current user):`, usersInChannel.map(u => u.nickname));
+  aiDebug.log(` Channel ${channel.name} users:`, channel.users.map(u => u.nickname));
+  aiDebug.log(` Current user nickname: "${currentUserNickname}"`);
+  aiDebug.log(` Filtered users (excluding current user):`, usersInChannel.map(u => u.nickname));
   
   if (usersInChannel.length === 0) {
-    console.log(`[AI Debug] No virtual users in channel ${channel.name} (excluding current user) - skipping AI generation`);
+    aiDebug.log(` No virtual users in channel ${channel.name} (excluding current user) - skipping AI generation`);
     return '';
   }
   
   // Additional safety check to ensure we have valid users
   if (usersInChannel.some(user => !user || !user.nickname)) {
-    console.error(`[AI Debug] Invalid users found in channel ${channel.name}:`, usersInChannel);
+    aiDebug.error(` Invalid users found in channel ${channel.name}:`, usersInChannel);
     return '';
   }
   
   // Additional safety check: ensure we don't generate messages for the current user
   if (usersInChannel.some(u => u.nickname === currentUserNickname)) {
-    console.log(`[AI Debug] Current user found in filtered users - this should not happen! Skipping AI generation`);
+    aiDebug.log(` Current user found in filtered users - this should not happen! Skipping AI generation`);
     return '';
   }
   
@@ -650,14 +651,14 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
   if (channel.dominantLanguage) {
     // Use explicitly set dominant language
     dominantLanguage = channel.dominantLanguage;
-    console.log(`[AI Debug] Channel ${channel.name} explicit dominant language: ${dominantLanguage}`);
+    aiDebug.log(` Channel ${channel.name} explicit dominant language: ${dominantLanguage}`);
   } else {
     // Calculate dominant language from users
     const channelLanguages = channel.users.map(u => getAllLanguages(u.languageSkills)[0]).filter(Boolean);
     dominantLanguage = channelLanguages.length > 0 ? 
       channelLanguages.reduce((a, b, i, arr) => arr.filter(v => v === a).length >= arr.filter(v => v === b).length ? a : b) : 
       'English';
-    console.log(`[AI Debug] Channel ${channel.name} calculated dominant language: ${dominantLanguage}`);
+    aiDebug.log(` Channel ${channel.name} calculated dominant language: ${dominantLanguage}`);
   }
   
   // Prioritize users whose primary language matches the channel's dominant language
@@ -730,7 +731,7 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
   
   // 30% chance to use completely random selection to ensure diversity
   if (Math.random() < 0.3) {
-    console.log(`[User Selection] Using completely random selection for diversity`);
+    aiDebug.log(` Using completely random selection for diversity`);
     candidateUsers = shuffledUsers;
   } else if (longTermInactiveUsers.length > 0) {
     // 20% chance to prefer long-term inactive users (users who haven't spoken in last 5 messages)
@@ -765,13 +766,13 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
     .map(([nickname, _]) => nickname);
   
   if (overactiveUsers.length > 0) {
-    console.log(`[User Selection] Detected overactive users: ${overactiveUsers.join(', ')} - gentle rotation`);
+    aiDebug.log(` Detected overactive users: ${overactiveUsers.join(', ')} - gentle rotation`);
     // Only reduce probability, don't completely filter out
     candidateUsers = candidateUsers.filter(user => !overactiveUsers.includes(user.nickname));
     
     // If filtering removed all candidates, use all users as fallback
     if (candidateUsers.length === 0) {
-      console.warn(`[User Selection] No candidates after overactive filtering, using all users as fallback`);
+      aiDebug.warn(` No candidates after overactive filtering, using all users as fallback`);
       candidateUsers = shuffledUsers;
     }
   }
@@ -780,27 +781,27 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
   
   // Safety check to ensure we have a valid user
   if (!randomUser) {
-    console.error(`[User Selection] No valid user found! candidateUsers.length: ${candidateUsers.length}`);
-    console.error(`[User Selection] candidateUsers:`, candidateUsers.map(u => u.nickname));
-    console.error(`[User Selection] shuffledUsers:`, shuffledUsers.map(u => u.nickname));
-    console.error(`[User Selection] overactiveUsers:`, overactiveUsers);
+    aiDebug.error(` No valid user found! candidateUsers.length: ${candidateUsers.length}`);
+    aiDebug.error(` candidateUsers:`, candidateUsers.map(u => u.nickname));
+    aiDebug.error(` shuffledUsers:`, shuffledUsers.map(u => u.nickname));
+    aiDebug.error(` overactiveUsers:`, overactiveUsers);
     throw new Error('No valid user found for channel activity');
   }
   
-  console.log(`[AI Debug] Selected user: ${randomUser.nickname} for channel activity (language: ${getAllLanguages(randomUser.languageSkills)[0]})`);
-  console.log(`[AI Debug] Recent speakers (last 3): ${recentSpeakers.join(', ')}`);
-  console.log(`[AI Debug] Long-term recent speakers (last 10): ${longTermRecentSpeakers.join(', ')}`);
-  console.log(`[AI Debug] Last speaker: ${lastSpeaker || 'none'}`);
-  console.log(`[AI Debug] Less active users: ${lessActiveUsers.map(u => u.nickname).join(', ')}`);
-  console.log(`[AI Debug] Long-term inactive users: ${longTermInactiveUsers.map(u => u.nickname).join(', ')}`);
-  console.log(`[AI Debug] Candidate users: ${candidateUsers.map(u => u.nickname).join(', ')}`);
-  console.log(`[AI Debug] Time-based users: ${timeBasedUsers.map(u => u.nickname).join(', ')}`);
-  console.log(`[AI Debug] Total users in channel: ${usersInChannel.length}`);
+  aiDebug.log(` Selected user: ${randomUser.nickname} for channel activity (language: ${getAllLanguages(randomUser.languageSkills)[0]})`);
+  aiDebug.log(` Recent speakers (last 3): ${recentSpeakers.join(', ')}`);
+  aiDebug.log(` Long-term recent speakers (last 10): ${longTermRecentSpeakers.join(', ')}`);
+  aiDebug.log(` Last speaker: ${lastSpeaker || 'none'}`);
+  aiDebug.log(` Less active users: ${lessActiveUsers.map(u => u.nickname).join(', ')}`);
+  aiDebug.log(` Long-term inactive users: ${longTermInactiveUsers.map(u => u.nickname).join(', ')}`);
+  aiDebug.log(` Candidate users: ${candidateUsers.map(u => u.nickname).join(', ')}`);
+  aiDebug.log(` Time-based users: ${timeBasedUsers.map(u => u.nickname).join(', ')}`);
+  aiDebug.log(` Total users in channel: ${usersInChannel.length}`);
 
   // Safety check: ensure user has valid languageSkills
   if (!randomUser.languageSkills) {
-    console.error(`[AI Debug] User ${randomUser.nickname} has undefined languageSkills!`);
-    console.error(`[AI Debug] User object:`, randomUser);
+    aiDebug.error(` User ${randomUser.nickname} has undefined languageSkills!`);
+    aiDebug.error(` User object:`, randomUser);
     // Set default languageSkills
     randomUser.languageSkills = {
       languages: [{ language: 'English', fluency: 'native', accent: '' }]
@@ -811,11 +812,11 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
   // Use the first language from language skills, not from personality description
   const primaryLanguage = userLanguages[0] || 'English';
   
-  console.log(`[AI Debug] User ${randomUser.nickname} language skills:`, randomUser.languageSkills);
-  console.log(`[AI Debug] User ${randomUser.nickname} languages:`, userLanguages);
-  console.log(`[AI Debug] User ${randomUser.nickname} primary language:`, primaryLanguage);
-  console.log(`[AI Debug] isPerLanguageFormat check:`, isPerLanguageFormat(randomUser.languageSkills));
-  console.log(`[AI Debug] isLegacyFormat check:`, isLegacyFormat(randomUser.languageSkills));
+  aiDebug.log(` User ${randomUser.nickname} language skills:`, randomUser.languageSkills);
+  aiDebug.log(` User ${randomUser.nickname} languages:`, userLanguages);
+  aiDebug.log(` User ${randomUser.nickname} primary language:`, primaryLanguage);
+  aiDebug.log(` isPerLanguageFormat check:`, isPerLanguageFormat(randomUser.languageSkills));
+  aiDebug.log(` isLegacyFormat check:`, isLegacyFormat(randomUser.languageSkills));
 
   // Calculate appropriate token limit based on verbosity
   const getTokenLimit = (verbosity: string): number => {
@@ -831,7 +832,7 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
 
   const writingStyle = safeGetUserProperty(randomUser, 'writingStyle');
   const tokenLimit = getTokenLimit(writingStyle.verbosity);
-  console.log(`[AI Debug] Token limit for ${randomUser.nickname} (${writingStyle.verbosity}): ${tokenLimit}`);
+  aiDebug.log(` Token limit for ${randomUser.nickname} (${writingStyle.verbosity}): ${tokenLimit}`);
 
   // Check for greeting spam by the selected user
   const userRecentMessages = channel.messages.slice(-5).filter(msg => msg.nickname === randomUser.nickname);
@@ -877,7 +878,7 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
                                   content.includes('مرحبا') || content.includes('안녕하세요'));
   }).length;
   
-  console.log(`[AI Debug] User ${randomUser.nickname} greeting count in last 5 messages: ${userGreetingCount}`);
+  aiDebug.log(` User ${randomUser.nickname} greeting count in last 5 messages: ${userGreetingCount}`);
   
   // Enhanced conversation diversity and repetition prevention
   const conversationVariety = Math.random();
@@ -896,7 +897,7 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
   let antiGreetingSpam = '';
   if (userGreetingCount >= 2) {
     antiGreetingSpam = `CRITICAL: You have been greeting too much recently (${userGreetingCount} greetings in last 5 messages). DO NOT greet anyone. Instead, contribute to the conversation with meaningful content, ask questions, share thoughts, or discuss topics. Avoid any form of greeting including "hi", "hello", "hey", "welcome", etc.`;
-    console.log(`[AI Debug] Anti-greeting spam activated for ${randomUser.nickname}: ${userGreetingCount} greetings detected`);
+    aiDebug.log(` Anti-greeting spam activated for ${randomUser.nickname}: ${userGreetingCount} greetings detected`);
   }
   
   // Enhanced diversity prompts with higher probability
@@ -975,7 +976,7 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
 
   // Get time-of-day context
   const timeContext = getTimeOfDayContext();
-  console.log(`[AI Debug] Time context: ${timeContext}`);
+  aiDebug.log(` Time context: ${timeContext}`);
 
   const prompt = `
 ${timeContext}
@@ -1032,14 +1033,14 @@ ${isChannelOperator(channel, randomUser.nickname) ? `- Role: Channel operator (c
 `;
 
   try {
-    console.log(`[AI Debug] Sending request to Gemini for channel activity in ${channel.name}`);
-    console.log(`[AI Debug] Using model ID: "${validatedModel}" for API call`);
+    aiDebug.log(` Sending request to Gemini for channel activity in ${channel.name}`);
+    aiDebug.log(` Using model ID: "${validatedModel}" for API call`);
     // Add temperature variation for more diverse responses
     const baseTemperature = 0.9;
     const temperatureVariation = Math.random() * 0.3; // Add 0-0.3 variation
     const finalTemperature = Math.min(1.0, baseTemperature + temperatureVariation);
     
-    console.log(`[AI Debug] Using temperature: ${finalTemperature.toFixed(2)} for ${randomUser.nickname}`);
+    aiDebug.log(` Using temperature: ${finalTemperature.toFixed(2)} for ${randomUser.nickname}`);
     
     try {
       // Configure thinking mode based on model requirements
@@ -1053,8 +1054,8 @@ ${isChannelOperator(channel, randomUser.nickname) ? `- Role: Channel operator (c
       if (validatedModel.includes('2.5') || validatedModel.includes('pro')) {
         config.thinkingConfig = { thinkingBudget: 2000 }; // Increased budget for thinking mode
         config.maxOutputTokens = Math.max(tokenLimit, 2000); // Ensure minimum output tokens
-        console.log(`[AI Debug] Using thinking mode with budget 2000 for model: ${validatedModel}`);
-        console.log(`[AI Debug] Adjusted maxOutputTokens to: ${config.maxOutputTokens}`);
+        aiDebug.log(` Using thinking mode with budget 2000 for model: ${validatedModel}`);
+        aiDebug.log(` Adjusted maxOutputTokens to: ${config.maxOutputTokens}`);
       }
     
     const response = await withRateLimitAndRetries(() => 
@@ -1066,16 +1067,16 @@ ${isChannelOperator(channel, randomUser.nickname) ? `- Role: Channel operator (c
     );
     
     const result = extractTextFromResponse(response);
-    console.log(`[AI Debug] Successfully generated channel activity: "${result}"`);
+    aiDebug.log(` Successfully generated channel activity: "${result}"`);
     return result;
     } catch (error) {
-      console.warn(`[AI Debug] API call failed, using fallback response for ${randomUser.nickname}:`, error);
+      aiDebug.warn(` API call failed, using fallback response for ${randomUser.nickname}:`, error);
       const fallbackResponse = getFallbackResponse(randomUser, 'activity');
-      console.log(`[AI Debug] Using fallback response: "${fallbackResponse}"`);
+      aiDebug.log(` Using fallback response: "${fallbackResponse}"`);
       return fallbackResponse;
     }
   } catch (error) {
-    console.error(`[AI Debug] Error generating channel activity for ${channel.name}:`, {
+    aiDebug.error(` Error generating channel activity for ${channel.name}:`, {
       error: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined,
       channelName: channel.name,
@@ -1087,24 +1088,24 @@ ${isChannelOperator(channel, randomUser.nickname) ? `- Role: Channel operator (c
 };
 
 export const generateReactionToMessage = async (channel: Channel, userMessage: Message, currentUserNickname: string, model: string = 'gemini-2.5-flash'): Promise<string> => {
-    console.log(`[AI Debug] generateReactionToMessage called for channel: ${channel.name}, reacting to: ${userMessage.nickname}`);
+    aiDebug.log(` generateReactionToMessage called for channel: ${channel.name}, reacting to: ${userMessage.nickname}`);
     
     const validatedModel = validateModelId(model);
-    console.log(`[AI Debug] Validated model ID for reaction: "${validatedModel}"`);
+    aiDebug.log(` Validated model ID for reaction: "${validatedModel}"`);
     
     const usersInChannel = channel.users.filter(u => u.nickname !== currentUserNickname);
-    console.log(`[AI Debug] Reaction - Channel ${channel.name} users:`, channel.users.map(u => u.nickname));
-    console.log(`[AI Debug] Reaction - Current user nickname: "${currentUserNickname}"`);
-    console.log(`[AI Debug] Reaction - Filtered users (excluding current user):`, usersInChannel.map(u => u.nickname));
+    aiDebug.log(` Reaction - Channel ${channel.name} users:`, channel.users.map(u => u.nickname));
+    aiDebug.log(` Reaction - Current user nickname: "${currentUserNickname}"`);
+    aiDebug.log(` Reaction - Filtered users (excluding current user):`, usersInChannel.map(u => u.nickname));
     
     if (usersInChannel.length === 0) {
-        console.log(`[AI Debug] No virtual users in channel ${channel.name} to react (excluding current user) - skipping reaction generation`);
+        aiDebug.log(` No virtual users in channel ${channel.name} to react (excluding current user) - skipping reaction generation`);
         return '';
     }
     
     // Additional safety check: ensure we don't generate reactions for the current user
     if (usersInChannel.some(u => u.nickname === currentUserNickname)) {
-        console.log(`[AI Debug] Current user found in filtered users for reaction - this should not happen! Skipping reaction generation`);
+        aiDebug.log(` Current user found in filtered users for reaction - this should not happen! Skipping reaction generation`);
         return '';
     }
 
@@ -1113,14 +1114,14 @@ export const generateReactionToMessage = async (channel: Channel, userMessage: M
     if (channel.dominantLanguage) {
       // Use explicitly set dominant language
       dominantLanguage = channel.dominantLanguage;
-      console.log(`[AI Debug] Channel ${channel.name} explicit dominant language: ${dominantLanguage}`);
+      aiDebug.log(` Channel ${channel.name} explicit dominant language: ${dominantLanguage}`);
     } else {
       // Calculate dominant language from users
       const channelLanguages = channel.users.map(u => getAllLanguages(u.languageSkills)[0]).filter(Boolean);
       dominantLanguage = channelLanguages.length > 0 ? 
         channelLanguages.reduce((a, b, i, arr) => arr.filter(v => v === a).length >= arr.filter(v => v === b).length ? a : b) : 
         'English';
-      console.log(`[AI Debug] Channel ${channel.name} calculated dominant language: ${dominantLanguage}`);
+      aiDebug.log(` Channel ${channel.name} calculated dominant language: ${dominantLanguage}`);
     }
     
     // Prioritize users whose primary language matches the channel's dominant language
@@ -1160,11 +1161,11 @@ export const generateReactionToMessage = async (channel: Channel, userMessage: M
     
     const randomUser = candidateUsers[Math.floor(Math.random() * candidateUsers.length)];
     
-    console.log(`[AI Debug] Selected user: ${randomUser.nickname} to react to ${userMessage.nickname}'s message (language: ${getAllLanguages(randomUser.languageSkills)[0]})`);
-    console.log(`[AI Debug] Reaction - Recent speakers (last 3): ${recentSpeakers.join(', ')}`);
-    console.log(`[AI Debug] Reaction - Last speaker: ${lastSpeaker || 'none'}`);
-    console.log(`[AI Debug] Reaction - Less active users: ${lessActiveUsers.map(u => u.nickname).join(', ')}`);
-    console.log(`[AI Debug] Reaction - Candidate users: ${candidateUsers.map(u => u.nickname).join(', ')}`);
+    aiDebug.log(` Selected user: ${randomUser.nickname} to react to ${userMessage.nickname}'s message (language: ${getAllLanguages(randomUser.languageSkills)[0]})`);
+    aiDebug.log(` Reaction - Recent speakers (last 3): ${recentSpeakers.join(', ')}`);
+    aiDebug.log(` Reaction - Last speaker: ${lastSpeaker || 'none'}`);
+    aiDebug.log(` Reaction - Less active users: ${lessActiveUsers.map(u => u.nickname).join(', ')}`);
+    aiDebug.log(` Reaction - Candidate users: ${candidateUsers.map(u => u.nickname).join(', ')}`);
     
     // Handle different message types
     let messageDescription = '';
@@ -1220,7 +1221,7 @@ export const generateReactionToMessage = async (channel: Channel, userMessage: M
                                     content.includes('مرحبا') || content.includes('안녕하세요') || content.includes('hei') || content.includes('terve') || content.includes('moi'));
     }).length;
     
-    console.log(`[AI Debug] Reaction - User ${randomUser.nickname} greeting count in last 5 messages: ${userGreetingCount}`);
+    aiDebug.log(` Reaction - User ${randomUser.nickname} greeting count in last 5 messages: ${userGreetingCount}`);
     
     const userLanguages = getAllLanguages(randomUser.languageSkills);
     const primaryLanguage = userLanguages[0] || 'English';
@@ -1239,11 +1240,11 @@ export const generateReactionToMessage = async (channel: Channel, userMessage: M
     };
 
     const tokenLimit = getTokenLimit(writingStyle.verbosity);
-    console.log(`[AI Debug] Token limit for reaction from ${randomUser.nickname} (${writingStyle.verbosity}): ${tokenLimit}`);
+    aiDebug.log(` Token limit for reaction from ${randomUser.nickname} (${writingStyle.verbosity}): ${tokenLimit}`);
     
     // Get time-of-day context for reactions too
     const timeContext = getTimeOfDayContext();
-    console.log(`[AI Debug] Time context for reaction: ${timeContext}`);
+    aiDebug.log(` Time context for reaction: ${timeContext}`);
 
     // Enhanced reaction diversity and repetition prevention
     const repetitivePhrases = detectRepetitivePatterns(channel.messages);
@@ -1257,7 +1258,7 @@ export const generateReactionToMessage = async (channel: Channel, userMessage: M
     // Anti-greeting spam protection for reactions
     if (userGreetingCount >= 2) {
       reactionAntiGreetingSpam = `CRITICAL: You have been greeting too much recently (${userGreetingCount} greetings in last 5 messages). DO NOT greet anyone. Instead, contribute to the conversation with meaningful content, ask questions, share thoughts, or discuss topics. Avoid any form of greeting including "hi", "hello", "hey", "welcome", etc.`;
-      console.log(`[AI Debug] Reaction - Anti-greeting spam activated for ${randomUser.nickname}: ${userGreetingCount} greetings detected`);
+      aiDebug.log(` Reaction - Anti-greeting spam activated for ${randomUser.nickname}: ${userGreetingCount} greetings detected`);
     }
 
     const prompt = `
@@ -1302,14 +1303,14 @@ ${isChannelOperator(channel, randomUser.nickname) ? `- Role: Channel operator (c
 `;
     
     try {
-        console.log(`[AI Debug] Sending request to Gemini for reaction in ${channel.name}`);
+        aiDebug.log(` Sending request to Gemini for reaction in ${channel.name}`);
         
         // Add temperature variation for reactions too
         const baseTemperature = 0.8;
         const temperatureVariation = Math.random() * 0.3;
         const finalTemperature = Math.min(1.0, baseTemperature + temperatureVariation);
         
-        console.log(`[AI Debug] Using temperature: ${finalTemperature.toFixed(2)} for reaction from ${randomUser.nickname}`);
+        aiDebug.log(` Using temperature: ${finalTemperature.toFixed(2)} for reaction from ${randomUser.nickname}`);
         
         try {
           // Configure thinking mode based on model requirements
@@ -1323,8 +1324,8 @@ ${isChannelOperator(channel, randomUser.nickname) ? `- Role: Channel operator (c
           if (validatedModel.includes('2.5') || validatedModel.includes('pro')) {
             config.thinkingConfig = { thinkingBudget: 2000 }; // Increased budget for thinking mode
             config.maxOutputTokens = Math.max(tokenLimit, 2000); // Ensure minimum output tokens
-            console.log(`[AI Debug] Using thinking mode with budget 2000 for reaction model: ${validatedModel}`);
-            console.log(`[AI Debug] Adjusted maxOutputTokens to: ${config.maxOutputTokens}`);
+            aiDebug.log(` Using thinking mode with budget 2000 for reaction model: ${validatedModel}`);
+            aiDebug.log(` Adjusted maxOutputTokens to: ${config.maxOutputTokens}`);
           }
         
         const response = await withRateLimitAndRetries(() => 
@@ -1336,16 +1337,16 @@ ${isChannelOperator(channel, randomUser.nickname) ? `- Role: Channel operator (c
         );
         
         const result = extractTextFromResponse(response);
-        console.log(`[AI Debug] Successfully generated reaction: "${result}"`);
+        aiDebug.log(` Successfully generated reaction: "${result}"`);
         return result;
         } catch (apiError) {
-          console.warn(`[AI Debug] API call failed, using fallback response for reaction from ${randomUser.nickname}:`, apiError);
+          aiDebug.warn(` API call failed, using fallback response for reaction from ${randomUser.nickname}:`, apiError);
           const fallbackResponse = getFallbackResponse(randomUser, 'reaction', userMessage.content);
-          console.log(`[AI Debug] Using fallback reaction: "${fallbackResponse}"`);
+          aiDebug.log(` Using fallback reaction: "${fallbackResponse}"`);
           return fallbackResponse;
         }
     } catch (error) {
-        console.error(`[AI Debug] Error generating reaction for ${channel.name}:`, {
+        aiDebug.error(` Error generating reaction for ${channel.name}:`, {
             error: error instanceof Error ? error.message : 'Unknown error',
             stack: error instanceof Error ? error.stack : undefined,
             channelName: channel.name,
@@ -1359,10 +1360,10 @@ ${isChannelOperator(channel, randomUser.nickname) ? `- Role: Channel operator (c
 };
 
 export const generatePrivateMessageResponse = async (conversation: PrivateMessageConversation, userMessage: Message, currentUserNickname: string, model: string = 'gemini-2.5-flash'): Promise<string> => {
-    console.log(`[AI Debug] generatePrivateMessageResponse called for user: ${conversation.user.nickname}`);
+    aiDebug.log(` generatePrivateMessageResponse called for user: ${conversation.user.nickname}`);
     
     const validatedModel = validateModelId(model);
-    console.log(`[AI Debug] Validated model ID for private message: "${validatedModel}"`);
+    aiDebug.log(` Validated model ID for private message: "${validatedModel}"`);
     
     const aiUser = conversation.user;
     const userLanguages = getAllLanguages(aiUser.languageSkills);
@@ -1382,11 +1383,11 @@ export const generatePrivateMessageResponse = async (conversation: PrivateMessag
     };
 
     const tokenLimit = getTokenLimit(writingStyle.verbosity);
-    console.log(`[AI Debug] Token limit for private message from ${aiUser.nickname} (${writingStyle.verbosity}): ${tokenLimit}`);
+    aiDebug.log(` Token limit for private message from ${aiUser.nickname} (${writingStyle.verbosity}): ${tokenLimit}`);
     
     // Get time-of-day context for private messages too
     const timeContext = getTimeOfDayContext();
-    console.log(`[AI Debug] Time context for private message: ${timeContext}`);
+    aiDebug.log(` Time context for private message: ${timeContext}`);
 
     const prompt = `
 ${timeContext}
@@ -1420,7 +1421,7 @@ ${writingStyle.verbosity === 'very_verbose' ? 'IMPORTANT: This user is very verb
 `;
 
     try {
-        console.log(`[AI Debug] Sending request to Gemini for private message response from ${aiUser.nickname}`);
+        aiDebug.log(` Sending request to Gemini for private message response from ${aiUser.nickname}`);
         
         // Configure thinking mode based on model requirements
         const config: any = {
@@ -1433,8 +1434,8 @@ ${writingStyle.verbosity === 'very_verbose' ? 'IMPORTANT: This user is very verb
         if (validatedModel.includes('2.5') || validatedModel.includes('pro')) {
           config.thinkingConfig = { thinkingBudget: 2000 }; // Increased budget for thinking mode
           config.maxOutputTokens = Math.max(tokenLimit, 2000); // Ensure minimum output tokens
-          console.log(`[AI Debug] Using thinking mode with budget 2000 for private message model: ${validatedModel}`);
-          console.log(`[AI Debug] Adjusted maxOutputTokens to: ${config.maxOutputTokens}`);
+          aiDebug.log(` Using thinking mode with budget 2000 for private message model: ${validatedModel}`);
+          aiDebug.log(` Adjusted maxOutputTokens to: ${config.maxOutputTokens}`);
         }
         
         const response = await withRateLimitAndRetries(() => 
@@ -1446,10 +1447,10 @@ ${writingStyle.verbosity === 'very_verbose' ? 'IMPORTANT: This user is very verb
         );
         
         const result = extractTextFromResponse(response);
-        console.log(`[AI Debug] Successfully generated private message response: "${result}"`);
+        aiDebug.log(` Successfully generated private message response: "${result}"`);
         return result;
     } catch (error) {
-        console.error(`[AI Debug] Error generating private message response from ${aiUser.nickname}:`, {
+        aiDebug.error(` Error generating private message response from ${aiUser.nickname}:`, {
             error: error instanceof Error ? error.message : 'Unknown error',
             stack: error instanceof Error ? error.stack : undefined,
             aiUser: aiUser.nickname,
@@ -1466,10 +1467,10 @@ export const generateBatchUsers = async (count: number, model: string = 'gemini-
   multilingualPersonalities?: boolean;
   personalityLanguage?: string;
 }): Promise<User[]> => {
-  console.log(`[AI Debug] generateBatchUsers called for count: ${count}`);
+  aiDebug.log(` generateBatchUsers called for count: ${count}`);
   
   const validatedModel = validateModelId(model);
-  console.log(`[AI Debug] Validated model ID for batch users: "${validatedModel}"`);
+  aiDebug.log(` Validated model ID for batch users: "${validatedModel}"`);
   
   const multilingualPrompt = options?.multilingualPersonalities && options?.personalityLanguage 
     ? `IMPORTANT: Generate personality descriptions in ${options.personalityLanguage}. For example:
@@ -1502,7 +1503,7 @@ Provide the output in JSON format.
 `;
 
   try {
-    console.log(`[AI Debug] Sending request to Gemini for batch user generation (${count} users)`);
+    aiDebug.log(` Sending request to Gemini for batch user generation (${count} users)`);
     
     // Configure thinking mode based on model requirements
     const config: any = {
@@ -1599,7 +1600,7 @@ Provide the output in JSON format.
         // Some models require thinking mode with a budget
         if (validatedModel.includes('2.5') || validatedModel.includes('pro')) {
           config.thinkingConfig = { thinkingBudget: 2000 }; // Higher budget for batch generation
-          console.log(`[AI Debug] Using thinking mode with budget 2000 for batch generation model: ${validatedModel}`);
+          aiDebug.log(` Using thinking mode with budget 2000 for batch generation model: ${validatedModel}`);
         }
         
         const response = await withRateLimitAndRetries(() =>
@@ -1610,7 +1611,7 @@ Provide the output in JSON format.
           }), `batch user generation (${users.length} users)`
     );
 
-    console.log(`[AI Debug] Successfully received response from Gemini for batch user generation`);
+    aiDebug.log(` Successfully received response from Gemini for batch user generation`);
     
     const jsonString = extractTextFromResponse(response);
     const result = JSON.parse(jsonString);
@@ -1619,10 +1620,10 @@ Provide the output in JSON format.
       status: 'online' as const
     }));
     
-    console.log(`[AI Debug] Successfully generated ${users.length} users:`, users.map(u => u.nickname));
+    aiDebug.log(` Successfully generated ${users.length} users:`, users.map(u => u.nickname));
     return users;
   } catch (error) {
-    console.error(`[AI Debug] Error generating batch users (${count} requested):`, {
+    aiDebug.error(` Error generating batch users (${count} requested):`, {
       error: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined,
       requestedCount: count
@@ -1633,7 +1634,7 @@ Provide the output in JSON format.
 
 export const generateRandomWorldConfiguration = async (model: string = 'gemini-2.5-flash'): Promise<RandomWorldConfig> => {
     const validatedModel = validateModelId(model);
-    console.log(`[AI Debug] Validated model ID for world config: "${validatedModel}"`);
+    aiDebug.log(` Validated model ID for world config: "${validatedModel}"`);
     
     const prompt = `
 Generate a creative and interesting configuration for a simulated IRC world.
@@ -1761,7 +1762,7 @@ Provide the output in JSON format.
             // Some models require thinking mode with a budget
             if (validatedModel.includes('2.5') || validatedModel.includes('pro')) {
                 config.thinkingConfig = { thinkingBudget: 2000 }; // Higher budget for world generation
-                console.log(`[AI Debug] Using thinking mode with budget 2000 for world config model: ${validatedModel}`);
+                aiDebug.log(` Using thinking mode with budget 2000 for world config model: ${validatedModel}`);
             }
             
             const response = await withRateLimitAndRetries(() =>
@@ -1775,9 +1776,9 @@ Provide the output in JSON format.
     const jsonString = extractTextFromResponse(response);
     
     // Log the raw response for debugging
-    console.log(`[AI Debug] Raw response from AI:`, jsonString);
-    console.log(`[AI Debug] Response length:`, jsonString.length);
-    console.log(`[AI Debug] First 200 characters:`, jsonString.substring(0, 200));
+    aiDebug.log(` Raw response from AI:`, jsonString);
+    aiDebug.log(` Response length:`, jsonString.length);
+    aiDebug.log(` First 200 characters:`, jsonString.substring(0, 200));
     
     // Try to find JSON content if the response contains extra text
     let jsonContent = jsonString;
@@ -1788,20 +1789,20 @@ Provide the output in JSON format.
     
     if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
         jsonContent = jsonString.substring(jsonStart, jsonEnd + 1);
-        console.log(`[AI Debug] Extracted JSON content:`, jsonContent);
+        aiDebug.log(` Extracted JSON content:`, jsonContent);
     } else {
-        console.warn(`[AI Debug] No JSON object boundaries found in response`);
+        aiDebug.warn(` No JSON object boundaries found in response`);
     }
     
     let parsedConfig: RandomWorldConfig;
     try {
         parsedConfig = JSON.parse(jsonContent);
     } catch (parseError) {
-        console.error(`[AI Debug] JSON parse error:`, parseError);
-        console.error(`[AI Debug] Attempted to parse:`, jsonContent);
+        aiDebug.error(` JSON parse error:`, parseError);
+        aiDebug.error(` Attempted to parse:`, jsonContent);
         
         // Try to repair truncated JSON
-        console.log(`[AI Debug] Attempting to repair truncated JSON...`);
+        aiDebug.log(` Attempting to repair truncated JSON...`);
         let repairedJson = jsonContent;
         
         // If the JSON is truncated, try to close it properly
@@ -1814,7 +1815,7 @@ Provide the output in JSON format.
                 if (channelEntries && channelEntries.length > 0) {
                     // Close the channels array and the main object
                     repairedJson = jsonContent.replace(/"channels":\s*\[.*$/, `"channels": [${channelEntries.join(', ')}]}`);
-                    console.log(`[AI Debug] Repaired JSON:`, repairedJson);
+                    aiDebug.log(` Repaired JSON:`, repairedJson);
                 }
             }
         }
@@ -1822,12 +1823,12 @@ Provide the output in JSON format.
         // Try parsing the repaired JSON
         try {
             parsedConfig = JSON.parse(repairedJson);
-            console.log(`[AI Debug] Successfully parsed repaired JSON`);
+            aiDebug.log(` Successfully parsed repaired JSON`);
         } catch (repairError) {
-            console.error(`[AI Debug] JSON repair failed:`, repairError);
+            aiDebug.error(` JSON repair failed:`, repairError);
             
             // Try to provide a fallback configuration if JSON parsing fails
-            console.log(`[AI Debug] Attempting to create fallback configuration...`);
+            aiDebug.log(` Attempting to create fallback configuration...`);
             const fallbackConfig: RandomWorldConfig = {
             users: [
                 {
@@ -2047,7 +2048,7 @@ Provide the output in JSON format.
             ]
         };
         
-            console.log(`[AI Debug] Using fallback configuration due to JSON parse error`);
+            aiDebug.log(` Using fallback configuration due to JSON parse error`);
             return fallbackConfig;
         }
     }
@@ -2090,7 +2091,7 @@ Provide the output in JSON format.
  * @returns Promise<GeminiModel[]> Array of available models
  */
 export const listAvailableModels = async (): Promise<GeminiModel[]> => {
-    console.log("🔍 Fetching available Gemini models...");
+    aiDebug.log("🔍 Fetching available Gemini models...");
     
     try {
         const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models?key=' + API_KEY);
@@ -2100,18 +2101,18 @@ export const listAvailableModels = async (): Promise<GeminiModel[]> => {
         }
         
         const data: ModelsListResponse = await response.json();
-        console.log(`✅ Successfully fetched ${data.models.length} models`);
+        aiDebug.log(`✅ Successfully fetched ${data.models.length} models`);
         
         // Filter for models that support generateContent
         const supportedModels = data.models.filter(model => 
             model.supportedGenerationMethods?.includes('generateContent')
         );
         
-        console.log(`📝 Found ${supportedModels.length} models supporting generateContent`);
+        aiDebug.log(`📝 Found ${supportedModels.length} models supporting generateContent`);
         
         return supportedModels;
     } catch (error) {
-        console.error("❌ Error fetching available models:", error);
+        aiDebug.error("❌ Error fetching available models:", error);
         throw new Error(`Failed to fetch available models: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
 };
@@ -2122,7 +2123,7 @@ export const listAvailableModels = async (): Promise<GeminiModel[]> => {
  * @returns Promise<GeminiModel> Model information
  */
 export const getModelInfo = async (modelId: string): Promise<GeminiModel> => {
-    console.log(`🔍 Fetching info for model: ${modelId}`);
+    aiDebug.log(`🔍 Fetching info for model: ${modelId}`);
     
     try {
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelId}?key=` + API_KEY);
@@ -2132,11 +2133,11 @@ export const getModelInfo = async (modelId: string): Promise<GeminiModel> => {
         }
         
         const model: GeminiModel = await response.json();
-        console.log(`✅ Successfully fetched info for model: ${model.displayName}`);
+        aiDebug.log(`✅ Successfully fetched info for model: ${model.displayName}`);
         
         return model;
     } catch (error) {
-        console.error(`❌ Error fetching model info for ${modelId}:`, error);
+        aiDebug.error(`❌ Error fetching model info for ${modelId}:`, error);
         throw new Error(`Failed to fetch model info: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
 };

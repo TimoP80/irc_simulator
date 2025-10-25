@@ -9,6 +9,11 @@ import { addChannelOperator, removeChannelOperator, isChannelOperator, canUserPe
 import { generateChannelActivity, generateReactionToMessage, generatePrivateMessageResponse } from './services/geminiService';
 import { handleBotCommand, isBotCommand } from './services/botService';
 import { loadConfig, saveConfig, initializeStateFromConfig, saveChannelLogs, loadChannelLogs, clearChannelLogs, simulateTypingDelay } from './utils/config';
+import { 
+  aiDebug, simulationDebug, networkDebug, settingsDebug, pmDebug, rateLimiterDebug, 
+  urlFilterDebug, userListDebug, joinDebug, configDebug, chatLogDebug, ircExportDebug, 
+  botDebug, imageDebug, disableAllDebugLogging, enableAllDebugLogging, getDebugConfig 
+} from './utils/debugLogger';
 import { getIRCExportService, getDefaultIRCExportConfig, type IRCExportConfig, type IRCExportStatus, type IRCExportMessage } from './services/ircExportService';
 import { getChatLogService, initializeChatLogs } from './services/chatLogService';
 import { ChatLogManager } from './components/ChatLogManager';
@@ -21,7 +26,7 @@ const deduplicateChannelUsers = (users: User[]): User[] => {
   const seen = new Set<string>();
   return users.filter(user => {
     if (seen.has(user.nickname)) {
-      console.warn(`[Deduplication] Removing duplicate user: ${user.nickname}`);
+      simulationDebug.warn(`Removing duplicate user: ${user.nickname}`);
       return false;
     }
     seen.add(user.nickname);
@@ -52,7 +57,7 @@ const loadOperatorAssignments = (channels: Channel[]): Channel[] => {
       });
     }
   } catch (error) {
-    console.warn('Failed to load operator assignments:', error);
+    settingsDebug.warn('Failed to load operator assignments:', error);
   }
   return channels;
 };
@@ -66,7 +71,7 @@ const saveUserChannelAssignments = (users: User[]) => {
     }));
     localStorage.setItem('station_v_user_channels', JSON.stringify(userChannelData));
   } catch (error) {
-    console.warn('Failed to save user channel assignments:', error);
+    settingsDebug.warn('Failed to save user channel assignments:', error);
   }
 };
 
@@ -85,11 +90,10 @@ const loadUserChannelAssignments = (users: User[]): User[] => {
       });
     }
   } catch (error) {
-    console.warn('Failed to load user channel assignments:', error);
+    settingsDebug.warn('Failed to load user channel assignments:', error);
   }
   return users;
 };
-import { aiLogger, simulationLogger, configLogger } from './utils/debugLogger';
 
 // Migration function to ensure all channels have operators property
 const migrateChannels = (channels: Channel[]): Channel[] => {
@@ -110,7 +114,7 @@ const migrateChannelUsers = (channels: Channel[], virtualUsers: User[], currentU
     );
     
     if (hasAllUsers || hasTooManyUsers) {
-      console.log(`[Migration] Resetting users for channel ${channel.name} (had ${channel.users.length} users)`);
+      simulationDebug.log(`Resetting users for channel ${channel.name} (had ${channel.users.length} users)`);
       
       // Reset to default channel-specific users based on channel name
       let channelSpecificUsers: User[] = [];
@@ -135,7 +139,7 @@ const migrateChannelUsers = (channels: Channel[], virtualUsers: User[], currentU
       
       return {
         ...channel,
-          users: [
+        users: [
           channel.users.find(u => u.nickname === currentUserNickname) || {
             nickname: currentUserNickname,
             status: 'online' as const,
@@ -187,11 +191,11 @@ const App: React.FC = () => {
       const savedPMs = localStorage.getItem('station-v-private-messages');
       if (savedPMs) {
         const parsed = JSON.parse(savedPMs);
-        console.log('[PM Persistence] Loaded PM conversations from localStorage:', Object.keys(parsed));
+        pmDebug.log('Loaded PM conversations from localStorage:', Object.keys(parsed));
         return parsed;
       }
     } catch (error) {
-      console.error('[PM Persistence] Failed to load PM conversations from localStorage:', error);
+      pmDebug.error('Failed to load PM conversations from localStorage:', error);
     }
     return {};
   });
@@ -201,11 +205,11 @@ const App: React.FC = () => {
       const savedUnreadPMs = localStorage.getItem('station-v-unread-pm-users');
       if (savedUnreadPMs) {
         const parsed = JSON.parse(savedUnreadPMs);
-        console.log('[Unread Persistence] Loaded unread PM users from localStorage:', parsed);
+        pmDebug.log('Loaded unread PM users from localStorage:', parsed);
         return new Set(parsed);
       }
     } catch (error) {
-      console.error('[Unread Persistence] Failed to load unread PM users from localStorage:', error);
+      pmDebug.error('Failed to load unread PM users from localStorage:', error);
     }
     return new Set();
   });
@@ -215,11 +219,11 @@ const App: React.FC = () => {
       const savedUnreadChannels = localStorage.getItem('station-v-unread-channels');
       if (savedUnreadChannels) {
         const parsed = JSON.parse(savedUnreadChannels);
-        console.log('[Unread Persistence] Loaded unread channels from localStorage:', parsed);
+        unreadDebug.log('Loaded unread channels from localStorage:', parsed);
         return new Set(parsed);
       }
     } catch (error) {
-      console.error('[Unread Persistence] Failed to load unread channels from localStorage:', error);
+      unreadDebug.error('Failed to load unread channels from localStorage:', error);
     }
     return new Set();
   });
@@ -229,11 +233,11 @@ const App: React.FC = () => {
       const savedContext = localStorage.getItem('station-v-active-context');
       if (savedContext) {
         const parsed = JSON.parse(savedContext);
-        console.log('[Context Persistence] Loaded active context from localStorage:', parsed);
+        contextDebug.log('Loaded active context from localStorage:', parsed);
         return parsed;
       }
     } catch (error) {
-      console.error('[Context Persistence] Failed to load active context from localStorage:', error);
+      contextDebug.error('Failed to load active context from localStorage:', error);
     }
     return null;
   });
@@ -295,9 +299,9 @@ const App: React.FC = () => {
   useEffect(() => {
     try {
       localStorage.setItem('station-v-private-messages', JSON.stringify(privateMessages));
-      console.log('[PM Persistence] Saved PM conversations to localStorage:', Object.keys(privateMessages));
+      pmDebug.log('Saved PM conversations to localStorage:', Object.keys(privateMessages));
     } catch (error) {
-      console.error('[PM Persistence] Failed to save PM conversations to localStorage:', error);
+      pmDebug.error('Failed to save PM conversations to localStorage:', error);
     }
   }, [privateMessages]);
 
@@ -306,13 +310,13 @@ const App: React.FC = () => {
     try {
       if (activeContext) {
         localStorage.setItem('station-v-active-context', JSON.stringify(activeContext));
-        console.log('[Context Persistence] Saved active context to localStorage:', activeContext);
+        contextDebug.log('Saved active context to localStorage:', activeContext);
       } else {
         localStorage.removeItem('station-v-active-context');
-        console.log('[Context Persistence] Removed active context from localStorage');
+        contextDebug.log('Removed active context from localStorage');
       }
     } catch (error) {
-      console.error('[Context Persistence] Failed to save active context to localStorage:', error);
+      contextDebug.error('Failed to save active context to localStorage:', error);
     }
   }, [activeContext]);
 
@@ -320,9 +324,9 @@ const App: React.FC = () => {
   useEffect(() => {
     try {
       localStorage.setItem('station-v-unread-pm-users', JSON.stringify(Array.from(unreadPMUsers)));
-      console.log('[Unread Persistence] Saved unread PM users to localStorage:', Array.from(unreadPMUsers));
+      unreadDebug.log('Saved unread PM users to localStorage:', Array.from(unreadPMUsers));
     } catch (error) {
-      console.error('[Unread Persistence] Failed to save unread PM users to localStorage:', error);
+      unreadDebug.error('Failed to save unread PM users to localStorage:', error);
     }
   }, [unreadPMUsers]);
 
@@ -330,9 +334,9 @@ const App: React.FC = () => {
   useEffect(() => {
     try {
       localStorage.setItem('station-v-unread-channels', JSON.stringify(Array.from(unreadChannels)));
-      console.log('[Unread Persistence] Saved unread channels to localStorage:', Array.from(unreadChannels));
+      unreadDebug.log('Saved unread channels to localStorage:', Array.from(unreadChannels));
     } catch (error) {
-      console.error('[Unread Persistence] Failed to save unread channels to localStorage:', error);
+      unreadDebug.error('Failed to save unread channels to localStorage:', error);
     }
   }, [unreadChannels]);
 
@@ -369,7 +373,7 @@ const App: React.FC = () => {
         }
         
         if (user) {
-          console.log('[PM] Creating new PM conversation with:', nickname);
+          pmDebug.log('Creating new PM conversation with:', nickname);
           return {
             ...prev,
             [nickname]: { user, messages: [] }
@@ -436,7 +440,7 @@ const App: React.FC = () => {
   // Auto-join users to channels that only have the current user
   // Function to reset last speakers tracking to force more diverse user selection
   const resetLastSpeakers = useCallback(() => {
-    console.log('[User Selection] Resetting last speakers tracking to force diverse user selection');
+    simulationDebug.log('Resetting last speakers tracking to force diverse user selection');
     setLastSpeakersReset(prev => prev + 1);
     
     // Clear recent messages to reset the "recent speakers" tracking
@@ -450,13 +454,13 @@ const App: React.FC = () => {
 
   // Manual reset function for stuck loading state
   const resetLoadingState = useCallback(() => {
-    console.warn('[Input Protection] Manually resetting loading state');
+    inputDebug.warn('Manually resetting loading state');
     setIsLoading(false);
   }, []);
 
   // Show AI reaction notification
   const showAiReactionNotification = useCallback((message: string) => {
-    console.log('[AI Notification] Showing notification:', message);
+    notificationDebug.log('Showing notification:', message);
     setAiReactionNotification({
       isVisible: true,
       message,
@@ -465,7 +469,7 @@ const App: React.FC = () => {
     
     // Auto-hide notification after 3 seconds
     setTimeout(() => {
-      console.log('[AI Notification] Hiding notification');
+      notificationDebug.log('Hiding notification');
       setAiReactionNotification(prev => ({
         ...prev,
         isVisible: false
@@ -505,12 +509,12 @@ const App: React.FC = () => {
     try {
       // Check if this is an image command
       if (content.startsWith('!image') || content.startsWith('!img')) {
-      // Send generating message first
-      const generatingMessage: Message = {
+        // Send generating message first
+        const generatingMessage: Message = {
         id: generateUniqueMessageId(),
-        nickname: botUser.nickname,
-        content: `🎨 Generating image...`,
-        timestamp: new Date(),
+          nickname: botUser.nickname,
+          content: `🎨 Generating image...`,
+          timestamp: new Date(),
           type: 'bot',
           botCommand: 'image',
           botResponse: { 
@@ -526,7 +530,7 @@ const App: React.FC = () => {
         addMessageToContext(botResponse, activeContext);
       }
     } catch (error) {
-      console.error('[Bot Service] Bot command failed:', error);
+      botDebug.error('Bot command failed:', error);
       
       // Provide specific error messages based on error type
       let errorContent = '❌ Bot command failed. Please try again later.';
@@ -554,14 +558,24 @@ const App: React.FC = () => {
   // Handle virtual user bot commands
   const handleVirtualUserBotCommand = async (content: string, user: User, channelName: string) => {
     try {
-      console.log(`[Virtual User Bot] Processing bot command from ${user.nickname}: ${content}`);
+      simulationDebug.log(` Processing bot command from ${user.nickname}: ${content}`);
+      
+      // First, add the original bot command message so users can see what was executed
+      const commandMessage: Message = {
+        id: generateUniqueMessageId(),
+        nickname: user.nickname,
+        content: content,
+        timestamp: new Date(),
+        type: 'user'
+      };
+      addMessageToContext(commandMessage, { type: 'channel', name: channelName });
       
       // Find a bot user in the channel to handle the command
       const channel = channels.find(c => c.name === channelName);
       const botUser = channel?.users.find(u => u.userType === 'bot');
       
       if (!botUser) {
-        console.log(`[Virtual User Bot] No bot available in channel ${channelName}`);
+        simulationDebug.log(` No bot available in channel ${channelName}`);
         return null;
       }
       
@@ -584,13 +598,13 @@ const App: React.FC = () => {
       
       const botResponse = await handleBotCommand(content, botUser, channelName, aiModel, imageGenerationConfig);
       if (botResponse) {
-        console.log(`[Virtual User Bot] Bot response generated for ${user.nickname}'s command`);
+        simulationDebug.log(` Bot response generated for ${user.nickname}'s command`);
         return botResponse;
       }
       
       return null;
     } catch (error) {
-      console.error(`[Virtual User Bot] Failed to process bot command from ${user.nickname}:`, error);
+      simulationDebug.error(` Failed to process bot command from ${user.nickname}:`, error);
       return null;
     }
   };
@@ -603,7 +617,7 @@ const App: React.FC = () => {
       const virtualUsersInChannel = channel.users.filter(u => u.nickname !== currentUserNickname);
       
       if (virtualUsersInChannel.length === 0) {
-        simulationLogger.debug(`Channel ${channel.name} only has current user, auto-joining virtual users`);
+        simulationDebug.debug(`Channel ${channel.name} only has current user, auto-joining virtual users`);
         
         // Select 2-4 random virtual users to join this channel
         const availableUsers = virtualUsers.filter(u => 
@@ -637,7 +651,7 @@ const App: React.FC = () => {
                 timestamp: new Date(),
                 type: 'join'
               };
-              console.log(`[Auto-Join] Adding join message for ${user.nickname} to channel ${channel.name}`);
+              joinDebug.log(` Adding join message for ${user.nickname} to channel ${channel.name}`);
               addMessageToContext(joinMessage, { type: 'channel', name: channel.name });
             });
             
@@ -654,7 +668,7 @@ const App: React.FC = () => {
             setVirtualUsers(updatedUsers);
             saveUserChannelAssignments(updatedUsers);
             
-            simulationLogger.debug(`Auto-joined ${usersNotInChannel.length} users to ${channel.name}: ${usersNotInChannel.map(u => u.nickname).join(', ')}`);
+            simulationDebug.debug(`Auto-joined ${usersNotInChannel.length} users to ${channel.name}: ${usersNotInChannel.map(u => u.nickname).join(', ')}`);
           }
         }
       }
@@ -697,7 +711,7 @@ const App: React.FC = () => {
     const savedConfig = loadConfig();
     const savedLogs = loadChannelLogs();
     
-    configLogger.debug('useEffect running - savedConfig:', !!savedConfig, 'savedLogs:', savedLogs?.length || 0);
+    configDebug.debug('useEffect running - savedConfig:', !!savedConfig, 'savedLogs:', savedLogs?.length || 0);
     
     // If no saved config, open settings for the user to configure the app
     if (!savedConfig) {
@@ -707,7 +721,7 @@ const App: React.FC = () => {
     
     // Merge saved logs with current channels
       if (savedLogs && savedLogs.length > 0) {
-        configLogger.debug('Saved logs details:', savedLogs.map(c => ({ 
+        configDebug.debug('Saved logs details:', savedLogs.map(c => ({ 
           name: c.name, 
           messageCount: c.messages?.length || 0,
           messages: c.messages?.slice(0, 2) // Show first 2 messages
@@ -717,7 +731,7 @@ const App: React.FC = () => {
       setChannels(prevChannels => {
         const mergedChannels = prevChannels.map(configuredChannel => {
           const savedChannel = savedLogs.find(saved => saved.name === configuredChannel.name);
-          configLogger.debug(`Looking for saved channel ${configuredChannel.name}:`, {
+          configDebug.debug(`Looking for saved channel ${configuredChannel.name}:`, {
             found: !!savedChannel,
             messageCount: savedChannel?.messages?.length || 0,
             savedChannelNames: savedLogs.map(s => s.name)
@@ -725,7 +739,7 @@ const App: React.FC = () => {
           
           if (savedChannel && savedChannel.messages && savedChannel.messages.length > 0) {
             // Use saved messages but keep configured users and topic
-            configLogger.debug(`Merging saved messages for ${configuredChannel.name}: ${savedChannel.messages.length} messages`);
+            configDebug.debug(`Merging saved messages for ${configuredChannel.name}: ${savedChannel.messages.length} messages`);
             return {
               ...configuredChannel,
               messages: savedChannel.messages, // Use saved messages
@@ -734,28 +748,28 @@ const App: React.FC = () => {
             };
           } else {
             // No saved messages for this channel, use configured channel
-            configLogger.debug(`No saved messages for ${configuredChannel.name}, using configured channel`);
+            configDebug.debug(`No saved messages for ${configuredChannel.name}, using configured channel`);
             return configuredChannel;
           }
         });
         
-        configLogger.debug('Merged channels message counts:', mergedChannels.map(c => ({ name: c.name, messageCount: c.messages?.length || 0 })));
+        configDebug.debug('Merged channels message counts:', mergedChannels.map(c => ({ name: c.name, messageCount: c.messages?.length || 0 })));
         return mergedChannels;
       });
       } else {
-      configLogger.debug('No saved logs, using current channels');
+      configDebug.debug('No saved logs, using current channels');
     }
   }, []);
 
   // Initialize chat log service
   useEffect(() => {
-    initializeChatLogs().catch(console.error);
+    initializeChatLogs().catch(error => console.error("Critical error:", error));
   }, []);
 
   // Save channel logs and operator assignments whenever channels change
   useEffect(() => {
     if (channels.length > 0) {
-      configLogger.debug('Saving channel logs:', channels.map(c => ({ 
+      configDebug.debug('Saving channel logs:', channels.map(c => ({ 
         name: c.name, 
         messageCount: c.messages?.length || 0 
       })));
@@ -772,17 +786,17 @@ const App: React.FC = () => {
   }, [virtualUsers]);
 
   const handleSaveSettings = (config: AppConfig) => {
-    console.log('[Settings Debug] handleSaveSettings called with config:', config);
-    console.log('[Settings Debug] Config keys:', Object.keys(config));
-    console.log('[Settings Debug] Config aiModel:', config.aiModel);
-    console.log('[Settings Debug] Config simulationSpeed:', config.simulationSpeed);
+    settingsDebug.log('handleSaveSettings called with config:', config);
+    settingsDebug.log('Config keys:', Object.keys(config));
+    settingsDebug.log('Config aiModel:', config.aiModel);
+    settingsDebug.log('Config simulationSpeed:', config.simulationSpeed);
     
     saveConfig(config);
-    console.log('[Settings Debug] saveConfig called successfully');
+    settingsDebug.log('saveConfig called successfully');
     
     // Initialize state from the new config
     const { nickname, virtualUsers, channels: newChannels, simulationSpeed, aiModel: savedAiModel, typingDelay } = initializeStateFromConfig(config);
-    console.log('[Settings Debug] Saving settings with aiModel:', savedAiModel);
+    settingsDebug.log('Saving settings with aiModel:', savedAiModel);
     setCurrentUserNickname(nickname);
     setVirtualUsers(virtualUsers);
     
@@ -792,7 +806,7 @@ const App: React.FC = () => {
     
     setSimulationSpeed(simulationSpeed);
     setAiModel(savedAiModel || DEFAULT_AI_MODEL);
-    console.log('[Settings Debug] Set aiModel to:', savedAiModel || DEFAULT_AI_MODEL);
+    settingsDebug.log('Set aiModel to:', savedAiModel || DEFAULT_AI_MODEL);
     
     // Clear PM conversations and unread status when settings are reset
     setPrivateMessages({});
@@ -806,9 +820,9 @@ const App: React.FC = () => {
       localStorage.removeItem('station-v-unread-pm-users');
       localStorage.removeItem('station-v-unread-channels');
       localStorage.removeItem('station-v-active-context');
-      console.log('[PM Persistence] Cleared PM data from localStorage on settings reset');
+      pmDebug.log('Cleared PM data from localStorage on settings reset');
     } catch (error) {
-      console.error('[PM Persistence] Failed to clear PM data from localStorage:', error);
+      pmDebug.error('Failed to clear PM data from localStorage:', error);
     }
     setTypingDelayConfig(typingDelay || DEFAULT_TYPING_DELAY);
       setImageGenerationConfig(config.imageGeneration || {
@@ -866,9 +880,9 @@ const App: React.FC = () => {
       
       const status = ircService.getStatus();
       setIrcExportStatus(status);
-      console.log('[IRC Export] Connected successfully');
+      ircDebug.log('Connected successfully');
     } catch (error) {
-      console.error('[IRC Export] Connection failed:', error);
+      ircDebug.error('Connection failed:', error);
       setIrcExportStatus(prev => ({
         ...prev,
         error: error instanceof Error ? error.message : 'Connection failed'
@@ -888,9 +902,9 @@ const App: React.FC = () => {
         lastActivity: null,
         error: null
       });
-      console.log('[IRC Export] Disconnected successfully');
+      ircDebug.log('Disconnected successfully');
     } catch (error) {
-      console.error('[IRC Export] Disconnect failed:', error);
+      ircDebug.error('Disconnect failed:', error);
     }
   };
 
@@ -1088,7 +1102,7 @@ const App: React.FC = () => {
     );
     
     if (youtubeLinks.length > 2) {
-      console.log(`[YouTube Repetition] Multiple YouTube links detected in recent messages:`, youtubeLinks.map(msg => msg.content.substring(0, 50)));
+      contentDebug.log(` Multiple YouTube links detected in recent messages:`, youtubeLinks.map(msg => msg.content.substring(0, 50)));
     }
     
     // Track Rick Astley link repetition specifically
@@ -1099,7 +1113,7 @@ const App: React.FC = () => {
     );
     
     if (rickAstleyLinks.length > 0) {
-      console.log(`[Rick Astley Spam] Rick Astley links detected in recent messages:`, rickAstleyLinks.map(msg => msg.content.substring(0, 50)));
+      contentDebug.log(` Rick Astley links detected in recent messages:`, rickAstleyLinks.map(msg => msg.content.substring(0, 50)));
     }
     
     // Track potentially outdated YouTube links
@@ -1113,7 +1127,7 @@ const App: React.FC = () => {
     );
     
     if (potentiallyOutdatedLinks.length > 0) {
-      console.log(`[Outdated YouTube Links] Potentially outdated YouTube links detected:`, potentiallyOutdatedLinks.map(msg => msg.content.substring(0, 50)));
+      contentDebug.log(` Potentially outdated YouTube links detected:`, potentiallyOutdatedLinks.map(msg => msg.content.substring(0, 50)));
     }
     
     // Track multi-user replies (unrealistic IRC behavior)
@@ -1125,7 +1139,7 @@ const App: React.FC = () => {
     );
     
     if (multiUserReplies.length > 0) {
-      console.log(`[IRC Realism] Multi-user replies detected (unrealistic IRC behavior):`, multiUserReplies.map(msg => msg.content.substring(0, 50)));
+      contentDebug.log(` Multi-user replies detected (unrealistic IRC behavior):`, multiUserReplies.map(msg => msg.content.substring(0, 50)));
     }
     
     const repetitivePhrases = Object.entries(phraseCounts)
@@ -1165,7 +1179,7 @@ const App: React.FC = () => {
     const handleError = (event: ErrorEvent) => {
       if (event.message.includes('play method is not allowed') || 
           event.message.includes('The play method is not allowed')) {
-        console.warn('[Audio/Video Error Suppressed]:', event.message);
+        mediaDebug.warn('Audio/Video Error Suppressed:', event.message);
         event.preventDefault();
         event.stopPropagation();
         return false;
@@ -1175,7 +1189,7 @@ const App: React.FC = () => {
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
       if (event.reason && event.reason.message && 
           event.reason.message.includes('play method is not allowed')) {
-        console.warn('[Audio/Video Promise Error Suppressed]:', event.reason.message);
+        mediaDebug.warn('Audio/Video Promise Error Suppressed:', event.reason.message);
         event.preventDefault();
         return false;
       }
@@ -1295,7 +1309,7 @@ const App: React.FC = () => {
       
       // Check if URL contains any blocked domains
       if (blockedDomains.some(domain => url.includes(domain))) {
-        console.log('[URL Filter] Blocked problematic domain:', url);
+        urlFilterDebug.log('Blocked problematic domain:', url);
         return false;
       }
       
@@ -1316,7 +1330,7 @@ const App: React.FC = () => {
       
       // Check if URL contains any problematic image services
       if (problematicImageServices.some(service => url.includes(service))) {
-        console.log('[URL Filter] Blocked problematic image service:', url);
+        urlFilterDebug.log('Blocked problematic image service:', url);
         return false;
       }
       
@@ -1335,23 +1349,23 @@ const App: React.FC = () => {
     // Helper function to check if a URL should be blocked
     const shouldBlockUrl = (url: string): boolean => {
       if (isRickAstleyRedirect(url)) {
-        console.log('[URL Filter] Blocked Rick Astley redirect URL:', url);
+        urlFilterDebug.log('Blocked Rick Astley redirect URL:', url);
         return true;
       }
       if (isOutdatedYouTubeLink(url)) {
-        console.log('[URL Filter] Blocked outdated YouTube link:', url);
+        urlFilterDebug.log('Blocked outdated YouTube link:', url);
         return true;
       }
       if (isProblematicYouTubeLink(url)) {
-        console.log('[URL Filter] Blocked problematic YouTube link:', url);
+        urlFilterDebug.log('Blocked problematic YouTube link:', url);
         return true;
       }
       if (isImgurUrl(url)) {
-        console.log('[URL Filter] Blocked Imgur URL:', url);
+        urlFilterDebug.log('Blocked Imgur URL:', url);
         return true;
       }
       if (isUnsafeUrl(url)) {
-        console.log('[URL Filter] Blocked unsafe URL:', url);
+        urlFilterDebug.log('Blocked unsafe URL:', url);
         return true;
       }
       return false;
@@ -1376,7 +1390,7 @@ const App: React.FC = () => {
         if (isDirectImageUrl(url)) {
           safeImageUrls.push(url);
         } else {
-          console.log('[URL Filter] Blocked non-direct image URL:', url);
+          urlFilterDebug.log('Blocked non-direct image URL:', url);
         }
       } else {
         // It's a regular link
@@ -1384,7 +1398,7 @@ const App: React.FC = () => {
       }
     }
     
-    console.log('[URL Filter] Processed URLs:', {
+    urlFilterDebug.log('Processed URLs:', {
       allUrls: allUrls.length,
       uniqueUrls: uniqueUrls.length,
       safeImageUrls: safeImageUrls.length,
@@ -1397,26 +1411,105 @@ const App: React.FC = () => {
     };
   }, []);
 
+  // Remove URLs from content after they've been extracted to prevent duplicates
+  const removeUrlsFromContent = useCallback((content: string, extractedUrls: string[]): string => {
+    if (extractedUrls.length === 0) return content;
+    
+    // Create a regex pattern that matches any of the extracted URLs
+    // Escape special regex characters and join with | for alternation
+    const escapedUrls = extractedUrls.map(url => 
+      url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    );
+    const urlPattern = new RegExp(`\\b(${escapedUrls.join('|')})\\b`, 'gi');
+    
+    // Replace URLs with empty string, but preserve spacing
+    let cleanedContent = content.replace(urlPattern, '');
+    
+    // Clean up extra whitespace that might be left behind
+    cleanedContent = cleanedContent.replace(/\s+/g, ' ').trim();
+    
+    return cleanedContent;
+  }, []);
+
+  // Global rate limiter to prevent API overload
+  const [concurrentRequests, setConcurrentRequests] = useState(0);
+  const [lastRequestTime, setLastRequestTime] = useState(0);
+  const MAX_CONCURRENT_REQUESTS = 2; // Limit to 2 concurrent AI requests
+  const MIN_REQUEST_INTERVAL = 1500; // Minimum 1.5 seconds between requests
+
+  // Debug logging control
+  const [debugConfig, setDebugConfig] = useState(getDebugConfig());
+  
+  // Update debug config when it changes
+  useEffect(() => {
+    const handleDebugConfigChange = () => {
+      setDebugConfig(getDebugConfig());
+    };
+    
+    // Listen for debug config changes
+    window.addEventListener('debugConfigChanged', handleDebugConfigChange);
+    
+    return () => {
+      window.removeEventListener('debugConfigChanged', handleDebugConfigChange);
+    };
+  }, []);
+  
+  const withConcurrencyLimit = useCallback(async (fn: () => Promise<any>, context: string): Promise<any> => {
+    // Wait if we're at the limit
+    while (concurrentRequests >= MAX_CONCURRENT_REQUESTS) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
+    // Add delay between requests to prevent overload
+    const now = Date.now();
+    const timeSinceLastRequest = now - lastRequestTime;
+    if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
+      const delay = MIN_REQUEST_INTERVAL - timeSinceLastRequest;
+      rateLimiterDebug.log(`Waiting ${delay}ms before ${context} to prevent overload`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+    
+    setConcurrentRequests(prev => prev + 1);
+    setLastRequestTime(Date.now());
+    rateLimiterDebug.log(`Starting ${context} (${concurrentRequests + 1}/${MAX_CONCURRENT_REQUESTS} concurrent)`);
+    
+    try {
+      const result = await fn();
+      return result;
+    } finally {
+      setConcurrentRequests(prev => prev - 1);
+      rateLimiterDebug.log(`Completed ${context} (${concurrentRequests - 1}/${MAX_CONCURRENT_REQUESTS} concurrent)`);
+    }
+  }, [concurrentRequests, lastRequestTime]);
+
   const addMessageToContext = useCallback((message: Message, context: ActiveContext | null) => {
     if (!context) return;
     
     // Extract links and images from the message content
     const { links, images } = extractLinksAndImages(message.content);
+    
+    // Only remove URLs from content if we actually extracted URLs from the content
+    // Don't remove URLs if the message already has images/links arrays (like bot responses)
+    const allExtractedUrls = [...links, ...images];
+    const shouldCleanContent = allExtractedUrls.length > 0 && !message.images && !message.links;
+    const cleanedContent = shouldCleanContent ? removeUrlsFromContent(message.content, allExtractedUrls) : message.content;
+    
     const processedMessage = {
       ...message,
+      content: cleanedContent, // Use cleaned content only if we extracted URLs from content
       links: links.length > 0 ? links : undefined,
       // Preserve existing images array if it exists, otherwise use extracted images
       images: message.images || (images.length > 0 ? images : undefined)
     };
     if (context.type === 'channel') {
-      console.log(`[addMessageToContext] Adding message to channel ${context.name}:`, processedMessage);
+      messageDebug.log(` Adding message to channel ${context.name}:`, processedMessage);
       setChannels(prev => {
         const updatedChannels = prev.map(c => {
           if (c.name === context.name) {
             // Check if message already exists to prevent duplicates
             const existingMessage = c.messages?.find(m => m.id === processedMessage.id);
             if (existingMessage) {
-              console.log(`[addMessageToContext] Message ${processedMessage.id} already exists in channel ${context.name}, skipping`);
+              messageDebug.log(` Message ${processedMessage.id} already exists in channel ${context.name}, skipping`);
               return c;
             }
             
@@ -1424,7 +1517,7 @@ const App: React.FC = () => {
           }
           return c;
         });
-        simulationLogger.debug(`Message added to channel ${context.name}. Updated channel messages count: ${updatedChannels.find(c => c.name === context.name)?.messages?.length || 0}`);
+        simulationDebug.debug(`Message added to channel ${context.name}. Updated channel messages count: ${updatedChannels.find(c => c.name === context.name)?.messages?.length || 0}`);
         return updatedChannels;
       });
 
@@ -1432,7 +1525,7 @@ const App: React.FC = () => {
       setPrivateMessages(prev => {
         const user = virtualUsers.find(u => u.nickname === context.with);
         if (!user) {
-          console.error(`[addMessageToContext] User ${context.with} not found in virtualUsers, skipping PM creation`);
+          messageDebug.error(` User ${context.with} not found in virtualUsers, skipping PM creation`);
           return prev;
         }
         const conversation = prev[context.with] || { user, messages: [] };
@@ -1440,7 +1533,7 @@ const App: React.FC = () => {
         // Check if message already exists to prevent duplicates
         const existingMessage = conversation.messages?.find(m => m.id === processedMessage.id);
         if (existingMessage) {
-          console.log(`[addMessageToContext] Message ${processedMessage.id} already exists in PM with ${context.with}, skipping`);
+          messageDebug.log(` Message ${processedMessage.id} already exists in PM with ${context.with}, skipping`);
           return prev;
         }
         
@@ -1469,7 +1562,7 @@ const App: React.FC = () => {
       const ircService = getIRCExportService();
       if (ircService && ircService.isConnected()) {
         ircService.sendMessage(message.content, message.nickname).catch(error => {
-          console.error('[IRC Export] Failed to send message:', error);
+          ircDebug.error('Failed to send message:', error);
         });
       }
     }
@@ -1480,9 +1573,9 @@ const App: React.FC = () => {
       if (networkService && networkService.isConnected()) {
         try {
           networkService.sendAIMessage(context.name, message.content, message.nickname);
-          console.log(`[Network] Broadcasted AI message from ${message.nickname} to network users`);
+          networkDebug.log(`Broadcasted AI message from ${message.nickname} to network users`);
         } catch (error) {
-          console.error('[Network] Failed to broadcast AI message:', error);
+          networkDebug.error('Failed to broadcast AI message:', error);
         }
       }
     }
@@ -1491,7 +1584,7 @@ const App: React.FC = () => {
     if (context.type === 'channel') {
       const chatLogService = getChatLogService();
       chatLogService.saveMessage(context.name, message).catch(error => {
-        console.error('[Chat Log] Failed to save message:', error);
+        chatLogDebug.error('Failed to save message:', error);
       });
     }
     
@@ -1506,7 +1599,7 @@ const App: React.FC = () => {
         // Rate limiting: prevent broadcasting too frequently (max 1 message per 100ms)
         const now = Date.now();
         if (now - lastBroadcastTime < 100) {
-          console.log(`[App] Rate limiting: skipping broadcast of message ${message.id} (too frequent)`);
+          appDebug.log(` Rate limiting: skipping broadcast of message ${message.id} (too frequent)`);
           return;
         }
         
@@ -1518,7 +1611,7 @@ const App: React.FC = () => {
               channelName: context.name
             }
           });
-          console.log(`[App] Broadcasted virtual message ${message.id} from ${message.nickname} to other tabs`);
+          appDebug.log(` Broadcasted virtual message ${message.id} from ${message.nickname} to other tabs`);
           
           // Update last broadcast time
           setLastBroadcastTime(now);
@@ -1534,7 +1627,7 @@ const App: React.FC = () => {
             return newSet;
           });
         } catch (error) {
-          console.warn('[App] Failed to broadcast virtual message:', error);
+          appDebug.warn('Failed to broadcast virtual message:', error);
         }
       }
     }
@@ -1663,7 +1756,7 @@ const App: React.FC = () => {
                 addMessageToContext(reaction, activeContext);
               }
             } catch (error) {
-              console.error('Failed to generate AI reaction to topic change:', error);
+              simulationDebug.error('Failed to generate AI reaction to topic change:', error);
             }
           }, 1000 + Math.random() * 2000); // Random delay between 1-3 seconds
         }
@@ -1732,7 +1825,7 @@ const App: React.FC = () => {
                   }
                 }
               } catch (error) {
-                console.error('Failed to generate AI reaction to action:', error);
+                simulationDebug.error('Failed to generate AI reaction to action:', error);
               }
             }, 1000 + Math.random() * 2000);
           }
@@ -2047,7 +2140,7 @@ const App: React.FC = () => {
   };
 
   const handleSendMessage = async (content: string) => {
-    console.log('[AI Notification] handleSendMessage called with content:', content, 'activeContext:', activeContext);
+    notificationDebug.log('handleSendMessage called with content:', content, 'activeContext:', activeContext);
     
     if (content.startsWith('/')) {
       handleCommand(content);
@@ -2062,7 +2155,7 @@ const App: React.FC = () => {
     
     // Prevent multiple simultaneous message sends
     if (isLoading) {
-      console.warn('[Input Protection] Message send already in progress, ignoring duplicate request');
+      inputDebug.warn('Message send already in progress, ignoring duplicate request');
       return;
     }
     
@@ -2078,19 +2171,19 @@ const App: React.FC = () => {
         // For network messages, only show notification if there are local virtual users
         // (AI reactions are generated by local virtual users, not network users)
         const localVirtualUsers = migrateUsers(channel.users).filter(u => u.userType === 'virtual');
-        console.log('[AI Notification] Debug - network channel:', channel.name, 'all users:', channel.users.map(u => u.nickname), 'localVirtualUsers:', localVirtualUsers.map(u => u.nickname));
-        console.log('[AI Notification] Debug - user types:', channel.users.map(u => ({ nickname: u.nickname, userType: u.userType, personality: u.personality })));
+        notificationDebug.log('Debug - network channel:', channel.name, 'all users:', channel.users.map(u => u.nickname), 'localVirtualUsers:', localVirtualUsers.map(u => u.nickname));
+        notificationDebug.log('Debug - user types:', channel.users.map(u => ({ nickname: u.nickname, userType: u.userType, personality: u.personality })));
         
         if (localVirtualUsers.length > 0) {
           // Show notification that AI is generating a reaction
           const randomUser = localVirtualUsers[Math.floor(Math.random() * localVirtualUsers.length)];
-          console.log('[AI Notification] Triggering notification for network message, localVirtualUsers:', localVirtualUsers.length, 'selected:', randomUser.nickname);
+          notificationDebug.log('Triggering notification for network message, localVirtualUsers:', localVirtualUsers.length, 'selected:', randomUser.nickname);
           showAiReactionNotification(`${randomUser.nickname} noticed your message, reaction generation started`);
         } else {
-          console.log('[AI Notification] No local virtual users in network channel, skipping notification');
+          notificationDebug.log('No local virtual users in network channel, skipping notification');
         }
       } else {
-        console.log('[AI Notification] No channel found for network activeContext:', activeContext);
+        notificationDebug.log('No channel found for network activeContext:', activeContext);
       }
       
       networkService.sendMessage(activeContext.name, content);
@@ -2112,7 +2205,7 @@ const App: React.FC = () => {
 
     // Set a timeout to ensure isLoading is always reset
     const loadingTimeout = setTimeout(() => {
-      console.warn('[Input Protection] AI response timeout, resetting loading state');
+      inputDebug.warn('AI response timeout, resetting loading state');
       setIsLoading(false);
     }, 30000); // 30 second timeout
 
@@ -2123,30 +2216,33 @@ const App: React.FC = () => {
         if (channel) {
           // Check if there are virtual users in the channel (AI reactions are generated by virtual users)
           const virtualUsers = migrateUsers(channel.users).filter(u => u.userType === 'virtual');
-          console.log('[AI Notification] Debug - channel:', channel.name, 'all users:', channel.users.map(u => u.nickname), 'currentUser:', currentUserNickname, 'virtualUsers:', virtualUsers.map(u => u.nickname));
-          console.log('[AI Notification] Debug - user types:', channel.users.map(u => ({ nickname: u.nickname, userType: u.userType, personality: u.personality })));
+          notificationDebug.log('Debug - channel:', channel.name, 'all users:', channel.users.map(u => u.nickname), 'currentUser:', currentUserNickname, 'virtualUsers:', virtualUsers.map(u => u.nickname));
+          notificationDebug.log('Debug - user types:', channel.users.map(u => ({ nickname: u.nickname, userType: u.userType, personality: u.personality })));
           
           if (virtualUsers.length > 0) {
             // Show notification that AI is generating a reaction
             const randomUser = virtualUsers[Math.floor(Math.random() * virtualUsers.length)];
-            console.log('[AI Notification] Triggering notification for local message, virtualUsers:', virtualUsers.length, 'selected:', randomUser.nickname);
+            notificationDebug.log('Triggering notification for local message, virtualUsers:', virtualUsers.length, 'selected:', randomUser.nickname);
             showAiReactionNotification(`${randomUser.nickname} noticed your message, reaction generation started`);
             
-            aiResponse = await generateReactionToMessage(channel, userMessage, currentUserNickname, aiModel);
+          aiResponse = await generateReactionToMessage(channel, userMessage, currentUserNickname, aiModel);
           } else {
-            console.log('[AI Notification] No virtual users in channel, skipping notification');
+            notificationDebug.log('No virtual users in channel, skipping notification');
           }
         } else {
-          console.log('[AI Notification] No channel found for activeContext:', activeContext);
+          notificationDebug.log('No channel found for activeContext:', activeContext);
         }
       } else if (activeContext && activeContext.type === 'pm') { // 'pm'
         const user = virtualUsers.find(u => u.nickname === activeContext.with);
         if (!user) {
-          console.error(`[handleSendMessage] User ${activeContext.with} not found in virtualUsers, skipping PM response`);
+          pmDebug.error(` User ${activeContext.with} not found in virtualUsers, skipping PM response`);
           return;
         }
         const conversation = privateMessages[activeContext.with] || { user, messages: [] };
-        aiResponse = await generatePrivateMessageResponse(conversation, userMessage, currentUserNickname, aiModel);
+        aiResponse = await withConcurrencyLimit(
+          () => generatePrivateMessageResponse(conversation, userMessage, currentUserNickname, aiModel),
+          `private message response from ${activeContext.with}`
+        );
       }
       
       if (aiResponse) {
@@ -2160,7 +2256,7 @@ const App: React.FC = () => {
             setTyping(nickname.trim(), true);
             
             // Simulate typing delay for each AI response message
-            simulationLogger.debug(`Simulating typing delay for AI response: "${content}"`);
+            simulationDebug.debug(`Simulating typing delay for AI response: "${content}"`);
             await simulateTypingDelay(content.length, typingDelayConfig);
             
             // Hide typing indicator
@@ -2232,7 +2328,7 @@ The greeting should be friendly, brief, and in-character for the user who is gre
 The response must be a single line in the format: "nickname: greeting message"
 `;
 
-      console.log('[Simulation Debug] Using aiModel for auto-join:', aiModel);
+      simulationDebug.log('Using aiModel for auto-join:', aiModel);
       const response = await generateChannelActivity(channel, newUserNickname, aiModel);
       if (response) {
         const greetingMessages = response.split('\n').filter(line => line.includes(':'));
@@ -2245,7 +2341,7 @@ The response must be a single line in the format: "nickname: greeting message"
             setTyping(nickname.trim(), true);
             
             // Simulate typing delay for greeting messages
-            simulationLogger.debug(`Simulating typing delay for greeting: "${content}"`);
+            simulationDebug.debug(`Simulating typing delay for greeting: "${content}"`);
             await simulateTypingDelay(content.length, typingDelayConfig);
             
             // Hide typing indicator
@@ -2269,7 +2365,7 @@ The response must be a single line in the format: "nickname: greeting message"
 
   // Enhanced user management with dynamic channel joining
   const handleUsersChange = useCallback((newUsers: User[]) => {
-    console.log(`[UserList Debug] handleUsersChange called with ${newUsers.length} users:`, newUsers.map(u => u.nickname));
+    userListDebug.log(`handleUsersChange called with ${newUsers.length} users:`, newUsers.map(u => u.nickname));
     
     const oldUsers = virtualUsers;
     const addedUsers = newUsers.filter(newUser => 
@@ -2279,8 +2375,8 @@ The response must be a single line in the format: "nickname: greeting message"
       !newUsers.some(newUser => newUser.nickname === oldUser.nickname)
     );
     
-    console.log(`[UserList Debug] Added users:`, addedUsers.map(u => u.nickname));
-    console.log(`[UserList Debug] Removed users:`, removedUsers.map(u => u.nickname));
+    userListDebug.log(`Added users:`, addedUsers.map(u => u.nickname));
+    userListDebug.log(`Removed users:`, removedUsers.map(u => u.nickname));
     
     // Update virtual users
     setVirtualUsers(newUsers);
@@ -2324,16 +2420,16 @@ The response must be a single line in the format: "nickname: greeting message"
           );
           
           if (joinedChannel) {
-            const joinMessage: Message = {
-              id: generateUniqueMessageId(),
+              const joinMessage: Message = {
+                id: generateUniqueMessageId(),
               nickname: addedUsers[0].nickname,
               content: joinedChannel.name,
-              timestamp: new Date(),
-              type: 'join'
-            };
-            console.log(`[Join Debug] Creating join message for ${addedUsers[0].nickname} in ${joinedChannel.name}:`, joinMessage);
+                timestamp: new Date(),
+                type: 'join'
+              };
+            joinDebug.log(`Creating join message for ${addedUsers[0].nickname} in ${joinedChannel.name}:`, joinMessage);
             addMessageToContext(joinMessage, { type: 'channel', name: joinedChannel.name });
-          }
+            }
         }
         
         return updatedChannels;
@@ -2348,7 +2444,7 @@ The response must be a single line in the format: "nickname: greeting message"
               // Use the existing generateGreetingForNewUser function
               await generateGreetingForNewUser(activeChannel, newUser.nickname);
             } catch (error) {
-              console.error('Failed to generate greeting for new user:', error);
+              console.error("Failed to generate greeting for new user:", error);
             }
           });
         }
@@ -2418,7 +2514,7 @@ The response must be a single line in the format: "nickname: greeting message"
     }
     
     const adjustedInterval = Math.round(baseInterval * multiplier);
-    console.log(`[Time Sync] Hour: ${hour}, Weekend: ${isWeekend}, Multiplier: ${multiplier.toFixed(2)}, Adjusted interval: ${adjustedInterval}ms`);
+    timeDebug.log(` Hour: ${hour}, Weekend: ${isWeekend}, Multiplier: ${multiplier.toFixed(2)}, Adjusted interval: ${adjustedInterval}ms`);
     
     return adjustedInterval;
   }, []);
@@ -2442,19 +2538,19 @@ The response must be a single line in the format: "nickname: greeting message"
   const runSimulation = useCallback(async () => {
     // Safety check: Don't run simulation if settings modal is open
     if (isSettingsOpen) {
-      simulationLogger.debug('Settings modal is open, skipping simulation');
+      simulationDebug.debug('Settings modal is open, skipping simulation');
       return;
     }
     
     if (channels.length === 0) {
-      simulationLogger.debug('No channels available for simulation');
+      simulationDebug.debug('No channels available for simulation');
       return;
     }
     
     // Debug: Log current user nickname and channel users
-    console.log(`[Simulation Debug] Current user nickname: "${currentUserNickname}"`);
+    simulationDebug.log(`Current user nickname: "${currentUserNickname}"`);
     channels.forEach(channel => {
-      console.log(`[Simulation Debug] Channel ${channel.name} users:`, channel.users.map(u => u.nickname));
+      simulationDebug.log(`Channel ${channel.name} users:`, channel.users.map(u => u.nickname));
     });
     
     // Auto-join users to channels that only have the current user
@@ -2465,7 +2561,7 @@ The response must be a single line in the format: "nickname: greeting message"
     const timeSinceLastUserMessage = now - lastUserMessageTimeRef.current;
     const shouldBurst = timeSinceLastUserMessage < 30000; // 30 seconds
     
-    simulationLogger.debug(`Running simulation - burst mode: ${shouldBurst}, time since last user message: ${timeSinceLastUserMessage}ms`);
+    simulationDebug.debug(`Running simulation - burst mode: ${shouldBurst}, time since last user message: ${timeSinceLastUserMessage}ms`);
     
     // Prioritize the active channel for more responsive conversation
     let targetChannel: Channel;
@@ -2473,21 +2569,21 @@ The response must be a single line in the format: "nickname: greeting message"
       const activeChannel = channels.find(c => c.name === activeContext.name);
       if (activeChannel) {
         targetChannel = activeChannel;
-        simulationLogger.debug(`Using active channel: ${targetChannel.name}`);
+        simulationDebug.debug(`Using active channel: ${targetChannel.name}`);
       } else {
         const randomChannelIndex = Math.floor(Math.random() * channels.length);
         targetChannel = channels[randomChannelIndex];
-        simulationLogger.debug(`Active channel not found, using random channel: ${targetChannel.name}`);
+        simulationDebug.debug(`Active channel not found, using random channel: ${targetChannel.name}`);
       }
     } else {
       const randomChannelIndex = Math.floor(Math.random() * channels.length);
       targetChannel = channels[randomChannelIndex];
-      simulationLogger.debug(`No active context, using random channel: ${targetChannel.name}`);
+      simulationDebug.debug(`No active context, using random channel: ${targetChannel.name}`);
     }
 
     // Check if we should reset the conversation for this channel (much less aggressive)
     if (shouldResetConversation(targetChannel.name)) {
-      simulationLogger.debug(`Resetting conversation for ${targetChannel.name} to prevent staleness`);
+      simulationDebug.debug(`Resetting conversation for ${targetChannel.name} to prevent staleness`);
       // Keep the last 100 messages to maintain conversation history while preventing staleness
       const updatedChannels = channels.map(channel => 
         channel.name === targetChannel.name 
@@ -2498,19 +2594,19 @@ The response must be a single line in the format: "nickname: greeting message"
     }
 
     try {
-      simulationLogger.debug(`Generating channel activity for ${targetChannel.name}`);
-      console.log('[Simulation Debug] Using aiModel for channel activity:', aiModel);
+      simulationDebug.debug(`Generating channel activity for ${targetChannel.name}`);
+      simulationDebug.log('Using aiModel for channel activity:', aiModel);
       const response = await generateChannelActivity(targetChannel, currentUserNickname, aiModel);
       if (response) {
         const [nickname, ...contentParts] = response.split(':');
         const content = contentParts.join(':').trim();
 
-        simulationLogger.debug(`Parsed response - nickname: "${nickname}", content: "${content}"`);
+        simulationDebug.debug(`Parsed response - nickname: "${nickname}", content: "${content}"`);
 
         if (nickname && content && nickname.trim()) {
           // Check if this is a bot command from a virtual user
           if (isBotCommand(content)) {
-            console.log(`[Virtual User Bot] Virtual user ${nickname.trim()} used bot command: ${content}`);
+            simulationDebug.log(` Virtual user ${nickname.trim()} used bot command: ${content}`);
             
             // First, add the original bot command message from the virtual user
             const aiMessage: Message = {
@@ -2520,7 +2616,7 @@ The response must be a single line in the format: "nickname: greeting message"
               timestamp: new Date(),
               type: 'ai'
             };
-            simulationLogger.debug(`Adding AI message from ${nickname.trim()}: "${content}"`);
+            simulationDebug.debug(`Adding AI message from ${nickname.trim()}: "${content}"`);
             addMessageToContext(aiMessage, { type: 'channel', name: targetChannel.name });
             
             // Find the user who sent the command
@@ -2531,7 +2627,7 @@ The response must be a single line in the format: "nickname: greeting message"
               if (botResponse) {
                 // Add the bot response
                 addMessageToContext(botResponse, { type: 'channel', name: targetChannel.name });
-                simulationLogger.debug(`Added bot response for ${nickname.trim()}'s command`);
+                simulationDebug.debug(`Added bot response for ${nickname.trim()}'s command`);
               }
             }
           } else {
@@ -2539,7 +2635,7 @@ The response must be a single line in the format: "nickname: greeting message"
           setTyping(nickname.trim(), true);
           
           // Simulate typing delay before adding the message
-          simulationLogger.debug(`Simulating typing delay for message: "${content}"`);
+          simulationDebug.debug(`Simulating typing delay for message: "${content}"`);
           await simulateTypingDelay(content.length, typingDelayConfig);
           
           // Hide typing indicator
@@ -2552,12 +2648,12 @@ The response must be a single line in the format: "nickname: greeting message"
             timestamp: new Date(),
             type: 'ai'
           };
-          simulationLogger.debug(`Adding AI message from ${nickname.trim()}: "${content}"`);
+          simulationDebug.debug(`Adding AI message from ${nickname.trim()}: "${content}"`);
           addMessageToContext(aiMessage, { type: 'channel', name: targetChannel.name });
           
           // Sometimes generate a reaction to the AI message for more conversation
           if (Math.random() < 0.5) { // 50% chance to generate a reaction
-            simulationLogger.debug(`Generating reaction to AI message from ${nickname.trim()}`);
+            simulationDebug.debug(`Generating reaction to AI message from ${nickname.trim()}`);
             setTimeout(async () => {
               try {
                 // Create a new message object for the reaction
@@ -2590,7 +2686,7 @@ The response must be a single line in the format: "nickname: greeting message"
                       timestamp: new Date(),
                       type: 'ai'
                     };
-                    simulationLogger.debug(`Adding reaction from ${reactionNickname.trim()}: "${reactionContent}"`);
+                    simulationDebug.debug(`Adding reaction from ${reactionNickname.trim()}: "${reactionContent}"`);
                     addMessageToContext(reactionMessage, { type: 'channel', name: targetChannel.name });
                   }
                 }
@@ -2601,18 +2697,18 @@ The response must be a single line in the format: "nickname: greeting message"
           }
           }
         } else {
-          simulationLogger.debug(`Invalid response format: "${response}" - nickname: "${nickname}", content: "${content}"`);
+          simulationDebug.debug(`Invalid response format: "${response}" - nickname: "${nickname}", content: "${content}"`);
         }
       } else {
-        simulationLogger.debug(`No response generated for ${targetChannel.name}`);
+        simulationDebug.debug(`No response generated for ${targetChannel.name}`);
       }
       
       // Even in normal mode, sometimes generate additional activity for more diverse conversations
       if (!shouldBurst && Math.random() < 0.2) { // 20% chance for additional activity in normal mode
-        simulationLogger.debug(`Normal mode: generating additional activity for ${targetChannel.name}`);
+        simulationDebug.debug(`Normal mode: generating additional activity for ${targetChannel.name}`);
         setTimeout(async () => {
           try {
-            console.log('[Simulation Debug] Using aiModel for additional activity:', aiModel);
+            simulationDebug.log('Using aiModel for additional activity:', aiModel);
             const additionalResponse = await generateChannelActivity(targetChannel, currentUserNickname, aiModel);
             if (additionalResponse) {
               const [nickname, ...contentParts] = additionalResponse.split(':');
@@ -2621,7 +2717,7 @@ The response must be a single line in the format: "nickname: greeting message"
               if (nickname && content && nickname.trim()) {
                 // Check if this is a bot command from a virtual user
                 if (isBotCommand(content)) {
-                  console.log(`[Virtual User Bot] Virtual user ${nickname.trim()} used bot command in additional activity: ${content}`);
+                  simulationDebug.log(` Virtual user ${nickname.trim()} used bot command in additional activity: ${content}`);
                   
                   // Find the user who sent the command
                   const user = targetChannel.users.find(u => u.nickname === nickname.trim());
@@ -2631,7 +2727,7 @@ The response must be a single line in the format: "nickname: greeting message"
                     if (botResponse) {
                       // Add the bot response
                       addMessageToContext(botResponse, { type: 'channel', name: targetChannel.name });
-                      simulationLogger.debug(`Added bot response for ${nickname.trim()}'s additional activity command`);
+                      simulationDebug.debug(`Added bot response for ${nickname.trim()}'s additional activity command`);
                     }
                   }
                 } else {
@@ -2651,7 +2747,7 @@ The response must be a single line in the format: "nickname: greeting message"
                     timestamp: new Date(),
                     type: 'ai'
                   };
-                  simulationLogger.debug(`Adding additional AI message from ${nickname.trim()}: "${content}"`);
+                  simulationDebug.debug(`Adding additional AI message from ${nickname.trim()}: "${content}"`);
                   addMessageToContext(aiMessage, { type: 'channel', name: targetChannel.name });
                 }
               }
@@ -2665,21 +2761,21 @@ The response must be a single line in the format: "nickname: greeting message"
       // In burst mode, sometimes generate a second message for more activity
       // Increased probability for more balanced conversation
       if (shouldBurst && Math.random() < 0.6) { // Increased from 0.4 to 0.6
-        simulationLogger.debug(`Burst mode: generating second message for ${targetChannel.name}`);
+        simulationDebug.debug(`Burst mode: generating second message for ${targetChannel.name}`);
         setTimeout(async () => {
           try {
-            console.log('[Simulation Debug] Using aiModel for second response:', aiModel);
+            simulationDebug.log('Using aiModel for second response:', aiModel);
             const secondResponse = await generateChannelActivity(targetChannel, currentUserNickname, aiModel);
             if (secondResponse) {
               const [nickname, ...contentParts] = secondResponse.split(':');
               const content = contentParts.join(':').trim();
 
-              simulationLogger.debug(`Burst mode parsed response - nickname: "${nickname}", content: "${content}"`);
+              simulationDebug.debug(`Burst mode parsed response - nickname: "${nickname}", content: "${content}"`);
 
               if (nickname && content && nickname.trim()) {
                 // Check if this is a bot command from a virtual user
                 if (isBotCommand(content)) {
-                  console.log(`[Virtual User Bot] Virtual user ${nickname.trim()} used bot command in burst mode: ${content}`);
+                  simulationDebug.log(` Virtual user ${nickname.trim()} used bot command in burst mode: ${content}`);
                   
                   // Find the user who sent the command
                   const user = targetChannel.users.find(u => u.nickname === nickname.trim());
@@ -2689,7 +2785,7 @@ The response must be a single line in the format: "nickname: greeting message"
                     if (botResponse) {
                       // Add the bot response
                       addMessageToContext(botResponse, { type: 'channel', name: targetChannel.name });
-                      simulationLogger.debug(`Added bot response for ${nickname.trim()}'s burst mode command`);
+                      simulationDebug.debug(`Added bot response for ${nickname.trim()}'s burst mode command`);
                     }
                   }
                 } else {
@@ -2697,7 +2793,7 @@ The response must be a single line in the format: "nickname: greeting message"
                   setTyping(nickname.trim(), true);
                   
                   // Simulate typing delay for burst message too
-                  simulationLogger.debug(`Simulating typing delay for burst message: "${content}"`);
+                  simulationDebug.debug(`Simulating typing delay for burst message: "${content}"`);
                   await simulateTypingDelay(content.length, typingDelayConfig);
                   
                   // Hide typing indicator
@@ -2710,13 +2806,13 @@ The response must be a single line in the format: "nickname: greeting message"
                     timestamp: new Date(),
                     type: 'ai'
                   };
-                  simulationLogger.debug(`Adding burst AI message from ${nickname.trim()}: "${content}"`);
+                  simulationDebug.debug(`Adding burst AI message from ${nickname.trim()}: "${content}"`);
                   addMessageToContext(aiMessage, { type: 'channel', name: targetChannel.name });
                 }
               }
             }
           } catch (error) {
-            console.error(`[Simulation Debug] Burst simulation failed for ${targetChannel.name}:`, {
+            simulationDebug.error(` Burst simulation failed for ${targetChannel.name}:`, {
               error: error instanceof Error ? error.message : 'Unknown error',
               stack: error instanceof Error ? error.stack : undefined,
               channel: targetChannel.name
@@ -2725,7 +2821,7 @@ The response must be a single line in the format: "nickname: greeting message"
         }, Math.random() * 5000 + 2000); // Increased from 1-4s to 2-7s delay
       }
     } catch (error) {
-      console.error(`[Simulation Debug] Simulation failed for ${targetChannel.name}:`, {
+      simulationDebug.error(` Simulation failed for ${targetChannel.name}:`, {
         error: error instanceof Error ? error.message : 'Unknown error',
         stack: error instanceof Error ? error.stack : undefined,
         channel: targetChannel.name,
@@ -2735,7 +2831,7 @@ The response must be a single line in the format: "nickname: greeting message"
       // Only show error message if the last one was more than 5 minutes ago
       if (now - lastSimErrorTimestampRef.current > 300000) { 
           lastSimErrorTimestampRef.current = now;
-          simulationLogger.debug(`Showing error message to user for ${targetChannel.name}`);
+          simulationDebug.debug(`Showing error message to user for ${targetChannel.name}`);
           const errorMessage: Message = {
               id: now,
               nickname: 'system',
@@ -2745,19 +2841,19 @@ The response must be a single line in the format: "nickname: greeting message"
           };
           addMessageToContext(errorMessage, { type: 'channel', name: targetChannel.name });
       } else {
-        simulationLogger.debug(`Error rate limited, not showing alert for ${targetChannel.name}`);
+        simulationDebug.debug(`Error rate limited, not showing alert for ${targetChannel.name}`);
       }
       
       // Pause simulation for 30 seconds when API errors occur
-      simulationLogger.debug(`Pausing simulation for 30 seconds due to API error`);
+      simulationDebug.debug(`Pausing simulation for 30 seconds due to API error`);
       setTimeout(() => {
-        simulationLogger.debug(`Resuming simulation after API error pause`);
+        simulationDebug.debug(`Resuming simulation after API error pause`);
       }, 30000);
     }
   }, [channels, activeContext, addMessageToContext, currentUserNickname, isSettingsOpen, autoJoinUsersToEmptyChannels]);
 
   useEffect(() => {
-    simulationLogger.debug(`useEffect triggered - simulationSpeed: ${simulationSpeed}, isSettingsOpen: ${isSettingsOpen}`);
+    simulationDebug.debug(`useEffect triggered - simulationSpeed: ${simulationSpeed}, isSettingsOpen: ${isSettingsOpen}`);
     const stopSimulation = () => {
       if (simulationIntervalRef.current) {
         clearInterval(simulationIntervalRef.current);
@@ -2768,14 +2864,14 @@ The response must be a single line in the format: "nickname: greeting message"
     const startSimulation = () => {
       stopSimulation(); // Ensure no multiple intervals are running
       if (simulationSpeed === 'off' || document.hidden || isSettingsOpen) {
-        simulationLogger.debug(`Not starting simulation - speed: ${simulationSpeed}, hidden: ${document.hidden}, settingsOpen: ${isSettingsOpen}`);
+        simulationDebug.debug(`Not starting simulation - speed: ${simulationSpeed}, hidden: ${document.hidden}, settingsOpen: ${isSettingsOpen}`);
         return;
       }
       // Adjust simulation frequency based on time of day
       const baseInterval = SIMULATION_INTERVALS[simulationSpeed];
       const timeAdjustedInterval = getTimeAdjustedInterval(baseInterval);
       
-      simulationLogger.debug(`Starting simulation with interval: ${timeAdjustedInterval}ms (${simulationSpeed}, time-adjusted)`);
+      simulationDebug.debug(`Starting simulation with interval: ${timeAdjustedInterval}ms (${simulationSpeed}, time-adjusted)`);
       simulationIntervalRef.current = window.setInterval(runSimulation, timeAdjustedInterval);
     };
     
@@ -2787,7 +2883,7 @@ The response must be a single line in the format: "nickname: greeting message"
         }
     };
 
-    simulationLogger.debug(`Calling startSimulation from useEffect`);
+    simulationDebug.debug(`Calling startSimulation from useEffect`);
     startSimulation();
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -2883,7 +2979,7 @@ The response must be a single line in the format: "nickname: greeting message"
       
       // Only log if there are issues
       if (allUsers.length !== uniqueUsers.length) {
-        console.warn(`[UserList] Found duplicate users in channel ${activeChannel.name}. Original: ${allUsers.length}, Deduplicated: ${uniqueUsers.length}`);
+        userListDebug.warn(` Found duplicate users in channel ${activeChannel.name}. Original: ${allUsers.length}, Deduplicated: ${uniqueUsers.length}`);
       }
       
       return uniqueUsers;
@@ -2914,7 +3010,7 @@ The response must be a single line in the format: "nickname: greeting message"
       }
       
       if (!pmUser) {
-        console.error(`[usersInContext] PM user ${activeContext.with} not found in virtual or network users`);
+        userListDebug.error(` PM user ${activeContext.with} not found in virtual or network users`);
         return [{ nickname: currentUserNickname, status: 'online' }];
       }
       
@@ -2942,14 +3038,14 @@ The response must be a single line in the format: "nickname: greeting message"
     // First try to find in virtual users
     let user = virtualUsers.find(u => u.nickname === nickname);
     if (user) {
-      console.log('[PM Debug] Found virtual user:', nickname);
+      pmDebug.log('Found virtual user:', nickname);
       return user;
     }
     
     // If not found in virtual users, try to find in network users
     user = networkUsers.find(u => u.nickname === nickname);
     if (user) {
-      console.log('[PM Debug] Found network user:', nickname);
+      pmDebug.log('Found network user:', nickname);
       // Convert network user to User format
       return {
         nickname: user.nickname,
@@ -2969,12 +3065,12 @@ The response must be a single line in the format: "nickname: greeting message"
       };
     }
     
-    console.log('[PM Debug] User not found in virtual or network users:', nickname);
+    pmDebug.log('User not found in virtual or network users:', nickname);
     return null;
   }).filter(Boolean);
   
-  console.log('[PM Debug] privateMessages keys:', Object.keys(privateMessages));
-  console.log('[PM Debug] allPMUsers:', allPMUsers.map(u => u.nickname));
+  pmDebug.log('privateMessages keys:', Object.keys(privateMessages));
+  pmDebug.log('allPMUsers:', allPMUsers.map(u => u.nickname));
 
   // Network users update handler
   const handleNetworkUsersUpdate = useCallback((users: NetworkUser[]) => {
@@ -3074,18 +3170,18 @@ The response must be a single line in the format: "nickname: greeting message"
         
         if (type === 'virtualMessage') {
           const { message, channelName } = data;
-          console.log(`[App] Received virtual message ${message.id} from another tab:`, message);
+          appDebug.log(` Received virtual message ${message.id} from another tab:`, message);
           
           // Check if we've already processed this message
           if (processedVirtualMessageIds.has(message.id)) {
-            console.log(`[App] Virtual message ${message.id} already processed, skipping`);
+            appDebug.log(` Virtual message ${message.id} already processed, skipping`);
             return;
           }
 
           // Additional safety check: verify this is actually a virtual user message
           const isVirtualUser = virtualUsers.some(u => u.nickname === message.nickname);
           if (!isVirtualUser) {
-            console.log(`[App] Received message from non-virtual user ${message.nickname}, skipping broadcast processing`);
+            appDebug.log(` Received message from non-virtual user ${message.nickname}, skipping broadcast processing`);
             return;
           }
 
@@ -3156,10 +3252,10 @@ The response must be a single line in the format: "nickname: greeting message"
             
             // Show notification that AI is generating a reaction to network message
             const randomUser = localVirtualUsers[Math.floor(Math.random() * localVirtualUsers.length)];
-            console.log('[AI Notification] Triggering notification for network message, localVirtualUsers:', localVirtualUsers.length, 'selected:', randomUser.nickname);
+            notificationDebug.log('Triggering notification for network message, localVirtualUsers:', localVirtualUsers.length, 'selected:', randomUser.nickname);
             showAiReactionNotification(`${randomUser.nickname} noticed the message, reaction generation started`);
             
-            console.log(`[Network AI] Generating reaction using ${localVirtualUsers.length} local virtual users:`, localVirtualUsers.map(u => u.nickname));
+            networkDebug.log(`Generating reaction using ${localVirtualUsers.length} local virtual users:`, localVirtualUsers.map(u => u.nickname));
             
             generateReactionToMessage(localChannel, networkMessage, currentUserNickname, aiModel)
               .then(aiResponse => {
@@ -3203,9 +3299,9 @@ The response must be a single line in the format: "nickname: greeting message"
                         console.error('[Chat Log] Failed to save AI reaction message:', error);
                       });
                       
-                      console.log(`[Network AI] Generated reaction from local virtual user: ${nickname.trim()}`);
+                      networkDebug.log(`Generated reaction from local virtual user: ${nickname.trim()}`);
                     } else {
-                      console.warn(`[Network AI] AI generated response from non-local user: ${nickname.trim()}, skipping`);
+                      networkDebug.warn(` AI generated response from non-local user: ${nickname.trim()}, skipping`);
                     }
                   }
                 }
@@ -3214,7 +3310,7 @@ The response must be a single line in the format: "nickname: greeting message"
                 console.error('[App] Error generating AI reaction to network message:', error);
               });
           } else {
-            console.log(`[Network AI] No local virtual users found in channel ${channelName}, skipping AI reaction`);
+            networkDebug.log(`No local virtual users found in channel ${channelName}, skipping AI reaction`);
           }
         }
       }
