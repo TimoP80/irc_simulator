@@ -497,13 +497,19 @@ Station V previously received major enhancements including time-of-day synchroni
 - **File Validation**: Automatic format detection with helpful error messages
 - **Backup & Sharing**: Easy channel configuration backup and community sharing
 
-### 💬 **Channel Log Export System (v1.13.11)**
-- **HTML Export**: Export channel chat logs as beautifully formatted HTML files
+### 💬 **Advanced HTML Export System (v1.16.2)**
+- **5 Export Templates**: Choose from multiple professional export styles
+  - **Modern Dark**: Dark theme with gradients and modern styling (default)
+  - **Classic Light**: Clean light theme with traditional styling
+  - **Minimal Clean**: Ultra-minimal design focused on content
+  - **Compact Table**: Dense table-like layout for maximum information density
+  - **Web Client Style**: Mimics actual web client interface with colored nicknames
+- **Live Preview**: Full-screen preview modal with template selection before export
+- **Chronological Ordering**: All templates ensure messages are ordered oldest to newest
+- **Enhanced Image Support**: Responsive image rendering with click-to-open functionality
+- **Interactive Features**: Search functionality, scroll-to-top, and hover effects
 - **Individual Channels**: Export each channel separately with full message history
 - **All Channels**: Export all channels in one comprehensive HTML file
-- **Message Formatting**: Proper styling for different message types (system, user, AI, actions)
-- **Timestamp Support**: Full timestamp information for all messages
-- **Easy Access**: Prominent "Export Logs" button in channel management interface
 - **Cross-Platform**: HTML files work in any web browser for easy sharing
 
 ### 🌍 **Advanced Language Support (v1.13.10-1.13.11)**

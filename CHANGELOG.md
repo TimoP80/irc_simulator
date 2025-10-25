@@ -4,39 +4,6 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 
 *Note: This project was previously known as "Gemini IRC Simulator" and was renamed to "Station V - Virtual IRC Simulator" as of v1.5.1.*
 
-## 1.15.0 - 2025-01-24
-
-### Added
-- **Stable Network Support**: Comprehensive network functionality allowing multiple human users to connect via WebSocket
-  - **WebSocket Server**: Built-in server (`server/station-v-server-simple.js`) for real-time communication
-  - **Network Service**: Client-side service for managing WebSocket connections and user synchronization
-  - **Cross-Tab Synchronization**: Users, messages, and virtual user messages sync across browser tabs
-  - **AI Message Broadcasting**: AI-generated messages are broadcast to all connected network users
-  - **Channel Data Synchronization**: New users receive initial channel state (users, messages, topic)
-  - **Network User Management**: Real-time user presence updates and connection status tracking
-
-### Enhanced
-- **User List Visual Indicators**: Enhanced user list with clear visual distinctions
-  - **Current User Highlighting**: Network users show with blue background and "(Network)" label
-  - **User Type Indicators**: Globe icon (🌐) for network users, link icon (🔗) for current network user
-  - **Status Dots**: Color-coded status indicators (blue for network, green for local, yellow for away)
-  - **Cross-Tab Consistency**: Same user appears as "current" across all browser tabs
-
-### Fixed
-- **Message Deduplication**: Comprehensive duplicate message prevention using unique ID generation
-- **React Key Conflicts**: Fixed "Encountered two children with the same key" errors
-- **Circular Dependencies**: Resolved "Maximum update depth exceeded" errors in useEffect hooks
-- **AI Message Loops**: Prevented AI messages from looping back to originating clients
-- **Network User Synchronization**: Fixed issues with network users not appearing in user lists
-- **Cross-Tab Message Sync**: Messages now properly sync across all connected browser tabs
-
-### Technical Improvements
-- **Unique Message ID System**: Counter-based unique ID generation for all messages
-- **BroadcastChannel Integration**: Cross-tab communication for user presence and messages
-- **Network Service Singleton**: Centralized network connection management
-- **Type Safety**: Enhanced TypeScript types for network users and messages
-- **Error Handling**: Robust error handling for network disconnections and reconnections
-
 ## 1.16.2 - 2025-10-25
 
 ### Fixed
@@ -48,9 +15,15 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 
 - **Network Mode Infinite Loop**: Fixed infinite loop caused by AI responses being broadcast back to network
   - **Root Cause**: AI reactions were added via `addMessageToContext()` which automatically broadcasts to network, creating message echo loops
-  - **Solution**: Implemented direct channel state updates for AI reactions to network messages, bypassing network broadcast
-  - **Impact**: Stable network mode operation without infinite message loops
-  - **Performance**: Eliminated excessive network traffic and message processing
+  - **Solution**: Implemented direct channel state updates for AI reactions, bypassing network broadcast logic
+  - **Impact**: Prevents AI responses from being re-broadcast and causing infinite message loops
+
+- **Message Loop Prevention**: Added comprehensive safeguards to prevent infinite message loops
+  - **BroadcastChannel Loop Prevention**: Enhanced user type validation and rate limiting (max 1 message per 100ms)
+  - **Memory Management**: Implemented cleanup for processed message IDs to prevent memory leaks
+  - **Network User Filtering**: Added safeguards to ensure network users don't trigger virtual user broadcasts
+  - **Error Handling**: Added graceful handling of broadcast failures with detailed logging
+  - **Impact**: System now resistant to infinite loop conditions that previously required server shutdown
 
 - **WebSocket Server Channels Error**: Fixed `TypeError: user.channels.includes is not a function` in WebSocket server
   - **Root Cause**: Server was using `Array.includes()` method on `Set` objects for channel membership checking
@@ -581,6 +554,39 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
   - **User Experience**: Users now see clear feedback that image generation is in progress
   - **Impact**: Improved user experience with clear visual feedback during image generation process
 
+## 1.14.0 - 2025-10-24
+
+### Added
+- **Stable Network Support**: Comprehensive network functionality allowing multiple human users to connect via WebSocket
+  - **WebSocket Server**: Built-in server (`server/station-v-server-simple.js`) for real-time communication
+  - **Network Service**: Client-side service for managing WebSocket connections and user synchronization
+  - **Cross-Tab Synchronization**: Users, messages, and virtual user messages sync across browser tabs
+  - **AI Message Broadcasting**: AI-generated messages are broadcast to all connected network users
+  - **Channel Data Synchronization**: New users receive initial channel state (users, messages, topic)
+  - **Network User Management**: Real-time user presence updates and connection status tracking
+
+### Enhanced
+- **User List Visual Indicators**: Enhanced user list with clear visual distinctions
+  - **Current User Highlighting**: Network users show with blue background and "(Network)" label
+  - **User Type Indicators**: Globe icon (🌐) for network users, link icon (🔗) for current network user
+  - **Status Dots**: Color-coded status indicators (blue for network, green for local, yellow for away)
+  - **Cross-Tab Consistency**: Same user appears as "current" across all browser tabs
+
+### Fixed
+- **Message Deduplication**: Comprehensive duplicate message prevention using unique ID generation
+- **React Key Conflicts**: Fixed "Encountered two children with the same key" errors
+- **Circular Dependencies**: Resolved "Maximum update depth exceeded" errors in useEffect hooks
+- **AI Message Loops**: Prevented AI messages from looping back to originating clients
+- **Network User Synchronization**: Fixed issues with network users not appearing in user lists
+- **Cross-Tab Message Sync**: Messages now properly sync across all connected browser tabs
+
+### Technical Improvements
+- **Unique Message ID System**: Counter-based unique ID generation for all messages
+- **BroadcastChannel Integration**: Cross-tab communication for user presence and messages
+- **Network Service Singleton**: Centralized network connection management
+- **Type Safety**: Enhanced TypeScript types for network users and messages
+- **Error Handling**: Robust error handling for network disconnections and reconnections
+
 ## 1.16.0 - 2025-01-23
 
 ### Added
@@ -778,7 +784,7 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
   - **Features**: AI now only shares real, existing, current YouTube links, comprehensive anti-repetition system prevents overused content, 100% coverage of anti-Rick Astley measures, enhanced content diversity with fresh, relevant links
   - **Impact**: Eliminated all problematic YouTube link types (fake, repetitive, outdated, overused), improved user experience with working, diverse content, enhanced conversation quality with relevant, fresh links, better AI behavior consistency
 
-## 1.14.0 - 2025-01-23
+## 1.13.18 - 2025-01-23
 
 ### Enhanced
 - **IRC Conversation Realism**: Improved AI conversation patterns to match real IRC behavior

@@ -181,8 +181,62 @@ const App: React.FC = () => {
     }
     return DEFAULT_CHANNELS;
   });
-  const [privateMessages, setPrivateMessages] = useState<Record<string, PrivateMessageConversation>>({});
-  const [activeContext, setActiveContext] = useState<ActiveContext | null>(null);
+  const [privateMessages, setPrivateMessages] = useState<Record<string, PrivateMessageConversation>>(() => {
+    // Load PM conversations from localStorage on initialization
+    try {
+      const savedPMs = localStorage.getItem('station-v-private-messages');
+      if (savedPMs) {
+        const parsed = JSON.parse(savedPMs);
+        console.log('[PM Persistence] Loaded PM conversations from localStorage:', Object.keys(parsed));
+        return parsed;
+      }
+    } catch (error) {
+      console.error('[PM Persistence] Failed to load PM conversations from localStorage:', error);
+    }
+    return {};
+  });
+  const [unreadPMUsers, setUnreadPMUsers] = useState<Set<string>>(() => {
+    // Load unread PM users from localStorage on initialization
+    try {
+      const savedUnreadPMs = localStorage.getItem('station-v-unread-pm-users');
+      if (savedUnreadPMs) {
+        const parsed = JSON.parse(savedUnreadPMs);
+        console.log('[Unread Persistence] Loaded unread PM users from localStorage:', parsed);
+        return new Set(parsed);
+      }
+    } catch (error) {
+      console.error('[Unread Persistence] Failed to load unread PM users from localStorage:', error);
+    }
+    return new Set();
+  });
+  const [unreadChannels, setUnreadChannels] = useState<Set<string>>(() => {
+    // Load unread channels from localStorage on initialization
+    try {
+      const savedUnreadChannels = localStorage.getItem('station-v-unread-channels');
+      if (savedUnreadChannels) {
+        const parsed = JSON.parse(savedUnreadChannels);
+        console.log('[Unread Persistence] Loaded unread channels from localStorage:', parsed);
+        return new Set(parsed);
+      }
+    } catch (error) {
+      console.error('[Unread Persistence] Failed to load unread channels from localStorage:', error);
+    }
+    return new Set();
+  });
+  const [activeContext, setActiveContext] = useState<ActiveContext | null>(() => {
+    // Load active context from localStorage on initialization
+    try {
+      const savedContext = localStorage.getItem('station-v-active-context');
+      if (savedContext) {
+        const parsed = JSON.parse(savedContext);
+        console.log('[Context Persistence] Loaded active context from localStorage:', parsed);
+        return parsed;
+      }
+    } catch (error) {
+      console.error('[Context Persistence] Failed to load active context from localStorage:', error);
+    }
+    return null;
+  });
   const [simulationSpeed, setSimulationSpeed] = useState<AppConfig['simulationSpeed']>(() => {
     const savedConfig = loadConfig();
     return savedConfig?.simulationSpeed || 'normal';
@@ -219,6 +273,130 @@ const App: React.FC = () => {
   // Cross-tab communication for virtual user messages
   const [broadcastChannel, setBroadcastChannel] = useState<BroadcastChannel | null>(null);
   const [processedVirtualMessageIds, setProcessedVirtualMessageIds] = useState<Set<number>>(new Set());
+  const [lastBroadcastTime, setLastBroadcastTime] = useState<number>(0);
+  const [aiReactionNotification, setAiReactionNotification] = useState<{
+    isVisible: boolean;
+    message: string;
+    timestamp: number;
+  }>({ isVisible: false, message: '', timestamp: 0 });
+
+  // Helper function to migrate users: fix network users that were incorrectly assigned userType 'virtual'
+  const migrateUsers = useCallback((users: User[]) => {
+    return users.map(user => {
+      // If user has 'Network User' personality but 'virtual' userType, fix it
+      if (user.personality === 'Network User' && user.userType === 'virtual') {
+        return { ...user, userType: 'network' as const };
+      }
+      return user;
+    });
+  }, []);
+
+  // Save PM conversations to localStorage when they change
+  useEffect(() => {
+    try {
+      localStorage.setItem('station-v-private-messages', JSON.stringify(privateMessages));
+      console.log('[PM Persistence] Saved PM conversations to localStorage:', Object.keys(privateMessages));
+    } catch (error) {
+      console.error('[PM Persistence] Failed to save PM conversations to localStorage:', error);
+    }
+  }, [privateMessages]);
+
+  // Save active context to localStorage when it changes
+  useEffect(() => {
+    try {
+      if (activeContext) {
+        localStorage.setItem('station-v-active-context', JSON.stringify(activeContext));
+        console.log('[Context Persistence] Saved active context to localStorage:', activeContext);
+      } else {
+        localStorage.removeItem('station-v-active-context');
+        console.log('[Context Persistence] Removed active context from localStorage');
+      }
+    } catch (error) {
+      console.error('[Context Persistence] Failed to save active context to localStorage:', error);
+    }
+  }, [activeContext]);
+
+  // Save unread PM users to localStorage when they change
+  useEffect(() => {
+    try {
+      localStorage.setItem('station-v-unread-pm-users', JSON.stringify(Array.from(unreadPMUsers)));
+      console.log('[Unread Persistence] Saved unread PM users to localStorage:', Array.from(unreadPMUsers));
+    } catch (error) {
+      console.error('[Unread Persistence] Failed to save unread PM users to localStorage:', error);
+    }
+  }, [unreadPMUsers]);
+
+  // Save unread channels to localStorage when they change
+  useEffect(() => {
+    try {
+      localStorage.setItem('station-v-unread-channels', JSON.stringify(Array.from(unreadChannels)));
+      console.log('[Unread Persistence] Saved unread channels to localStorage:', Array.from(unreadChannels));
+    } catch (error) {
+      console.error('[Unread Persistence] Failed to save unread channels to localStorage:', error);
+    }
+  }, [unreadChannels]);
+
+  // Handle PM user click - open PM and clear unread status
+  const handlePMUserClick = useCallback((nickname: string) => {
+    setActiveContext({ type: 'pm', with: nickname });
+    
+    // Create PM conversation immediately if it doesn't exist
+    setPrivateMessages(prev => {
+      if (!prev[nickname]) {
+        // Find the user in virtual users or network users
+        let user = virtualUsers.find(u => u.nickname === nickname);
+        if (!user) {
+          user = networkUsers.find(u => u.nickname === nickname);
+          if (user) {
+            // Convert network user to User format
+            user = {
+              nickname: user.nickname,
+              status: user.status,
+              userType: 'network' as const,
+              personality: 'Network User',
+              languageSkills: {
+                languages: [{ language: 'English', fluency: 'native' }]
+              },
+              writingStyle: {
+                formality: 'neutral',
+                verbosity: 'neutral',
+                humor: 'none',
+                emojiUsage: 'low',
+                punctuation: 'standard'
+              }
+            };
+          }
+        }
+        
+        if (user) {
+          console.log('[PM] Creating new PM conversation with:', nickname);
+          return {
+            ...prev,
+            [nickname]: { user, messages: [] }
+          };
+        }
+      }
+      return prev;
+    });
+    
+    // Clear unread status for this PM user
+    setUnreadPMUsers(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(nickname);
+      return newSet;
+    });
+  }, [virtualUsers, networkUsers]);
+
+  // Handle channel click - open channel and clear unread status
+  const handleChannelClick = useCallback((channelName: string) => {
+    setActiveContext({ type: 'channel', name: channelName });
+    // Clear unread status for this channel
+    setUnreadChannels(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(channelName);
+      return newSet;
+    });
+  }, []);
   
   // IRC Export state
   const [ircExportConfig, setIrcExportConfig] = useState<IRCExportConfig>(getDefaultIRCExportConfig());
@@ -274,6 +452,25 @@ const App: React.FC = () => {
   const resetLoadingState = useCallback(() => {
     console.warn('[Input Protection] Manually resetting loading state');
     setIsLoading(false);
+  }, []);
+
+  // Show AI reaction notification
+  const showAiReactionNotification = useCallback((message: string) => {
+    console.log('[AI Notification] Showing notification:', message);
+    setAiReactionNotification({
+      isVisible: true,
+      message,
+      timestamp: Date.now()
+    });
+    
+    // Auto-hide notification after 3 seconds
+    setTimeout(() => {
+      console.log('[AI Notification] Hiding notification');
+      setAiReactionNotification(prev => ({
+        ...prev,
+        isVisible: false
+      }));
+    }, 3000);
   }, []);
 
   // Handle bot command messages
@@ -596,6 +793,23 @@ const App: React.FC = () => {
     setSimulationSpeed(simulationSpeed);
     setAiModel(savedAiModel || DEFAULT_AI_MODEL);
     console.log('[Settings Debug] Set aiModel to:', savedAiModel || DEFAULT_AI_MODEL);
+    
+    // Clear PM conversations and unread status when settings are reset
+    setPrivateMessages({});
+    setUnreadPMUsers(new Set());
+    setUnreadChannels(new Set());
+    setActiveContext(null);
+    
+    // Clear localStorage for PM data
+    try {
+      localStorage.removeItem('station-v-private-messages');
+      localStorage.removeItem('station-v-unread-pm-users');
+      localStorage.removeItem('station-v-unread-channels');
+      localStorage.removeItem('station-v-active-context');
+      console.log('[PM Persistence] Cleared PM data from localStorage on settings reset');
+    } catch (error) {
+      console.error('[PM Persistence] Failed to clear PM data from localStorage:', error);
+    }
     setTypingDelayConfig(typingDelay || DEFAULT_TYPING_DELAY);
       setImageGenerationConfig(config.imageGeneration || {
         provider: 'nano-banana',
@@ -1216,7 +1430,12 @@ const App: React.FC = () => {
 
     } else { // 'pm'
       setPrivateMessages(prev => {
-        const conversation = prev[context.with] || { user: virtualUsers.find(u => u.nickname === context.with)!, messages: [] };
+        const user = virtualUsers.find(u => u.nickname === context.with);
+        if (!user) {
+          console.error(`[addMessageToContext] User ${context.with} not found in virtualUsers, skipping PM creation`);
+          return prev;
+        }
+        const conversation = prev[context.with] || { user, messages: [] };
         
         // Check if message already exists to prevent duplicates
         const existingMessage = conversation.messages?.find(m => m.id === processedMessage.id);
@@ -1233,6 +1452,16 @@ const App: React.FC = () => {
           },
         };
       });
+      
+      // Mark PM user as having unread messages if the message is not from the current user
+      if (processedMessage.nickname !== currentUserNickname) {
+        setUnreadPMUsers(prev => new Set([...prev, context.with]));
+      }
+    }
+    
+    // Mark channel as unread if the message is not from the current user (for channel messages)
+    if (context.type === 'channel' && processedMessage.nickname !== currentUserNickname) {
+      setUnreadChannels(prev => new Set([...prev, context.name]));
     }
 
     // Export to IRC if enabled and message is from AI
@@ -1270,7 +1499,17 @@ const App: React.FC = () => {
     if (context.type === 'channel' && (message.type === 'ai' || message.type === 'user') && broadcastChannel) {
       // Check if this is a virtual user message (not from network or current user)
       const isVirtualUser = virtualUsers.some(u => u.nickname === message.nickname);
-      if (isVirtualUser && !processedVirtualMessageIds.has(message.id)) {
+      // Additional safety check: ensure we're not in a network message handler context
+      const isFromNetworkHandler = message.nickname && networkUsers.some(u => u.nickname === message.nickname);
+      
+      if (isVirtualUser && !isFromNetworkHandler && !processedVirtualMessageIds.has(message.id)) {
+        // Rate limiting: prevent broadcasting too frequently (max 1 message per 100ms)
+        const now = Date.now();
+        if (now - lastBroadcastTime < 100) {
+          console.log(`[App] Rate limiting: skipping broadcast of message ${message.id} (too frequent)`);
+          return;
+        }
+        
         try {
           broadcastChannel.postMessage({
             type: 'virtualMessage',
@@ -1281,8 +1520,19 @@ const App: React.FC = () => {
           });
           console.log(`[App] Broadcasted virtual message ${message.id} from ${message.nickname} to other tabs`);
           
+          // Update last broadcast time
+          setLastBroadcastTime(now);
+          
           // Mark as processed to prevent re-broadcasting
-          setProcessedVirtualMessageIds(prev => new Set([...prev, message.id]));
+          setProcessedVirtualMessageIds(prev => {
+            const newSet = new Set([...prev, message.id]);
+            // Keep only the last 1000 message IDs to prevent memory leaks
+            if (newSet.size > 1000) {
+              const ids = Array.from(newSet);
+              return new Set(ids.slice(-1000));
+            }
+            return newSet;
+          });
         } catch (error) {
           console.warn('[App] Failed to broadcast virtual message:', error);
         }
@@ -1797,6 +2047,8 @@ const App: React.FC = () => {
   };
 
   const handleSendMessage = async (content: string) => {
+    console.log('[AI Notification] handleSendMessage called with content:', content, 'activeContext:', activeContext);
+    
     if (content.startsWith('/')) {
       handleCommand(content);
       return;
@@ -1819,6 +2071,28 @@ const App: React.FC = () => {
     // If connected to network, send message via network
     if (isNetworkConnected && activeContext?.type === 'channel') {
       const networkService = getNetworkService();
+      
+      // Show AI reaction notification for network messages
+      const channel = channels.find(c => c.name === activeContext.name);
+      if (channel) {
+        // For network messages, only show notification if there are local virtual users
+        // (AI reactions are generated by local virtual users, not network users)
+        const localVirtualUsers = migrateUsers(channel.users).filter(u => u.userType === 'virtual');
+        console.log('[AI Notification] Debug - network channel:', channel.name, 'all users:', channel.users.map(u => u.nickname), 'localVirtualUsers:', localVirtualUsers.map(u => u.nickname));
+        console.log('[AI Notification] Debug - user types:', channel.users.map(u => ({ nickname: u.nickname, userType: u.userType, personality: u.personality })));
+        
+        if (localVirtualUsers.length > 0) {
+          // Show notification that AI is generating a reaction
+          const randomUser = localVirtualUsers[Math.floor(Math.random() * localVirtualUsers.length)];
+          console.log('[AI Notification] Triggering notification for network message, localVirtualUsers:', localVirtualUsers.length, 'selected:', randomUser.nickname);
+          showAiReactionNotification(`${randomUser.nickname} noticed your message, reaction generation started`);
+        } else {
+          console.log('[AI Notification] No local virtual users in network channel, skipping notification');
+        }
+      } else {
+        console.log('[AI Notification] No channel found for network activeContext:', activeContext);
+      }
+      
       networkService.sendMessage(activeContext.name, content);
       setIsLoading(false);
       return;
@@ -1847,14 +2121,31 @@ const App: React.FC = () => {
       if (activeContext && activeContext.type === 'channel') {
         const channel = channels.find(c => c.name === activeContext.name);
         if (channel) {
-          // Check if there are other users in the channel besides the current user
-          const otherUsers = channel.users.filter(u => u.nickname !== currentUserNickname);
-          if (otherUsers.length > 0) {
-          aiResponse = await generateReactionToMessage(channel, userMessage, currentUserNickname, aiModel);
+          // Check if there are virtual users in the channel (AI reactions are generated by virtual users)
+          const virtualUsers = migrateUsers(channel.users).filter(u => u.userType === 'virtual');
+          console.log('[AI Notification] Debug - channel:', channel.name, 'all users:', channel.users.map(u => u.nickname), 'currentUser:', currentUserNickname, 'virtualUsers:', virtualUsers.map(u => u.nickname));
+          console.log('[AI Notification] Debug - user types:', channel.users.map(u => ({ nickname: u.nickname, userType: u.userType, personality: u.personality })));
+          
+          if (virtualUsers.length > 0) {
+            // Show notification that AI is generating a reaction
+            const randomUser = virtualUsers[Math.floor(Math.random() * virtualUsers.length)];
+            console.log('[AI Notification] Triggering notification for local message, virtualUsers:', virtualUsers.length, 'selected:', randomUser.nickname);
+            showAiReactionNotification(`${randomUser.nickname} noticed your message, reaction generation started`);
+            
+            aiResponse = await generateReactionToMessage(channel, userMessage, currentUserNickname, aiModel);
+          } else {
+            console.log('[AI Notification] No virtual users in channel, skipping notification');
           }
+        } else {
+          console.log('[AI Notification] No channel found for activeContext:', activeContext);
         }
       } else if (activeContext && activeContext.type === 'pm') { // 'pm'
-        const conversation = privateMessages[activeContext.with] || { user: virtualUsers.find(u => u.nickname === activeContext.with)!, messages: [] };
+        const user = virtualUsers.find(u => u.nickname === activeContext.with);
+        if (!user) {
+          console.error(`[handleSendMessage] User ${activeContext.with} not found in virtualUsers, skipping PM response`);
+          return;
+        }
+        const conversation = privateMessages[activeContext.with] || { user, messages: [] };
         aiResponse = await generatePrivateMessageResponse(conversation, userMessage, currentUserNickname, aiModel);
       }
       
@@ -2552,7 +2843,7 @@ The response must be a single line in the format: "nickname: greeting message"
       const convertedNetworkUsers: User[] = networkUsersInChannel.map(networkUser => ({
         nickname: networkUser.nickname,
         status: networkUser.status,
-        userType: networkUser.type === 'human' ? 'virtual' : networkUser.type, // Map human to virtual for now
+        userType: 'network' as const,
         personality: 'Network User',
         languageSkills: {
           languages: [{ language: 'English', fluency: 'native' }]
@@ -2597,7 +2888,37 @@ The response must be a single line in the format: "nickname: greeting message"
       
       return uniqueUsers;
     } else if (activeContext?.type === 'pm') {
-      return [virtualUsers.find(u => u.nickname === activeContext.with)!, { nickname: currentUserNickname, status: 'online' }];
+      // Find the PM user in virtual users or network users
+      let pmUser = virtualUsers.find(u => u.nickname === activeContext.with);
+      if (!pmUser) {
+        // Try to find in network users
+        const networkUser = networkUsers.find(u => u.nickname === activeContext.with);
+        if (networkUser) {
+          pmUser = {
+            nickname: networkUser.nickname,
+            status: networkUser.status,
+            userType: 'network' as const,
+            personality: 'Network User',
+            languageSkills: {
+              languages: [{ language: 'English', fluency: 'native' }]
+            },
+            writingStyle: {
+              formality: 'neutral',
+              verbosity: 'neutral',
+              humor: 'none',
+              emojiUsage: 'low',
+              punctuation: 'standard'
+            }
+          };
+        }
+      }
+      
+      if (!pmUser) {
+        console.error(`[usersInContext] PM user ${activeContext.with} not found in virtual or network users`);
+        return [{ nickname: currentUserNickname, status: 'online' }];
+      }
+      
+      return [pmUser, { nickname: currentUserNickname, status: 'online' }];
     }
     return [];
   }, [activeContext, activeChannel, virtualUsers, currentUserNickname, networkUsers, isNetworkConnected]);
@@ -2617,7 +2938,43 @@ The response must be a single line in the format: "nickname: greeting message"
     ? `Private message with ${activeContext.with}`
     : 'No channel selected';
 
-  const allPMUsers = Object.keys(privateMessages).map(nickname => virtualUsers.find(u => u.nickname === nickname)!);
+  const allPMUsers = Object.keys(privateMessages).map(nickname => {
+    // First try to find in virtual users
+    let user = virtualUsers.find(u => u.nickname === nickname);
+    if (user) {
+      console.log('[PM Debug] Found virtual user:', nickname);
+      return user;
+    }
+    
+    // If not found in virtual users, try to find in network users
+    user = networkUsers.find(u => u.nickname === nickname);
+    if (user) {
+      console.log('[PM Debug] Found network user:', nickname);
+      // Convert network user to User format
+      return {
+        nickname: user.nickname,
+        status: user.status,
+        userType: 'network' as const,
+        personality: 'Network User',
+        languageSkills: {
+          languages: [{ language: 'English', fluency: 'native' }]
+        },
+        writingStyle: {
+          formality: 'neutral',
+          verbosity: 'neutral',
+          humor: 'none',
+          emojiUsage: 'low',
+          punctuation: 'standard'
+        }
+      };
+    }
+    
+    console.log('[PM Debug] User not found in virtual or network users:', nickname);
+    return null;
+  }).filter(Boolean);
+  
+  console.log('[PM Debug] privateMessages keys:', Object.keys(privateMessages));
+  console.log('[PM Debug] allPMUsers:', allPMUsers.map(u => u.nickname));
 
   // Network users update handler
   const handleNetworkUsersUpdate = useCallback((users: NetworkUser[]) => {
@@ -2654,11 +3011,19 @@ The response must be a single line in the format: "nickname: greeting message"
             emojiUsage: 'low' as const,
             punctuation: 'standard' as const
           },
-          userType: 'virtual' as const
+          userType: 'network' as const
         }));
         
+        // Migrate existing users: fix network users that were incorrectly assigned userType 'virtual'
+        const existingUsers = (channel.users || []).map(user => {
+          // If user has 'Network User' personality but 'virtual' userType, fix it
+          if (user.personality === 'Network User' && user.userType === 'virtual') {
+            return { ...user, userType: 'network' as const };
+          }
+          return user;
+        });
+        
         // Merge existing users with network users, avoiding duplicates
-        const existingUsers = channel.users || [];
         const allUsers = [...existingUsers];
         
         networkUsers.forEach((networkUser: any) => {
@@ -2716,7 +3081,14 @@ The response must be a single line in the format: "nickname: greeting message"
             console.log(`[App] Virtual message ${message.id} already processed, skipping`);
             return;
           }
-          
+
+          // Additional safety check: verify this is actually a virtual user message
+          const isVirtualUser = virtualUsers.some(u => u.nickname === message.nickname);
+          if (!isVirtualUser) {
+            console.log(`[App] Received message from non-virtual user ${message.nickname}, skipping broadcast processing`);
+            return;
+          }
+
           // Mark message as processed
           setProcessedVirtualMessageIds(prev => new Set([...prev, message.id]));
           
@@ -2774,15 +3146,18 @@ The response must be a single line in the format: "nickname: greeting message"
         if (channel && networkMessage.nickname !== currentUserNickname) {
           // In network mode, create a channel object with only local virtual users for AI reactions
           // This ensures AI reactions use only the locally configured virtual users, not network users
-          const localVirtualUsers = virtualUsers.filter(user => 
-            channel.users.some(channelUser => channelUser.nickname === user.nickname)
-          );
+          const localVirtualUsers = migrateUsers(channel.users).filter(user => user.userType === 'virtual');
           
           if (localVirtualUsers.length > 0) {
             const localChannel = {
               ...channel,
               users: localVirtualUsers
             };
+            
+            // Show notification that AI is generating a reaction to network message
+            const randomUser = localVirtualUsers[Math.floor(Math.random() * localVirtualUsers.length)];
+            console.log('[AI Notification] Triggering notification for network message, localVirtualUsers:', localVirtualUsers.length, 'selected:', randomUser.nickname);
+            showAiReactionNotification(`${randomUser.nickname} noticed the message, reaction generation started`);
             
             console.log(`[Network AI] Generating reaction using ${localVirtualUsers.length} local virtual users:`, localVirtualUsers.map(u => u.nickname));
             
@@ -2883,11 +3258,27 @@ The response must be a single line in the format: "nickname: greeting message"
         privateMessageUsers={allPMUsers}
         activeContext={activeContext}
         onSelectContext={setActiveContext}
+        onChannelClick={handleChannelClick}
+        onPMClick={handlePMUserClick}
         onOpenSettings={handleOpenSettings}
+        unreadChannels={unreadChannels}
+        unreadPMUsers={unreadPMUsers}
         onOpenChatLogs={handleOpenChatLogs}
         onResetSpeakers={resetLastSpeakers}
       />
       <main className="flex flex-1 flex-col border-l border-r border-gray-700 min-h-0 lg:min-h-0">
+        {/* AI Reaction Notification */}
+        {console.log('[AI Notification] Render check - isVisible:', aiReactionNotification.isVisible, 'message:', aiReactionNotification.message)}
+        {aiReactionNotification.isVisible && (
+          <div className="bg-blue-900 border border-blue-600 text-blue-100 px-4 py-2 text-sm font-medium animate-pulse">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-blue-400 rounded-full animate-ping"></div>
+              <span>{aiReactionNotification.message}</span>
+            </div>
+          </div>
+        )}
+        
+        
         <ChatWindow 
           title={contextTitle}
           messages={messagesInContext}
@@ -2900,10 +3291,11 @@ The response must be a single line in the format: "nickname: greeting message"
       </main>
       <UserList 
         users={usersInContext} 
-        onUserClick={(nickname) => setActiveContext({ type: 'pm', with: nickname })} 
+        onUserClick={handlePMUserClick} 
         currentUserNickname={isNetworkConnected && networkNickname ? networkNickname : currentUserNickname}
         channel={activeChannel}
         onToggleOperator={handleToggleOperator}
+        unreadPMUsers={unreadPMUsers}
         networkNickname={networkNickname}
         isNetworkConnected={isNetworkConnected}
       />

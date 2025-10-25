@@ -11,9 +11,10 @@ interface UserListProps {
   onToggleOperator?: (nickname: string) => void;
   networkNickname?: string | null;
   isNetworkConnected?: boolean;
+  unreadPMUsers?: Set<string>;
 }
 
-export const UserList: React.FC<UserListProps> = ({ users, onUserClick, currentUserNickname, channel, onToggleOperator, networkNickname, isNetworkConnected }) => {
+export const UserList: React.FC<UserListProps> = ({ users, onUserClick, currentUserNickname, channel, onToggleOperator, networkNickname, isNetworkConnected, unreadPMUsers }) => {
   const isOperator = (nickname: string) => channel && isChannelOperator(channel, nickname);
   
   return (
@@ -37,6 +38,7 @@ export const UserList: React.FC<UserListProps> = ({ users, onUserClick, currentU
           const isCurrentUser = user.nickname === currentUserNickname;
           const isNetworkUser = user.personality === 'Network User';
           const isCurrentNetworkUser = isNetworkConnected && networkNickname && user.nickname === networkNickname;
+          const hasUnreadPM = unreadPMUsers?.has(user.nickname) || false;
           
           return isCurrentUser ? (
             <div key={`${user.nickname}-${index}-current`} className={`px-2 lg:px-3 py-2 lg:py-2.5 text-xs lg:text-sm rounded-md font-bold flex items-center gap-1 lg:gap-2 ${
@@ -71,7 +73,11 @@ export const UserList: React.FC<UserListProps> = ({ users, onUserClick, currentU
             <div key={user.nickname} className="flex items-center gap-1 lg:gap-2 group">
               <button
                 onClick={() => onUserClick(user.nickname)}
-                className="flex-1 text-left px-2 lg:px-3 py-1 lg:py-1.5 text-xs lg:text-sm text-gray-300 hover:bg-gray-700 rounded-md flex items-center gap-1 lg:gap-2 transition-colors"
+                className={`flex-1 text-left px-2 lg:px-3 py-1 lg:py-1.5 text-xs lg:text-sm rounded-md flex items-center gap-1 lg:gap-2 transition-colors ${
+                  hasUnreadPM 
+                    ? 'bg-orange-900/40 border border-orange-500/50 text-orange-200 hover:bg-orange-800/50' 
+                    : 'text-gray-300 hover:bg-gray-700'
+                }`}
               >
                 <span className={`h-1.5 w-1.5 lg:h-2 lg:w-2 rounded-full ${
                   user.status === 'online' 
@@ -79,6 +85,9 @@ export const UserList: React.FC<UserListProps> = ({ users, onUserClick, currentU
                     : 'bg-yellow-500'
                 }`}></span>
                 <span className="truncate">{user.nickname}</span>
+                {hasUnreadPM && (
+                  <span className="text-orange-400 text-xs font-bold">●</span>
+                )}
                 {isNetworkUser && (
                   <span className="text-blue-400 text-xs">🌐</span>
                 )}
