@@ -8,12 +8,16 @@ interface ChannelListProps {
   privateMessageUsers: User[];
   activeContext: ActiveContext;
   onSelectContext: (context: ActiveContext) => void;
+  onChannelClick?: (channelName: string) => void;
+  onPMClick?: (nickname: string) => void;
   onOpenSettings: () => void;
   onOpenChatLogs?: () => void;
   onResetSpeakers?: () => void;
+  unreadChannels?: Set<string>;
+  unreadPMUsers?: Set<string>;
 }
 
-export const ChannelList: React.FC<ChannelListProps> = ({ channels, privateMessageUsers, activeContext, onSelectContext, onOpenSettings, onOpenChatLogs, onResetSpeakers }) => {
+export const ChannelList: React.FC<ChannelListProps> = ({ channels, privateMessageUsers, activeContext, onSelectContext, onChannelClick, onPMClick, onOpenSettings, onOpenChatLogs, onResetSpeakers, unreadChannels, unreadPMUsers }) => {
   const getButtonClass = (isActive: boolean) => 
     `w-full text-left px-4 py-2 text-sm truncate flex items-center gap-2 rounded-md transition-colors duration-150 ${
       isActive ? 'bg-indigo-500 text-white' : 'text-gray-300 hover:bg-gray-700'
@@ -28,34 +32,70 @@ export const ChannelList: React.FC<ChannelListProps> = ({ channels, privateMessa
       <div className="flex-1 overflow-y-auto -mr-2 lg:-mr-4 pr-2 lg:pr-4">
         <h3 className="text-xs font-bold uppercase text-gray-500 mb-1 lg:mb-2 px-2">Channels</h3>
         <div className="flex flex-col gap-0.5 lg:gap-1 mb-3 lg:mb-6">
-          {channels.map(channel => (
-            <button
-              key={channel.name}
-              onClick={() => onSelectContext({ type: 'channel', name: channel.name })}
-              className={`w-full text-left px-2 lg:px-4 py-1.5 lg:py-2 text-xs lg:text-sm truncate flex items-center gap-1 lg:gap-2 rounded-md transition-colors duration-150 ${
-                activeContext?.type === 'channel' && activeContext.name === channel.name ? 'bg-indigo-500 text-white' : 'text-gray-300 hover:bg-gray-700'
-              }`}
-            >
-              <HashtagIcon className="h-3 w-3 lg:h-4 lg:w-4 flex-shrink-0" />
-              <span className="truncate">{channel.name}</span>
-            </button>
-          ))}
+          {channels.map(channel => {
+            const isActive = activeContext?.type === 'channel' && activeContext.name === channel.name;
+            const hasUnread = unreadChannels?.has(channel.name) || false;
+            
+            return (
+              <button
+                key={channel.name}
+                onClick={() => {
+                  if (onChannelClick) {
+                    onChannelClick(channel.name);
+                  } else {
+                    onSelectContext({ type: 'channel', name: channel.name });
+                  }
+                }}
+                className={`w-full text-left px-2 lg:px-4 py-1.5 lg:py-2 text-xs lg:text-sm truncate flex items-center gap-1 lg:gap-2 rounded-md transition-colors duration-150 ${
+                  isActive 
+                    ? 'bg-indigo-500 text-white' 
+                    : hasUnread 
+                      ? 'text-yellow-300 hover:bg-gray-700' 
+                      : 'text-gray-300 hover:bg-gray-700'
+                }`}
+              >
+                <HashtagIcon className="h-3 w-3 lg:h-4 lg:w-4 flex-shrink-0" />
+                <span className="truncate">{channel.name}</span>
+                {hasUnread && (
+                  <span className="text-yellow-400 text-xs font-bold ml-auto">●</span>
+                )}
+              </button>
+            );
+          })}
         </div>
         
         <h3 className="text-xs font-bold uppercase text-gray-500 mb-1 lg:mb-2 px-2">Private Messages</h3>
         <div className="flex flex-col gap-0.5 lg:gap-1">
-          {privateMessageUsers.map(user => (
-            <button
-              key={user.nickname}
-              onClick={() => onSelectContext({ type: 'pm', with: user.nickname })}
-              className={`w-full text-left px-2 lg:px-4 py-1.5 lg:py-2 text-xs lg:text-sm truncate flex items-center gap-1 lg:gap-2 rounded-md transition-colors duration-150 ${
-                activeContext?.type === 'pm' && activeContext.with === user.nickname ? 'bg-indigo-500 text-white' : 'text-gray-300 hover:bg-gray-700'
-              }`}
-            >
-              <UserIcon className="h-3 w-3 lg:h-4 lg:w-4 flex-shrink-0" />
-              <span className="truncate">{user.nickname}</span>
-            </button>
-          ))}
+          {privateMessageUsers.map(user => {
+            const isActive = activeContext?.type === 'pm' && activeContext.with === user.nickname;
+            const hasUnread = unreadPMUsers?.has(user.nickname) || false;
+            
+            return (
+              <button
+                key={user.nickname}
+                onClick={() => {
+                  if (onPMClick) {
+                    onPMClick(user.nickname);
+                  } else {
+                    onSelectContext({ type: 'pm', with: user.nickname });
+                  }
+                }}
+                className={`w-full text-left px-2 lg:px-4 py-1.5 lg:py-2 text-xs lg:text-sm truncate flex items-center gap-1 lg:gap-2 rounded-md transition-colors duration-150 ${
+                  isActive 
+                    ? 'bg-indigo-500 text-white' 
+                    : hasUnread 
+                      ? 'text-yellow-300 hover:bg-gray-700' 
+                      : 'text-gray-300 hover:bg-gray-700'
+                }`}
+              >
+                <UserIcon className="h-3 w-3 lg:h-4 lg:w-4 flex-shrink-0" />
+                <span className="truncate">{user.nickname}</span>
+                {hasUnread && (
+                  <span className="text-yellow-400 text-xs font-bold ml-auto">●</span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
