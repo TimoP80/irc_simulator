@@ -153,7 +153,11 @@ class NetworkService {
         this.ws.onclose = () => {
           networkDebug.log('Disconnected from server');
           this.connected = false;
+          // Clear all users and channels when disconnected
+          this.users.clear();
+          this.channels.clear();
           this.notifyConnectionHandlers(false);
+          this.notifyUserHandlers([]);
         };
 
         this.ws.onerror = (error) => {
@@ -173,7 +177,11 @@ class NetworkService {
       this.ws = null;
     }
     this.connected = false;
+    // Clear all users and channels when disconnecting
+    this.users.clear();
+    this.channels.clear();
     this.notifyConnectionHandlers(false);
+    this.notifyUserHandlers([]);
     
     // Close broadcast channel
     if (this.broadcastChannel) {

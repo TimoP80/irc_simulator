@@ -853,21 +853,35 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
   aiDebug.log(` isPerLanguageFormat check:`, isPerLanguageFormat(randomUser.languageSkills));
   aiDebug.log(` isLegacyFormat check:`, isLegacyFormat(randomUser.languageSkills));
 
-  // Calculate appropriate token limit based on verbosity
-  const getTokenLimit = (verbosity: string): number => {
+  // Calculate appropriate token limit based on verbosity and emoji usage
+  const getTokenLimit = (verbosity: string, emojiUsage: string): number => {
+    let baseLimit: number;
     switch (verbosity) {
-      case 'very_terse': return 100;  // Increased from 50 to ensure complete messages
-      case 'terse': return 150;       // Increased from 75
-      case 'neutral': return 200;     // Increased from 100
-      case 'verbose': return 400;     // Increased from 300
-      case 'very_verbose': return 600; // Increased from 500
-      default: return 200;            // Increased from 100
+      case 'very_terse': baseLimit = 150;  // Increased from 100
+      case 'terse': baseLimit = 200;       // Increased from 150
+      case 'neutral': baseLimit = 300;     // Increased from 200
+      case 'verbose': baseLimit = 600;     // Increased from 400
+      case 'very_verbose': baseLimit = 900; // Increased from 600
+      default: baseLimit = 300;            // Increased from 200
     }
+    
+    // Apply emoji usage multiplier
+    let emojiMultiplier: number;
+    switch (emojiUsage) {
+      case 'none': emojiMultiplier = 1.0;
+      case 'low': emojiMultiplier = 1.2;
+      case 'medium': emojiMultiplier = 1.5;
+      case 'high': emojiMultiplier = 2.0;
+      case 'excessive': emojiMultiplier = 2.5;
+      default: emojiMultiplier = 1.0;
+    }
+    
+    return Math.round(baseLimit * emojiMultiplier);
   };
 
   const writingStyle = safeGetUserProperty(randomUser, 'writingStyle');
-  const tokenLimit = getTokenLimit(writingStyle.verbosity);
-  aiDebug.log(` Token limit for ${randomUser.nickname} (${writingStyle.verbosity}): ${tokenLimit}`);
+  const tokenLimit = getTokenLimit(writingStyle.verbosity, writingStyle.emojiUsage);
+  aiDebug.log(` Token limit for ${randomUser.nickname} (${writingStyle.verbosity}, ${writingStyle.emojiUsage}): ${tokenLimit}`);
 
   // Check for greeting spam by the selected user
   const userRecentMessages = channel.messages.slice(-5).filter(msg => msg.nickname === randomUser.nickname);
@@ -958,7 +972,7 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
     diversityPrompt = 'IMPORTANT: Add some humor, wit, or clever wordplay to the conversation.';
   } else if (conversationVariety < 0.95) {
     // 10% chance: Share a link or image
-    diversityPrompt = 'IMPORTANT: Share a relevant link or image that adds value to the conversation. Use complete, working URLs like https://placehold.co/400x300/0066CC/FFFFFF/png?text=Screenshot or https://github.com/user/repo. Always include file extensions for images. Use only CORS-compliant services: placehold.co (for consistent placeholder images). Avoid ad networks, tracking services, and problematic image hosting services. CRITICAL: AVOID sharing YouTube links entirely - they often become outdated, unavailable, or redirect to unwanted content. Instead, share GitHub repos, news articles, tutorials, memes, screenshots, or documentation. If you must share video content, describe it instead of linking to it. CRITICAL: Only share REAL, EXISTING links that actually work - never make up fake URLs or non-existent content. If unsure about a link\'s existence, don\'t share it. NEVER post Rick Astley\'s "Never Gonna Give You Up" or similar overused memes - these are cliché and repetitive. NEVER use YouTube video ID "dQw4w9WgXcQ" or any URLs containing this ID. NEVER post URLs that redirect to Rick Astley content, even if they look legitimate. Share fresh, diverse content instead.';
+    diversityPrompt = 'IMPORTANT: Share a relevant link or image that adds value to the conversation. Use complete, working URLs like https://placehold.co/400x300/0066CC/FFFFFF/png?text=Screenshot or https://github.com/user/repo. Always include file extensions for images. Use only reliable image services: placehold.co (for consistent placeholder images), via.placeholder.com (legacy support). Avoid ad networks, tracking services, and problematic image hosting services. CRITICAL: AVOID sharing YouTube links entirely - they often become outdated, unavailable, or redirect to unwanted content. Instead, share GitHub repos, news articles, tutorials, memes, screenshots, or documentation. If you must share video content, describe it instead of linking to it. CRITICAL: Only share REAL, EXISTING links that actually work - never make up fake URLs or non-existent content. If unsure about a link\'s existence, don\'t share it. NEVER post Rick Astley\'s "Never Gonna Give You Up" or similar overused memes - these are cliché and repetitive. NEVER use YouTube video ID "dQw4w9WgXcQ" or any URLs containing this ID. NEVER post URLs that redirect to Rick Astley content, even if they look legitimate. Share fresh, diverse content instead.';
   } else {
     // 5% chance: Be more conversational and natural
     diversityPrompt = 'IMPORTANT: Be more conversational and natural - like you\'re talking to friends in a relaxed setting.';
@@ -988,7 +1002,7 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
   
   if (!hasRecentLinks && Math.random() < 0.3) {
     // 30% chance to encourage link/image sharing if none recently
-    linkImagePrompt = `IMPORTANT: Consider sharing a relevant link or image to make the conversation more engaging. Use complete, working URLs like https://picsum.photos/400/300 or https://github.com/user/repo. Always include file extensions for images. Use only CORS-compliant services: picsum.photos, httpbin.org, labs.google/fx/tools/whisk/share. Avoid ad networks, tracking services, and problematic image hosting services. ${antiRickAstleyPrompt}`;
+    linkImagePrompt = `IMPORTANT: Consider sharing a relevant link or image to make the conversation more engaging. Use complete, working URLs like https://placehold.co/400x300/0066CC/FFFFFF/png?text=Screenshot or https://github.com/user/repo. Always include file extensions for images. Use only reliable image services: placehold.co (for consistent placeholder images), via.placeholder.com (legacy support). Avoid ad networks, tracking services, and problematic image hosting services. ${antiRickAstleyPrompt}`;
   } else if (hasRecentYouTubeLinks && Math.random() < 0.4) {
     // 40% chance to discourage repetitive YouTube links
     linkImagePrompt = `IMPORTANT: Avoid posting repetitive links. Share diverse content - different types of links and topics. Consider sharing GitHub repos, news articles, tutorials, or images. CRITICAL: Only share REAL, EXISTING links that actually work - never make up fake URLs or non-existent content. ${antiRickAstleyPrompt}`;
@@ -1262,20 +1276,34 @@ export const generateReactionToMessage = async (channel: Channel, userMessage: M
     const primaryLanguage = userLanguages[0] || 'English';
     const writingStyle = safeGetUserProperty(randomUser, 'writingStyle');
     
-    // Calculate appropriate token limit based on verbosity
-    const getTokenLimit = (verbosity: string): number => {
+    // Calculate appropriate token limit based on verbosity and emoji usage
+    const getTokenLimit = (verbosity: string, emojiUsage: string): number => {
+      let baseLimit: number;
       switch (verbosity) {
-      case 'very_terse': return 100;  // Increased from 50 to ensure complete messages
-      case 'terse': return 150;       // Increased from 75
-      case 'neutral': return 200;     // Increased from 100
-      case 'verbose': return 400;     // Increased from 300
-      case 'very_verbose': return 600; // Increased from 500
-      default: return 200;            // Increased from 100
+        case 'very_terse': baseLimit = 150;  // Increased from 100
+        case 'terse': baseLimit = 200;       // Increased from 150
+        case 'neutral': baseLimit = 300;     // Increased from 200
+        case 'verbose': baseLimit = 600;     // Increased from 400
+        case 'very_verbose': baseLimit = 900; // Increased from 600
+        default: baseLimit = 300;            // Increased from 200
       }
+      
+      // Apply emoji usage multiplier
+      let emojiMultiplier: number;
+      switch (emojiUsage) {
+        case 'none': emojiMultiplier = 1.0;
+        case 'low': emojiMultiplier = 1.2;
+        case 'medium': emojiMultiplier = 1.5;
+        case 'high': emojiMultiplier = 2.0;
+        case 'excessive': emojiMultiplier = 2.5;
+        default: emojiMultiplier = 1.0;
+      }
+      
+      return Math.round(baseLimit * emojiMultiplier);
     };
 
-    const tokenLimit = getTokenLimit(writingStyle.verbosity);
-    aiDebug.log(` Token limit for reaction from ${randomUser.nickname} (${writingStyle.verbosity}): ${tokenLimit}`);
+    const tokenLimit = getTokenLimit(writingStyle.verbosity, writingStyle.emojiUsage);
+    aiDebug.log(` Token limit for reaction from ${randomUser.nickname} (${writingStyle.verbosity}, ${writingStyle.emojiUsage}): ${tokenLimit}`);
     
     // Get time-of-day context for reactions too
     const timeContext = getTimeOfDayContext();
@@ -1311,7 +1339,7 @@ ${formatMessageHistory(channel.messages)}
 
     ${reactionAntiGreetingSpam}
 
-    ${Math.random() < 0.2 ? 'IMPORTANT: Consider sharing a relevant link or image in your reaction to make it more engaging. Use complete, working URLs like https://placehold.co/400x300/0066CC/FFFFFF/png?text=Screenshot or https://github.com/user/repo. Always include file extensions for images. Use only CORS-compliant services: placehold.co (for consistent placeholder images). Avoid ad networks, tracking services, and problematic image hosting services. CRITICAL: AVOID sharing YouTube links entirely - they often become outdated, unavailable, or redirect to unwanted content. Instead, share GitHub repos, news articles, tutorials, memes, screenshots, or documentation. If you must share video content, describe it instead of linking to it. CRITICAL: Only share REAL, EXISTING links that actually work - never make up fake URLs or non-existent content. If unsure about a link\'s existence, don\'t share it. NEVER post Rick Astley\'s "Never Gonna Give You Up" or similar overused memes - these are cliché and repetitive. NEVER use YouTube video ID "dQw4w9WgXcQ" or any URLs containing this ID. NEVER post URLs that redirect to Rick Astley content, even if they look legitimate. Share fresh, diverse content instead.' : ''}
+    ${Math.random() < 0.2 ? 'IMPORTANT: Consider sharing a relevant link or image in your reaction to make it more engaging. Use complete, working URLs like https://placehold.co/400x300/0066CC/FFFFFF/png?text=Screenshot or https://github.com/user/repo. Always include file extensions for images. Use only reliable image services: placehold.co (for consistent placeholder images), via.placeholder.com (legacy support). Avoid ad networks, tracking services, and problematic image hosting services. CRITICAL: AVOID sharing YouTube links entirely - they often become outdated, unavailable, or redirect to unwanted content. Instead, share GitHub repos, news articles, tutorials, memes, screenshots, or documentation. If you must share video content, describe it instead of linking to it. CRITICAL: Only share REAL, EXISTING links that actually work - never make up fake URLs or non-existent content. If unsure about a link\'s existence, don\'t share it. NEVER post Rick Astley\'s "Never Gonna Give You Up" or similar overused memes - these are cliché and repetitive. NEVER use YouTube video ID "dQw4w9WgXcQ" or any URLs containing this ID. NEVER post URLs that redirect to Rick Astley content, even if they look legitimate. Share fresh, diverse content instead.' : ''}
 
     IMPORTANT: Reply to ONE person at a time, not multiple people. Focus on the most recent or most relevant message. Avoid addressing multiple users in one sentence - this is unrealistic IRC behavior. Keep your response natural and conversational, like a real IRC user would.
 
@@ -1405,20 +1433,34 @@ export const generatePrivateMessageResponse = async (conversation: PrivateMessag
     const primaryLanguage = userLanguages[0] || 'English';
     const writingStyle = safeGetUserProperty(aiUser, 'writingStyle');
     
-    // Calculate appropriate token limit based on verbosity
-    const getTokenLimit = (verbosity: string): number => {
+    // Calculate appropriate token limit based on verbosity and emoji usage
+    const getTokenLimit = (verbosity: string, emojiUsage: string): number => {
+      let baseLimit: number;
       switch (verbosity) {
-      case 'very_terse': return 100;  // Increased from 50 to ensure complete messages
-      case 'terse': return 150;       // Increased from 75
-      case 'neutral': return 200;     // Increased from 100
-      case 'verbose': return 400;     // Increased from 300
-      case 'very_verbose': return 600; // Increased from 500
-      default: return 200;            // Increased from 100
+        case 'very_terse': baseLimit = 150;  // Increased from 100
+        case 'terse': baseLimit = 200;       // Increased from 150
+        case 'neutral': baseLimit = 300;     // Increased from 200
+        case 'verbose': baseLimit = 600;     // Increased from 400
+        case 'very_verbose': baseLimit = 900; // Increased from 600
+        default: baseLimit = 300;            // Increased from 200
       }
+      
+      // Apply emoji usage multiplier
+      let emojiMultiplier: number;
+      switch (emojiUsage) {
+        case 'none': emojiMultiplier = 1.0;
+        case 'low': emojiMultiplier = 1.2;
+        case 'medium': emojiMultiplier = 1.5;
+        case 'high': emojiMultiplier = 2.0;
+        case 'excessive': emojiMultiplier = 2.5;
+        default: emojiMultiplier = 1.0;
+      }
+      
+      return Math.round(baseLimit * emojiMultiplier);
     };
 
-    const tokenLimit = getTokenLimit(writingStyle.verbosity);
-    aiDebug.log(` Token limit for private message from ${aiUser.nickname} (${writingStyle.verbosity}): ${tokenLimit}`);
+    const tokenLimit = getTokenLimit(writingStyle.verbosity, writingStyle.emojiUsage);
+    aiDebug.log(` Token limit for private message from ${aiUser.nickname} (${writingStyle.verbosity}, ${writingStyle.emojiUsage}): ${tokenLimit}`);
     
     // Get time-of-day context for private messages too
     const timeContext = getTimeOfDayContext();
@@ -1674,7 +1716,8 @@ Provide the output in JSON format.
     const result = JSON.parse(jsonString);
     const users = result.users.map((user: any) => ({
       ...user,
-      status: 'online' as const
+      status: 'online' as const,
+      pmProbability: 25 // Default 25% PM probability for generated users
     }));
     
     aiDebug.log(` Successfully generated ${users.length} users:`, users.map(u => u.nickname));
@@ -1906,7 +1949,8 @@ Provide the output in JSON format.
                         punctuation: 'standard'
                     },
                     status: 'online' as const,
-                    userType: 'virtual' as const
+                    userType: 'virtual' as const,
+                    pmProbability: 25
                 },
                 {
                     nickname: 'seraph',
@@ -1926,7 +1970,8 @@ Provide the output in JSON format.
                         punctuation: 'standard'
                     },
                     status: 'online' as const,
-                    userType: 'virtual' as const
+                    userType: 'virtual' as const,
+                    pmProbability: 25
                 },
                 {
                     nickname: 'jinx',
@@ -1946,7 +1991,8 @@ Provide the output in JSON format.
                         punctuation: 'excessive'
                     },
                     status: 'online' as const,
-                    userType: 'virtual' as const
+                    userType: 'virtual' as const,
+                    pmProbability: 25
                 },
                 {
                     nickname: 'rex',
@@ -1966,7 +2012,8 @@ Provide the output in JSON format.
                         punctuation: 'minimal'
                     },
                     status: 'online' as const,
-                    userType: 'virtual' as const
+                    userType: 'virtual' as const,
+                    pmProbability: 25
                 },
                 {
                     nickname: 'luna',
@@ -1986,7 +2033,8 @@ Provide the output in JSON format.
                         punctuation: 'standard'
                     },
                     status: 'online' as const,
-                    userType: 'virtual' as const
+                    userType: 'virtual' as const,
+                    pmProbability: 25
                 }
             ],
             channels: [

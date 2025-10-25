@@ -3,6 +3,8 @@ import { ChannelList } from './components/ChannelList';
 import { UserList } from './components/UserList';
 import { ChatWindow } from './components/ChatWindow';
 import { SettingsModal } from './components/SettingsModal';
+import { ChannelListModal } from './components/ChannelListModal';
+import { MobileNavigation } from './components/MobileNavigation';
 import { DEFAULT_CHANNELS, DEFAULT_VIRTUAL_USERS, DEFAULT_NICKNAME, SIMULATION_INTERVALS, DEFAULT_AI_MODEL, DEFAULT_TYPING_DELAY } from './constants';
 import type { Channel, Message, User, ActiveContext, PrivateMessageConversation, AppConfig } from './types';
 import { addChannelOperator, removeChannelOperator, isChannelOperator, canUserPerformAction } from './types';
@@ -254,6 +256,11 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isChatLogOpen, setIsChatLogOpen] = useState(false);
+  const [isChannelListModalOpen, setIsChannelListModalOpen] = useState(false);
+  
+  // Mobile navigation state
+  const [mobileActivePanel, setMobileActivePanel] = useState<'chat' | 'channels' | 'users' | 'network'>('chat');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
   const [lastSpeakersReset, setLastSpeakersReset] = useState(0); // Force user selection reset
   const [typingDelayConfig, setTypingDelayConfig] = useState(() => {
@@ -343,7 +350,7 @@ const App: React.FC = () => {
   }, [unreadChannels]);
 
   // Handle PM user click - open PM and clear unread status
-  const handlePMUserClick = useCallback((nickname: string) => {
+  const handlePMUserClick = useCallback(async (nickname: string) => {
     setActiveContext({ type: 'pm', with: nickname });
     
     // Create PM conversation immediately if it doesn't exist
@@ -384,6 +391,38 @@ const App: React.FC = () => {
       }
       return prev;
     });
+    
+    // Load existing PM messages from IndexedDB
+    try {
+      const chatLogService = getChatLogService();
+      const pmChannelName = `pm_${nickname}`;
+      const existingMessages = await chatLogService.getMessages(pmChannelName, 1000);
+      
+      if (existingMessages.length > 0) {
+        pmDebug.log(`Loading ${existingMessages.length} existing PM messages for ${nickname}`);
+        
+        // Convert ChatLogEntry[] to Message[] and sort by timestamp
+        const messages = existingMessages
+          .map(entry => entry.message)
+          .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+        
+        // Update the PM conversation with loaded messages
+        setPrivateMessages(prev => {
+          if (prev[nickname]) {
+            return {
+              ...prev,
+              [nickname]: {
+                ...prev[nickname],
+                messages: messages
+              }
+            };
+          }
+          return prev;
+        });
+      }
+    } catch (error) {
+      pmDebug.error('Failed to load PM messages from IndexedDB:', error);
+    }
     
     // Clear unread status for this PM user
     setUnreadPMUsers(prev => {
@@ -723,42 +762,42 @@ const App: React.FC = () => {
     }
     
     // Merge saved logs with current channels
-      if (savedLogs && savedLogs.length > 0) {
+    if (savedLogs && savedLogs.length > 0) {
         configDebug.debug('Saved logs details:', savedLogs.map(c => ({ 
           name: c.name, 
           messageCount: c.messages?.length || 0,
           messages: c.messages?.slice(0, 2) // Show first 2 messages
         })));
         
-      // Merge saved messages with current channels
-      setChannels(prevChannels => {
-        const mergedChannels = prevChannels.map(configuredChannel => {
-          const savedChannel = savedLogs.find(saved => saved.name === configuredChannel.name);
-          configDebug.debug(`Looking for saved channel ${configuredChannel.name}:`, {
-            found: !!savedChannel,
-            messageCount: savedChannel?.messages?.length || 0,
-            savedChannelNames: savedLogs.map(s => s.name)
+        // Merge saved messages with current channels
+        setChannels(prevChannels => {
+          const mergedChannels = prevChannels.map(configuredChannel => {
+            const savedChannel = savedLogs.find(saved => saved.name === configuredChannel.name);
+            configDebug.debug(`Looking for saved channel ${configuredChannel.name}:`, {
+              found: !!savedChannel,
+              messageCount: savedChannel?.messages?.length || 0,
+              savedChannelNames: savedLogs.map(s => s.name)
+            });
+            
+            if (savedChannel && savedChannel.messages && savedChannel.messages.length > 0) {
+              // Use saved messages but keep configured users and topic
+              configDebug.debug(`Merging saved messages for ${configuredChannel.name}: ${savedChannel.messages.length} messages`);
+              return {
+                ...configuredChannel,
+                messages: savedChannel.messages, // Use saved messages
+                users: configuredChannel.users, // Keep configured users
+                topic: configuredChannel.topic  // Keep configured topic
+              };
+            } else {
+              // No saved messages for this channel, use configured channel
+              configDebug.debug(`No saved messages for ${configuredChannel.name}, using configured channel`);
+              return configuredChannel;
+            }
           });
           
-          if (savedChannel && savedChannel.messages && savedChannel.messages.length > 0) {
-            // Use saved messages but keep configured users and topic
-            configDebug.debug(`Merging saved messages for ${configuredChannel.name}: ${savedChannel.messages.length} messages`);
-            return {
-              ...configuredChannel,
-              messages: savedChannel.messages, // Use saved messages
-              users: configuredChannel.users, // Keep configured users
-              topic: configuredChannel.topic  // Keep configured topic
-            };
-          } else {
-            // No saved messages for this channel, use configured channel
-            configDebug.debug(`No saved messages for ${configuredChannel.name}, using configured channel`);
-            return configuredChannel;
-          }
+          configDebug.debug('Merged channels message counts:', mergedChannels.map(c => ({ name: c.name, messageCount: c.messages?.length || 0 })));
+          return mergedChannels;
         });
-        
-        configDebug.debug('Merged channels message counts:', mergedChannels.map(c => ({ name: c.name, messageCount: c.messages?.length || 0 })));
-        return mergedChannels;
-      });
       } else {
       configDebug.debug('No saved logs, using current channels');
     }
@@ -768,6 +807,23 @@ const App: React.FC = () => {
   useEffect(() => {
     initializeChatLogs().catch(error => console.error("Critical error:", error));
   }, []);
+
+  // Ensure channels have users after initialization
+  useEffect(() => {
+    if (channels.length > 0 && virtualUsers.length > 0) {
+      userListDebug.log('Checking if channels need users after initialization');
+      
+      const channelsNeedingUsers = channels.filter(channel => {
+        const virtualUsersInChannel = channel.users.filter(u => u.nickname !== currentUserNickname);
+        return virtualUsersInChannel.length === 0;
+      });
+      
+      if (channelsNeedingUsers.length > 0) {
+        userListDebug.log(`Found ${channelsNeedingUsers.length} channels without virtual users, auto-joining`);
+        autoJoinUsersToEmptyChannels();
+      }
+    }
+  }, [channels, virtualUsers, currentUserNickname, autoJoinUsersToEmptyChannels]);
 
   // Save channel logs and operator assignments whenever channels change
   useEffect(() => {
@@ -1587,10 +1643,16 @@ const App: React.FC = () => {
     }
 
     // Save message to chat logs
+    const chatLogService = getChatLogService();
     if (context.type === 'channel') {
-      const chatLogService = getChatLogService();
       chatLogService.saveMessage(context.name, message).catch(error => {
         chatLogDebug.error('Failed to save message:', error);
+      });
+    } else if (context.type === 'pm') {
+      // Save PM messages to IndexedDB using a special channel name format
+      const pmChannelName = `pm_${context.with}`;
+      chatLogService.saveMessage(pmChannelName, message).catch(error => {
+        chatLogDebug.error('Failed to save PM message:', error);
       });
     }
     
@@ -1639,33 +1701,208 @@ const App: React.FC = () => {
     }
   }, [virtualUsers, ircExportStatus.connected, broadcastChannel]);
 
-  // Generate autonomous private messages from virtual users
-  const generateAutonomousPM = useCallback(async () => {
-    // Only generate PMs if there are virtual users and the current user is not in a PM context
-    if (!activeContext || activeContext.type !== 'channel') {
-      return;
+  // Handle joining a channel
+  const handleJoinChannel = useCallback((channelName: string) => {
+    const channel = channels.find(c => c.name === channelName);
+    if (!channel) return;
+
+    userListDebug.log(`Joining channel: ${channelName}`);
+    userListDebug.log(`Channel users before join:`, channel.users.map(u => u.nickname));
+
+    // Add current user to channel if not already present
+    const isUserInChannel = channel.users.some(u => u.nickname === currentUserNickname);
+    if (!isUserInChannel) {
+      const currentUser: User = {
+        nickname: currentUserNickname,
+        status: 'online' as const,
+        personality: 'The human user',
+        userType: 'virtual' as const,
+        languageSkills: { 
+          languages: [{
+            language: 'English',
+            fluency: 'native' as const,
+            accent: ''
+          }]
+        },
+        writingStyle: { formality: 'informal' as const, verbosity: 'neutral' as const, humor: 'none' as const, emojiUsage: 'low' as const, punctuation: 'standard' as const }
+      };
+
+      setChannels(prev => prev.map(c => 
+        c.name === channelName 
+          ? { ...c, users: [...c.users, currentUser] }
+          : c
+      ));
+
+      // Add join notification
+      const joinMessage: Message = {
+        id: generateUniqueMessageId(),
+        nickname: 'system',
+        content: `${currentUserNickname} joined ${channelName}`,
+        timestamp: new Date(),
+        type: 'join'
+      };
+
+      addMessageToContext(joinMessage, { type: 'channel', name: channelName });
     }
 
-    const activeChannel = channels.find(c => c.name === activeContext.name);
-    if (!activeChannel) return;
+    // Ensure channel has virtual users (auto-join if needed)
+    const virtualUsersInChannel = channel.users.filter(u => u.nickname !== currentUserNickname);
+    if (virtualUsersInChannel.length === 0) {
+      userListDebug.log(`Channel ${channelName} has no virtual users, auto-joining some`);
+      
+      // Select 2-4 random virtual users to join this channel
+      const availableUsers = virtualUsers.filter(u => 
+        !channels.some(c => c.name !== channelName && c.users.some(cu => cu.nickname === u.nickname))
+      );
+      
+      if (availableUsers.length > 0) {
+        const numUsersToJoin = Math.min(Math.floor(Math.random() * 3) + 2, availableUsers.length); // 2-4 users
+        const shuffledUsers = [...availableUsers].sort(() => Math.random() - 0.5);
+        const usersToJoin = shuffledUsers.slice(0, numUsersToJoin);
+        
+        userListDebug.log(`Auto-joining users to ${channelName}:`, usersToJoin.map(u => u.nickname));
+        
+        setChannels(prev => prev.map(c => 
+          c.name === channelName 
+            ? { ...c, users: [...c.users, ...usersToJoin] }
+            : c
+        ));
 
-    // Get virtual users from the active channel
-    const virtualUsers = migrateUsers(activeChannel.users).filter(u => u.userType === 'virtual');
-    if (virtualUsers.length === 0) return;
+        // Add join messages for the new users
+        usersToJoin.forEach(user => {
+          const joinMessage: Message = {
+            id: generateUniqueMessageId(),
+            nickname: user.nickname,
+            content: `joined ${channelName}`,
+            timestamp: new Date(),
+            type: 'join'
+          };
+          addMessageToContext(joinMessage, { type: 'channel', name: channelName });
+        });
+      }
+    }
 
-    // Randomly select a virtual user to send a PM
-    const randomUser = virtualUsers[Math.floor(Math.random() * virtualUsers.length)];
+    // Switch to the channel
+    setActiveContext({ type: 'channel', name: channelName });
+  }, [channels, currentUserNickname, addMessageToContext, virtualUsers]);
+
+  // Handle leaving a channel
+  const handleLeaveChannel = useCallback((channelName: string) => {
+    const channel = channels.find(c => c.name === channelName);
+    if (!channel) return;
+
+    userListDebug.log(`Leaving channel: ${channelName}`);
+
+    // Remove current user from channel
+    setChannels(prev => prev.map(c => 
+      c.name === channelName 
+        ? { ...c, users: c.users.filter(u => u.nickname !== currentUserNickname) }
+        : c
+    ));
+
+    // Add leave notification
+    const leaveMessage: Message = {
+      id: generateUniqueMessageId(),
+      nickname: 'system',
+      content: `${currentUserNickname} left ${channelName}`,
+      timestamp: new Date(),
+      type: 'part'
+    };
+
+    addMessageToContext(leaveMessage, { type: 'channel', name: channelName });
+
+    // If this was the active channel, switch to another channel or clear context
+    if (activeContext?.type === 'channel' && activeContext.name === channelName) {
+      const remainingChannels = channels.filter(c => c.name !== channelName && c.users.some(u => u.nickname === currentUserNickname));
+      if (remainingChannels.length > 0) {
+        userListDebug.log(`Switching to another channel: ${remainingChannels[0].name}`);
+        setActiveContext({ type: 'channel', name: remainingChannels[0].name });
+      } else {
+        userListDebug.log(`No other channels available, clearing context`);
+        setActiveContext(null);
+      }
+    }
+  }, [channels, currentUserNickname, activeContext, addMessageToContext]);
+
+  // Handle closing a channel/PM window
+  const handleCloseWindow = useCallback(() => {
+    if (activeContext?.type === 'channel') {
+      handleLeaveChannel(activeContext.name);
+    } else if (activeContext?.type === 'pm') {
+      // For PMs, just clear the context (don't remove the conversation)
+      setActiveContext(null);
+    }
+  }, [activeContext, handleLeaveChannel]);
+
+  // Generate autonomous private messages from virtual users
+  const generateAutonomousPM = useCallback(async () => {
+    // Get all virtual users from all channels
+    const allVirtualUsers = channels.flatMap(channel => 
+      migrateUsers(channel.users).filter(u => u.userType === 'virtual')
+    );
+
+    if (allVirtualUsers.length === 0) return;
+
+    let selectedUser: User | null = null;
+
+    // Check if user is currently in a PM conversation
+    if (activeContext?.type === 'pm' && activeContext.with) {
+      // Prioritize the current PM user for follow-up messages
+      const currentPMUser = allVirtualUsers.find(u => u.nickname === activeContext.with);
+      if (currentPMUser) {
+        const pmProb = currentPMUser.pmProbability ?? 25;
+        if (Math.random() < (pmProb / 100)) {
+          selectedUser = currentPMUser;
+          simulationDebug.log(`Selected current PM user ${currentPMUser.nickname} for follow-up message`);
+        }
+      }
+    }
+
+    // If no current PM user selected, choose from eligible users
+    if (!selectedUser) {
+      // Filter users based on their PM probability
+      const eligibleUsers = allVirtualUsers.filter(user => {
+        const pmProb = user.pmProbability ?? 25; // Default 25% if not set
+        return Math.random() < (pmProb / 100);
+      });
+
+      if (eligibleUsers.length === 0) {
+        simulationDebug.log('No eligible users for autonomous PM generation');
+        return;
+      }
+
+      // Randomly select from eligible users
+      selectedUser = eligibleUsers[Math.floor(Math.random() * eligibleUsers.length)];
+      simulationDebug.log(`Selected new PM user ${selectedUser.nickname} for initial message`);
+    }
+
+    const randomUser = selectedUser;
     
     // Generate 1-2 PM messages
     const numMessages = Math.random() < 0.7 ? 1 : 2; // 70% chance for 1 message, 30% for 2
     
     for (let i = 0; i < numMessages; i++) {
       try {
+        // Create a dummy message to trigger PM response
+        const dummyMessage: Message = {
+          id: generateUniqueMessageId(),
+          nickname: currentUserNickname,
+          content: "Hello", // Simple trigger message
+          timestamp: new Date(),
+          type: 'user'
+        };
+
+        // Create conversation object
+        const conversation: PrivateMessageConversation = {
+          user: randomUser,
+          messages: privateMessages[randomUser.nickname]?.messages || []
+        };
+
         // Generate PM content
         const pmContent = await generatePrivateMessageResponse(
-          randomUser,
+          conversation,
+          dummyMessage,
           currentUserNickname,
-          privateMessages[randomUser.nickname]?.messages || [],
           aiModel
         );
 
@@ -2223,7 +2460,9 @@ const App: React.FC = () => {
       return;
     }
     
+    // Set loading state only briefly for immediate feedback, then reset
     setIsLoading(true);
+    setTimeout(() => setIsLoading(false), 100); // Reset quickly to allow new messages
     
     // If connected to network, send message via network
     if (isNetworkConnected && activeContext?.type === 'channel') {
@@ -2251,7 +2490,6 @@ const App: React.FC = () => {
       }
       
       networkService.sendMessage(activeContext.name, content);
-      setIsLoading(false);
       return;
     }
     
@@ -2267,113 +2505,107 @@ const App: React.FC = () => {
     // Track user message time for burst mode
     lastUserMessageTimeRef.current = Date.now();
 
-    // Set a timeout to ensure isLoading is always reset
-    const loadingTimeout = setTimeout(() => {
-      inputDebug.warn('AI response timeout, resetting loading state');
-      setIsLoading(false);
-    }, 30000); // 30 second timeout
-
-    try {
-      let aiResponse: string | null = null;
-      if (activeContext && activeContext.type === 'channel') {
-        const channel = channels.find(c => c.name === activeContext.name);
-        if (channel) {
-          // Check if there are virtual users in the channel (AI reactions are generated by virtual users)
-          const virtualUsers = migrateUsers(channel.users).filter(u => u.userType === 'virtual');
-          notificationDebug.log('Debug - channel:', channel.name, 'all users:', channel.users.map(u => u.nickname), 'currentUser:', currentUserNickname, 'virtualUsers:', virtualUsers.map(u => u.nickname));
-          notificationDebug.log('Debug - user types:', channel.users.map(u => ({ nickname: u.nickname, userType: u.userType, personality: u.personality })));
-          
-          if (virtualUsers.length > 0) {
-            // Show notification that AI is generating a reaction
-            const randomUser = virtualUsers[Math.floor(Math.random() * virtualUsers.length)];
-            notificationDebug.log('Triggering notification for local message, virtualUsers:', virtualUsers.length, 'selected:', randomUser.nickname);
-            showAiReactionNotification(`${randomUser.nickname} noticed your message, reaction generation started`);
+    // Process AI response asynchronously without blocking the input
+    (async () => {
+      try {
+        let aiResponse: string | null = null;
+        if (activeContext && activeContext.type === 'channel') {
+          const channel = channels.find(c => c.name === activeContext.name);
+          if (channel) {
+            // Check if there are virtual users in the channel (AI reactions are generated by virtual users)
+            const virtualUsers = migrateUsers(channel.users).filter(u => u.userType === 'virtual');
+            notificationDebug.log('Debug - channel:', channel.name, 'all users:', channel.users.map(u => u.nickname), 'currentUser:', currentUserNickname, 'virtualUsers:', virtualUsers.map(u => u.nickname));
+            notificationDebug.log('Debug - user types:', channel.users.map(u => ({ nickname: u.nickname, userType: u.userType, personality: u.personality })));
             
-          aiResponse = await generateReactionToMessage(channel, userMessage, currentUserNickname, aiModel);
+            if (virtualUsers.length > 0) {
+              // Show notification that AI is generating a reaction
+              const randomUser = virtualUsers[Math.floor(Math.random() * virtualUsers.length)];
+              notificationDebug.log('Triggering notification for local message, virtualUsers:', virtualUsers.length, 'selected:', randomUser.nickname);
+              showAiReactionNotification(`${randomUser.nickname} noticed your message, reaction generation started`);
+              
+              aiResponse = await generateReactionToMessage(channel, userMessage, currentUserNickname, aiModel);
+            } else {
+              notificationDebug.log('No virtual users in channel, skipping notification');
+            }
           } else {
-            notificationDebug.log('No virtual users in channel, skipping notification');
+            notificationDebug.log('No channel found for activeContext:', activeContext);
           }
-        } else {
-          notificationDebug.log('No channel found for activeContext:', activeContext);
+        } else if (activeContext && activeContext.type === 'pm') { // 'pm'
+          const user = virtualUsers.find(u => u.nickname === activeContext.with);
+          if (!user) {
+            pmDebug.error(` User ${activeContext.with} not found in virtualUsers, skipping PM response`);
+            return;
+          }
+          const conversation = privateMessages[activeContext.with] || { user, messages: [] };
+          aiResponse = await withConcurrencyLimit(
+            () => generatePrivateMessageResponse(conversation, userMessage, currentUserNickname, aiModel),
+            `private message response from ${activeContext.with}`
+          );
         }
-      } else if (activeContext && activeContext.type === 'pm') { // 'pm'
-        const user = virtualUsers.find(u => u.nickname === activeContext.with);
-        if (!user) {
-          pmDebug.error(` User ${activeContext.with} not found in virtualUsers, skipping PM response`);
-          return;
-        }
-        const conversation = privateMessages[activeContext.with] || { user, messages: [] };
-        aiResponse = await withConcurrencyLimit(
-          () => generatePrivateMessageResponse(conversation, userMessage, currentUserNickname, aiModel),
-          `private message response from ${activeContext.with}`
-        );
-      }
-      
-      if (aiResponse) {
-        const aiMessages = aiResponse.split('\n').filter(line => line.includes(':'));
-        for (let index = 0; index < aiMessages.length; index++) {
-          const msgLine = aiMessages[index];
-          const [nickname, ...contentParts] = msgLine.split(':');
-          const content = contentParts.join(':').trim();
-          if (nickname && content && nickname.trim()) {
-            // Show typing indicator for AI response
-            setTyping(nickname.trim(), true);
-            
-            // Simulate typing delay for each AI response message
-            simulationDebug.debug(`Simulating typing delay for AI response: "${content}"`);
-            await simulateTypingDelay(content.length, typingDelayConfig);
-            
-            // Hide typing indicator
-            setTyping(nickname.trim(), false);
-            
-            const aiMessage: Message = {
-              id: generateUniqueMessageId(),
-              nickname: nickname.trim(),
-              content: content,
-              timestamp: new Date(),
-              type: activeContext?.type === 'pm' ? 'pm' : 'ai'
-            };
-            addMessageToContext(aiMessage, activeContext);
+        
+        if (aiResponse) {
+          const aiMessages = aiResponse.split('\n').filter(line => line.includes(':'));
+          for (let index = 0; index < aiMessages.length; index++) {
+            const msgLine = aiMessages[index];
+            const [nickname, ...contentParts] = msgLine.split(':');
+            const content = contentParts.join(':').trim();
+            if (nickname && content && nickname.trim()) {
+              // Show typing indicator for AI response
+              setTyping(nickname.trim(), true);
+              
+              // Simulate typing delay for each AI response message
+              simulationDebug.debug(`Simulating typing delay for AI response: "${content}"`);
+              await simulateTypingDelay(content.length, typingDelayConfig);
+              
+              // Hide typing indicator
+              setTyping(nickname.trim(), false);
+              
+              const aiMessage: Message = {
+                id: generateUniqueMessageId(),
+                nickname: nickname.trim(),
+                content: content,
+                timestamp: new Date(),
+                type: activeContext?.type === 'pm' ? 'pm' : 'ai'
+              };
+              addMessageToContext(aiMessage, activeContext);
+            }
           }
         }
-      }
-    } catch (error) {
-      console.error("Failed to get AI response:", error);
-      console.error("Full error details:", {
-        message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined,
-        name: error instanceof Error ? error.name : undefined
-      });
-      
-      let content = `Error: Could not get AI response. Please check your API key and network connection.`;
-      if (error instanceof Error) {
-        if (error.message.includes("RESOURCE_EXHAUSTED") || error.message.includes("429")) {
-          content = `Error: API rate limit exceeded. Try reducing simulation speed or disabling typing delays in Settings.`;
-        } else if (error.message.includes("PERMISSION_DENIED") || error.message.includes("403")) {
-          content = `Error: API key permission denied. Please check your API key is valid and has proper permissions.`;
-        } else if (error.message.includes("CORS") || error.message.includes("NetworkError") || error.message.includes("fetch")) {
-          content = `Error: Network/CORS error. This may be due to browser security policies. The simulation will continue with fallback responses.`;
-        } else if (error.message.includes("INVALID_ARGUMENT") || error.message.includes("400")) {
-          content = `Error: Invalid API request. This might be a temporary issue with the API service.`;
-        } else if (error.message.includes("UNAVAILABLE") || error.message.includes("503")) {
-          content = `Error: API service temporarily unavailable. Please try again in a few moments.`;
-        } else {
-          // For Tier 1 API debugging - show the actual error
-          content = `Error: ${error.message}. Check browser console for details.`;
+      } catch (error) {
+        console.error("Failed to get AI response:", error);
+        console.error("Full error details:", {
+          message: error instanceof Error ? error.message : 'Unknown error',
+          stack: error instanceof Error ? error.stack : undefined,
+          name: error instanceof Error ? error.name : undefined
+        });
+        
+        let content = `Error: Could not get AI response. Please check your API key and network connection.`;
+        if (error instanceof Error) {
+          if (error.message.includes("RESOURCE_EXHAUSTED") || error.message.includes("429")) {
+            content = `Error: API rate limit exceeded. Try reducing simulation speed or disabling typing delays in Settings.`;
+          } else if (error.message.includes("PERMISSION_DENIED") || error.message.includes("403")) {
+            content = `Error: API key permission denied. Please check your API key is valid and has proper permissions.`;
+          } else if (error.message.includes("CORS") || error.message.includes("NetworkError") || error.message.includes("fetch")) {
+            content = `Error: Network/CORS error. This may be due to browser security policies. The simulation will continue with fallback responses.`;
+          } else if (error.message.includes("INVALID_ARGUMENT") || error.message.includes("400")) {
+            content = `Error: Invalid API request. This might be a temporary issue with the API service.`;
+          } else if (error.message.includes("UNAVAILABLE") || error.message.includes("503")) {
+            content = `Error: API service temporarily unavailable. Please try again in a few moments.`;
+          } else {
+            // For Tier 1 API debugging - show the actual error
+            content = `Error: ${error.message}. Check browser console for details.`;
+          }
         }
+        const errorMessage: Message = {
+          id: generateUniqueMessageId(),
+          nickname: 'system',
+          content,
+          timestamp: new Date(),
+          type: 'system'
+        };
+        addMessageToContext(errorMessage, activeContext);
       }
-      const errorMessage: Message = {
-        id: generateUniqueMessageId(),
-        nickname: 'system',
-        content,
-        timestamp: new Date(),
-        type: 'system'
-      };
-      addMessageToContext(errorMessage, activeContext);
-    } finally {
-      clearTimeout(loadingTimeout);
-      setIsLoading(false);
-    }
+    })(); // Execute the async function immediately
   };
 
   const generateGreetingForNewUser = async (channel: Channel, newUserNickname: string) => {
@@ -2561,20 +2793,20 @@ The response must be a single line in the format: "nickname: greeting message"
     let multiplier = 1.0;
     
     if (hour >= 6 && hour < 12) {
-      // Morning: More active (faster simulation)
-      multiplier = isWeekend ? 0.8 : 0.7; // Even more active on weekends
+      // Morning: Slightly more active
+      multiplier = isWeekend ? 0.9 : 0.8; // Less aggressive than before
     } else if (hour >= 12 && hour < 17) {
       // Afternoon: Normal activity
-      multiplier = isWeekend ? 0.9 : 1.0;
+      multiplier = isWeekend ? 0.95 : 1.0;
     } else if (hour >= 17 && hour < 21) {
-      // Evening: Peak social time
-      multiplier = 0.6; // Much more active
+      // Evening: Peak social time - but not too aggressive
+      multiplier = 0.7; // Less aggressive than before
     } else if (hour >= 21 && hour < 24) {
       // Late evening: Winding down
-      multiplier = isWeekend ? 0.8 : 1.2;
+      multiplier = isWeekend ? 0.9 : 1.3;
     } else {
       // Late night/early morning: Very quiet
-      multiplier = 2.0; // Much slower
+      multiplier = 2.5; // Even slower than before
     }
     
     const adjustedInterval = Math.round(baseInterval * multiplier);
@@ -2608,7 +2840,8 @@ The response must be a single line in the format: "nickname: greeting message"
     
     if (channels.length === 0) {
       simulationDebug.debug('No channels available for simulation');
-      return;
+      // Still allow PM generation even without channels
+      // (though this is unlikely to happen in normal operation)
     }
     
     // Debug: Log current user nickname and channel users
@@ -2625,7 +2858,67 @@ The response must be a single line in the format: "nickname: greeting message"
     const timeSinceLastUserMessage = now - lastUserMessageTimeRef.current;
     const shouldBurst = timeSinceLastUserMessage < 30000; // 30 seconds
     
-    simulationDebug.debug(`Running simulation - burst mode: ${shouldBurst}, time since last user message: ${timeSinceLastUserMessage}ms`);
+    // Add quiet mode logic - occasionally skip simulation cycles entirely
+    const quietModeChance = 0.3; // 30% chance to enter quiet mode
+    const isQuietMode = Math.random() < quietModeChance;
+    
+    // In quiet mode, only generate reactions to recent messages, no new messages
+    if (isQuietMode && !shouldBurst) {
+      simulationDebug.debug('Quiet mode: Only checking for reactions to recent messages');
+      
+      // Find a random channel and check if there are recent messages to react to
+      const randomChannel = channels[Math.floor(Math.random() * channels.length)];
+      if (randomChannel && randomChannel.messages.length > 0) {
+        const recentMessages = randomChannel.messages.slice(-3); // Last 3 messages
+        const userMessages = recentMessages.filter(msg => 
+          msg.nickname !== currentUserNickname && 
+          msg.type !== 'system' && 
+          msg.type !== 'join' && 
+          msg.type !== 'part'
+        );
+        
+        if (userMessages.length > 0 && Math.random() < 0.4) { // 40% chance to react in quiet mode
+          const messageToReactTo = userMessages[Math.floor(Math.random() * userMessages.length)];
+          simulationDebug.debug(`Quiet mode: Generating reaction to message from ${messageToReactTo.nickname}`);
+          
+          try {
+            const reactionResponse = await generateReactionToMessage(randomChannel, messageToReactTo, currentUserNickname, aiModel);
+            if (reactionResponse) {
+              const [reactionNickname, ...reactionContentParts] = reactionResponse.split(':');
+              const reactionContent = reactionContentParts.join(':').trim();
+              
+              if (reactionNickname && reactionContent && reactionNickname.trim()) {
+                // Show typing indicator
+                setTyping(reactionNickname.trim(), true);
+                
+                // Simulate typing delay
+                await simulateTypingDelay(reactionContent.length, typingDelayConfig);
+                
+                // Hide typing indicator
+                setTyping(reactionNickname.trim(), false);
+                
+                const reactionMessage: Message = {
+                  id: generateUniqueMessageId(),
+                  nickname: reactionNickname.trim(),
+                  content: reactionContent,
+                  timestamp: new Date(),
+                  type: 'ai'
+                };
+                simulationDebug.debug(`Quiet mode: Adding reaction from ${reactionNickname.trim()}: "${reactionContent}"`);
+                addMessageToContext(reactionMessage, { type: 'channel', name: randomChannel.name });
+              }
+            }
+          } catch (error) {
+            simulationDebug.error('Quiet mode reaction generation failed:', error);
+          }
+        }
+      }
+      
+      // Skip the rest of the simulation in quiet mode
+      return;
+    }
+    
+    simulationDebug.debug(`Running simulation - burst mode: ${shouldBurst}, quiet mode: ${isQuietMode}, time since last user message: ${timeSinceLastUserMessage}ms`);
     
     // Prioritize the active channel for more responsive conversation
     let targetChannel: Channel;
@@ -2716,7 +3009,7 @@ The response must be a single line in the format: "nickname: greeting message"
           addMessageToContext(aiMessage, { type: 'channel', name: targetChannel.name });
           
           // Sometimes generate a reaction to the AI message for more conversation
-          if (Math.random() < 0.5) { // 50% chance to generate a reaction
+          if (Math.random() < 0.2) { // 20% chance to generate a reaction (reduced from 50%)
             simulationDebug.debug(`Generating reaction to AI message from ${nickname.trim()}`);
             setTimeout(async () => {
               try {
@@ -2768,7 +3061,7 @@ The response must be a single line in the format: "nickname: greeting message"
       }
       
       // Even in normal mode, sometimes generate additional activity for more diverse conversations
-      if (!shouldBurst && Math.random() < 0.2) { // 20% chance for additional activity in normal mode
+      if (!shouldBurst && Math.random() < 0.1) { // 10% chance for additional activity in normal mode (reduced from 20%)
         simulationDebug.debug(`Normal mode: generating additional activity for ${targetChannel.name}`);
         setTimeout(async () => {
           try {
@@ -2823,8 +3116,8 @@ The response must be a single line in the format: "nickname: greeting message"
       }
       
       // In burst mode, sometimes generate a second message for more activity
-      // Increased probability for more balanced conversation
-      if (shouldBurst && Math.random() < 0.6) { // Increased from 0.4 to 0.6
+      // Reduced probability for less hectic simulation
+      if (shouldBurst && Math.random() < 0.3) { // Reduced from 0.6 to 0.3
         simulationDebug.debug(`Burst mode: generating second message for ${targetChannel.name}`);
         setTimeout(async () => {
           try {
@@ -2916,12 +3209,40 @@ The response must be a single line in the format: "nickname: greeting message"
     }
 
     // Generate autonomous private messages (1-2 messages, no flooding)
-    if (Math.random() < 0.1) { // 10% chance to generate a PM
+    // Enhanced PM generation logic - works from any context
+    const activeChannel = channels.find(c => c.name === activeContext?.name);
+    
+    // Get all virtual users from all channels for PM generation
+    const allVirtualUsers = channels.flatMap(channel => 
+      migrateUsers(channel.users).filter(u => u.userType === 'virtual')
+    );
+    const hasUsersWithPMProbability = allVirtualUsers.some(user => (user.pmProbability ?? 25) > 0);
+    
+    // Check if user is currently in a PM conversation
+    const isInPM = activeContext?.type === 'pm';
+    const currentPMUser = isInPM ? activeContext.with : null;
+    
+    let pmChance = 0.05; // Base 5% chance (reduced from 10%)
+    
+    if (isInPM && currentPMUser) {
+      // Higher chance for follow-up PMs when already in PM conversation
+      pmChance = 0.3; // 30% chance for follow-up PMs (reduced from 60%)
+      simulationDebug.log(`Higher PM chance (30%) for ongoing conversation with ${currentPMUser}`);
+    } else if (hasUsersWithPMProbability) {
+      // Lower chance for initial PMs
+      pmChance = 0.1; // 10% chance for initial PMs (reduced from 20%)
+      simulationDebug.log(`Standard PM chance (10%) for initial PMs`);
+    }
+    
+    if (hasUsersWithPMProbability && Math.random() < pmChance) {
+      simulationDebug.log(`PM generation triggered! Chance: ${pmChance}, isInPM: ${isInPM}, currentPMUser: ${currentPMUser}`);
       try {
         await generateAutonomousPM();
       } catch (error) {
         simulationDebug.error('Failed to generate autonomous PM:', error);
       }
+    } else {
+      simulationDebug.debug(`PM generation skipped. hasUsersWithPMProbability: ${hasUsersWithPMProbability}, pmChance: ${pmChance}, random: ${Math.random()}`);
     }
   }, [channels, activeContext, addMessageToContext, currentUserNickname, isSettingsOpen, autoJoinUsersToEmptyChannels, generateAutonomousPM]);
 
@@ -2989,10 +3310,16 @@ The response must be a single line in the format: "nickname: greeting message"
     };
   }, []);
 
-  const activeChannel = useMemo(() => 
-    activeContext?.type === 'channel' ? channels.find(c => c.name === activeContext.name) : undefined,
-    [activeContext, channels]
-  );
+  const activeChannel = useMemo(() => {
+    if (activeContext?.type === 'channel') {
+      const channel = channels.find(c => c.name === activeContext.name);
+      userListDebug.log(`Finding activeChannel for context: ${activeContext.name}`);
+      userListDebug.log(`Available channels:`, channels.map(c => c.name));
+      userListDebug.log(`Found channel:`, channel ? `${channel.name} with ${channel.users.length} users` : 'null');
+      return channel;
+    }
+    return undefined;
+  }, [activeContext, channels]);
   
   const activePM = useMemo(() => 
     activeContext?.type === 'pm' ? privateMessages[activeContext.with] : undefined,
@@ -3001,12 +3328,18 @@ The response must be a single line in the format: "nickname: greeting message"
   
   const usersInContext: User[] = useMemo(() => {
     if (activeContext?.type === 'channel' && activeChannel) {
+      userListDebug.log(`Calculating usersInContext for channel: ${activeChannel.name}`);
+      userListDebug.log(`Channel users count: ${activeChannel.users.length}`);
+      userListDebug.log(`Channel users:`, activeChannel.users.map(u => u.nickname));
+      
       // Get network users in this channel
       const networkUsersInChannel = networkUsers.filter(networkUser => {
         // Ensure channels is an array before checking
         const channels = Array.isArray(networkUser.channels) ? networkUser.channels : Array.from(networkUser.channels || []);
         return channels.includes(activeChannel.name);
       });
+      
+      userListDebug.log(`Network users in channel: ${networkUsersInChannel.length}`);
       
       // Convert network users to User objects
       const convertedNetworkUsers: User[] = networkUsersInChannel.map(networkUser => ({
@@ -3029,6 +3362,8 @@ The response must be a single line in the format: "nickname: greeting message"
       // Combine channel users with network users
       let allUsers = [...activeChannel.users, ...convertedNetworkUsers];
       
+      userListDebug.log(`Combined users before filtering: ${allUsers.length}`);
+      
       // If network is connected, exclude the default human user (currentUserNickname) 
       // but only if it's not a network user (to avoid filtering out the actual network user)
       if (isNetworkConnected) {
@@ -3040,6 +3375,7 @@ The response must be a single line in the format: "nickname: greeting message"
           // Filter out the default human user
           return user.nickname !== currentUserNickname;
         });
+        userListDebug.log(`After network filtering: ${allUsers.length}`);
       }
       
       // Deduplicate users by nickname to prevent React key collisions
@@ -3049,6 +3385,9 @@ The response must be a single line in the format: "nickname: greeting message"
         }
         return acc;
       }, [] as User[]);
+      
+      userListDebug.log(`Final unique users: ${uniqueUsers.length}`);
+      userListDebug.log(`Final users:`, uniqueUsers.map(u => u.nickname));
       
       // Only log if there are issues
       if (allUsers.length !== uniqueUsers.length) {
@@ -3091,6 +3430,19 @@ The response must be a single line in the format: "nickname: greeting message"
     }
     return [];
   }, [activeContext, activeChannel, virtualUsers, currentUserNickname, networkUsers, isNetworkConnected]);
+
+  // Filter typing users based on current context
+  const typingUsersInContext: string[] = useMemo(() => {
+    if (activeContext?.type === 'channel' && activeChannel) {
+      // For channels, only show typing users who are in this channel
+      const channelUserNicknames = usersInContext.map(user => user.nickname);
+      return Array.from(typingUsers).filter(nickname => typeof nickname === 'string' && channelUserNicknames.includes(nickname));
+    } else if (activeContext?.type === 'pm' && activeContext.with) {
+      // For PMs, only show typing for the PM user
+      return Array.from(typingUsers).filter(nickname => typeof nickname === 'string' && nickname === activeContext.with);
+    }
+    return [];
+  }, [typingUsers, activeContext, usersInContext]);
 
   const messagesInContext = useMemo(() => {
     if (activeContext?.type === 'channel' && activeChannel) {
@@ -3159,6 +3511,14 @@ The response must be a single line in the format: "nickname: greeting message"
     }
   }, [isNetworkConnected, networkNickname]);
 
+  // Clear network users when disconnected
+  useEffect(() => {
+    if (!isNetworkConnected) {
+      setNetworkUsers([]);
+      setNetworkNickname(null);
+    }
+  }, [isNetworkConnected]);
+
   // Network channel data update handler
   const handleNetworkChannelData = useCallback((channelData: any) => {
     
@@ -3183,23 +3543,22 @@ The response must be a single line in the format: "nickname: greeting message"
           userType: 'network' as const
         }));
         
-        // Migrate existing users: fix network users that were incorrectly assigned userType 'virtual'
-        const existingUsers = (channel.users || []).map(user => {
-          // If user has 'Network User' personality but 'virtual' userType, fix it
+        // Separate existing users into virtual/local users and network users
+        const existingVirtualUsers = (channel.users || []).filter(user => 
+          user.userType === 'virtual' || user.userType === 'local'
+        );
+        
+        // Fix any network users that were incorrectly assigned userType 'virtual'
+        const existingNetworkUsers = (channel.users || []).map(user => {
           if (user.personality === 'Network User' && user.userType === 'virtual') {
             return { ...user, userType: 'network' as const };
           }
           return user;
-        });
+        }).filter(user => user.userType === 'network');
         
-        // Merge existing users with network users, avoiding duplicates
-        const allUsers = [...existingUsers];
-        
-        networkUsers.forEach((networkUser: any) => {
-          if (!allUsers.find(u => u.nickname === networkUser.nickname)) {
-            allUsers.push(networkUser);
-          }
-        });
+        // Combine virtual/local users with the current network users from server
+        // This ensures we only show users who are actually connected
+        const allUsers = [...existingVirtualUsers, ...networkUsers];
         
         // Remove duplicates by nickname to prevent React key conflicts
         const uniqueUsers = allUsers.reduce((acc, user) => {
@@ -3229,6 +3588,23 @@ The response must be a single line in the format: "nickname: greeting message"
       }
       return channel;
     }));
+
+    // Also update the global networkUsers state for the NetworkUsers component
+    const networkUsersFromChannel = channelData.users.map((user: any) => ({
+      nickname: user.nickname,
+      type: user.type || 'human',
+      status: user.status || 'online',
+      channels: [channelData.channel] // This user is in this specific channel
+    }));
+
+    // Update the global networkUsers state
+    setNetworkUsers(prev => {
+      // Remove users from this channel first
+      const usersNotInChannel = prev.filter(user => !user.channels.includes(channelData.channel));
+      
+      // Add the new users from this channel
+      return [...usersNotInChannel, ...networkUsersFromChannel];
+    });
   }, []);
 
   // Set up network message handler
@@ -3399,7 +3775,7 @@ The response must be a single line in the format: "nickname: greeting message"
   }, [currentUserNickname, aiModel, handleNetworkChannelData, virtualUsers]);
 
   return (
-    <div className="flex flex-col lg:flex-row h-screen w-screen bg-gray-800 font-mono">
+    <div className="flex flex-col h-screen w-screen bg-gray-800 font-mono">
       {isSettingsOpen && (
         <SettingsModal 
           onSave={handleSaveSettings} 
@@ -3422,118 +3798,228 @@ The response must be a single line in the format: "nickname: greeting message"
           currentChannel={activeContext?.type === 'channel' ? activeContext.name : undefined}
         />
       )}
-      <ChannelList 
+      <ChannelListModal
+        isOpen={isChannelListModalOpen}
+        onClose={() => setIsChannelListModalOpen(false)}
         channels={channels}
+        currentUserNickname={currentUserNickname}
+        onJoinChannel={handleJoinChannel}
+        onLeaveChannel={handleLeaveChannel}
+        onOpenPM={handlePMUserClick}
         privateMessageUsers={allPMUsers}
-        activeContext={activeContext}
-        onSelectContext={setActiveContext}
-        onChannelClick={handleChannelClick}
-        onPMClick={handlePMUserClick}
-        onOpenSettings={handleOpenSettings}
         unreadChannels={unreadChannels}
         unreadPMUsers={unreadPMUsers}
-        onOpenChatLogs={handleOpenChatLogs}
-        onResetSpeakers={resetLastSpeakers}
       />
-      <main className="flex flex-1 flex-col border-l border-r border-gray-700 min-h-0 lg:min-h-0">
-        {/* AI Reaction Notification */}
-        {console.log('[AI Notification] Render check - isVisible:', aiReactionNotification.isVisible, 'message:', aiReactionNotification.message)}
-        {aiReactionNotification.isVisible && (
-          <div className="bg-blue-900 border border-blue-600 text-blue-100 px-4 py-2 text-sm font-medium animate-pulse">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-blue-400 rounded-full animate-ping"></div>
-              <span>{aiReactionNotification.message}</span>
-            </div>
-          </div>
-        )}
-        
-        
-        <ChatWindow 
-          title={contextTitle}
-          messages={messagesInContext}
-          onSendMessage={handleSendMessage}
-          isLoading={isLoading}
-          currentUserNickname={currentUserNickname}
-          typingUsers={Array.from(typingUsers)}
-          channel={activeChannel}
-        />
-      </main>
-      <UserList 
-        users={usersInContext} 
-        onUserClick={handlePMUserClick} 
-        currentUserNickname={isNetworkConnected && networkNickname ? networkNickname : currentUserNickname}
-        channel={activeChannel}
-        onToggleOperator={handleToggleOperator}
+
+      {/* Mobile Navigation */}
+      <MobileNavigation
+        activePanel={mobileActivePanel}
+        onPanelChange={setMobileActivePanel}
+        isMenuOpen={isMobileMenuOpen}
+        onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+        unreadChannels={unreadChannels}
         unreadPMUsers={unreadPMUsers}
-        networkNickname={networkNickname}
         isNetworkConnected={isNetworkConnected}
       />
-      
-      {/* Network Panel */}
-      <div className="w-80 bg-gray-900 border-l border-gray-700 flex flex-col">
-        <div className="p-4 border-b border-gray-700">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-lg font-semibold text-white">Network</h2>
-            <button
-              onClick={() => setShowNetworkPanel(!showNetworkPanel)}
-              className="text-gray-400 hover:text-white"
-            >
-              {showNetworkPanel ? '▼' : '▶'}
-            </button>
-          </div>
+      {/* Main Content Area */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Desktop Layout - Sidebar */}
+        <div className="hidden lg:flex lg:flex-col">
+          <ChannelList 
+            channels={channels}
+            privateMessageUsers={allPMUsers}
+            activeContext={activeContext}
+            onSelectContext={setActiveContext}
+            onChannelClick={handleChannelClick}
+            onPMClick={handlePMUserClick}
+            onOpenSettings={handleOpenSettings}
+            onOpenChannelList={() => setIsChannelListModalOpen(true)}
+            onJoinChannel={handleJoinChannel}
+            onLeaveChannel={handleLeaveChannel}
+            unreadChannels={unreadChannels}
+            unreadPMUsers={unreadPMUsers}
+            onOpenChatLogs={handleOpenChatLogs}
+            onResetSpeakers={resetLastSpeakers}
+            currentUserNickname={currentUserNickname}
+          />
         </div>
-        
-        {showNetworkPanel && (
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {/* Current User Display */}
-            <div className="bg-gray-800 rounded-lg p-4 border border-gray-600">
-              <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
-                <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-                Current User
-              </h3>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-300">Nickname:</span>
-                  <span className="text-sm font-medium text-cyan-400">{currentUserNickname}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-300">Status:</span>
-                  <span className="text-sm text-green-400 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
-                    Online
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-300">Type:</span>
-                  <span className="text-sm text-blue-400">
-                    {isNetworkConnected ? 'Network User' : 'Local User'}
-                  </span>
-                </div>
-                {isNetworkConnected && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-300">Connection:</span>
-                    <span className="text-sm text-green-400 flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
-                      Connected
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
 
-            <NetworkConnection
-              onConnected={setIsNetworkConnected}
-              onUsersUpdate={handleNetworkUsersUpdate}
+        {/* Mobile Layout - Channel List Panel */}
+        {mobileActivePanel === 'channels' && (
+          <div className="lg:hidden w-full bg-gray-900">
+            <ChannelList 
+              channels={channels}
+              privateMessageUsers={allPMUsers}
+              activeContext={activeContext}
+              onSelectContext={(context) => {
+                setActiveContext(context);
+                setMobileActivePanel('chat');
+              }}
+              onChannelClick={(channelName) => {
+                handleChannelClick(channelName);
+                setMobileActivePanel('chat');
+              }}
+              onPMClick={(nickname) => {
+                handlePMUserClick(nickname);
+                setMobileActivePanel('chat');
+              }}
+              onOpenSettings={handleOpenSettings}
+              onOpenChannelList={() => setIsChannelListModalOpen(true)}
+              onJoinChannel={handleJoinChannel}
+              onLeaveChannel={handleLeaveChannel}
+              unreadChannels={unreadChannels}
+              unreadPMUsers={unreadPMUsers}
+              onOpenChatLogs={handleOpenChatLogs}
+              onResetSpeakers={resetLastSpeakers}
+              currentUserNickname={currentUserNickname}
             />
-            
-            {isNetworkConnected && (
-              <NetworkUsers
-                users={networkUsers}
-                currentChannel={activeContext?.type === 'channel' ? activeContext.name : undefined}
-              />
-            )}
           </div>
         )}
+
+        {/* Mobile Layout - User List Panel */}
+        {mobileActivePanel === 'users' && (
+          <div className="lg:hidden w-full bg-gray-900">
+            <UserList 
+              users={usersInContext} 
+              onUserClick={(nickname) => {
+                handlePMUserClick(nickname);
+                setMobileActivePanel('chat');
+              }} 
+              currentUserNickname={isNetworkConnected && networkNickname ? networkNickname : currentUserNickname}
+              channel={activeChannel}
+              onToggleOperator={handleToggleOperator}
+              unreadPMUsers={unreadPMUsers}
+              networkNickname={networkNickname}
+              isNetworkConnected={isNetworkConnected}
+            />
+          </div>
+        )}
+
+        {/* Mobile Layout - Network Panel */}
+        {mobileActivePanel === 'network' && (
+          <div className="lg:hidden w-full bg-gray-900 flex flex-col">
+            <div className="p-4 border-b border-gray-700">
+              <h2 className="text-lg font-semibold text-white">Network</h2>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <NetworkConnection 
+                onConnected={setIsNetworkConnected}
+                onUsersUpdate={handleNetworkUsersUpdate}
+              />
+              <NetworkUsers 
+                users={networkUsers} 
+                currentChannel={activeContext?.type === 'channel' ? activeContext.name : undefined}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Chat Area - Always visible on desktop, conditional on mobile */}
+        <main className={`flex flex-1 flex-col border-l border-r border-gray-700 min-h-0 ${
+          mobileActivePanel === 'chat' ? 'block' : 'hidden lg:flex'
+        }`}>
+            {/* AI Reaction Notification */}
+            {aiReactionNotification.isVisible && (
+              <div className="bg-blue-900 border border-blue-600 text-blue-100 px-4 py-2 text-sm font-medium animate-pulse">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-blue-400 rounded-full animate-ping"></div>
+                  <span>{aiReactionNotification.message}</span>
+                </div>
+              </div>
+            )}
+            
+            <ChatWindow 
+              title={contextTitle}
+              messages={messagesInContext}
+              onSendMessage={handleSendMessage}
+              isLoading={isLoading}
+              currentUserNickname={currentUserNickname}
+              typingUsers={typingUsersInContext}
+              channel={activeChannel}
+              onClose={handleCloseWindow}
+              showCloseButton={true}
+            />
+          </main>
+
+        {/* Desktop Layout - User List */}
+        <div className="hidden lg:block w-80 bg-gray-900 border-l border-gray-700">
+          <UserList 
+            users={usersInContext} 
+            onUserClick={handlePMUserClick} 
+            currentUserNickname={isNetworkConnected && networkNickname ? networkNickname : currentUserNickname}
+            channel={activeChannel}
+            onToggleOperator={handleToggleOperator}
+            unreadPMUsers={unreadPMUsers}
+            networkNickname={networkNickname}
+            isNetworkConnected={isNetworkConnected}
+          />
+        </div>
+        {/* Desktop Layout - Network Panel */}
+        <div className="hidden lg:block w-80 bg-gray-900 border-l border-gray-700 flex flex-col">
+          <div className="p-4 border-b border-gray-700">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-lg font-semibold text-white">Network</h2>
+              <button
+                onClick={() => setShowNetworkPanel(!showNetworkPanel)}
+                className="text-gray-400 hover:text-white"
+              >
+                {showNetworkPanel ? '▼' : '▶'}
+              </button>
+            </div>
+          </div>
+          
+          {showNetworkPanel && (
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {/* Current User Display */}
+              <div className="bg-gray-800 rounded-lg p-4 border border-gray-600">
+                <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+                  <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                  Current User
+                </h3>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-300">Nickname:</span>
+                    <span className="text-sm font-medium text-cyan-400">{currentUserNickname}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-300">Status:</span>
+                    <span className="text-sm text-green-400 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+                      Online
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-300">Type:</span>
+                    <span className="text-sm text-blue-400">
+                      {isNetworkConnected ? 'Network User' : 'Local User'}
+                    </span>
+                  </div>
+                  {isNetworkConnected && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-300">Connection:</span>
+                      <span className="text-sm text-green-400 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+                        Connected
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <NetworkConnection
+                onConnected={setIsNetworkConnected}
+                onUsersUpdate={handleNetworkUsersUpdate}
+              />
+              
+              {isNetworkConnected && (
+                <NetworkUsers
+                  users={networkUsers}
+                  currentChannel={activeContext?.type === 'channel' ? activeContext.name : undefined}
+                />
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

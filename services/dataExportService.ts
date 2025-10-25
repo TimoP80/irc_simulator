@@ -66,7 +66,7 @@ export class DataExportService {
 
       // Load chat logs from IndexedDB
       const chatLogService = getChatLogService();
-      const chatLogs = await chatLogService.getAllLogs();
+      const chatLogs = await chatLogService.exportLogs();
 
       // Load debug configuration
       const debugConfig = getDebugConfig();
@@ -301,7 +301,7 @@ export class DataExportService {
       const activeContext = activeContextData ? JSON.parse(activeContextData) : null;
       
       const chatLogService = getChatLogService();
-      const chatLogs = await chatLogService.getAllLogs();
+      const chatLogs = await chatLogService.exportLogs();
       
       return {
         channels: channels.length,
