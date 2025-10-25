@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import type { Message } from '../types';
+import type { Message, User } from '../types';
 import { MessageEntry } from './Message';
 import { SendIcon } from './icons';
 import { convertEmoticonsToEmojis, convertEmojisToEmoticons } from '../utils/emojiConverter';
@@ -13,11 +13,12 @@ interface ChatWindowProps {
   currentUserNickname: string;
   typingUsers: string[];
   channel?: { operators: string[] };
+  users?: User[]; // Optional users array for profile pictures
   onClose?: () => void;
   showCloseButton?: boolean;
 }
 
-export const ChatWindow: React.FC<ChatWindowProps> = ({ title, messages, onSendMessage, isLoading, currentUserNickname, typingUsers, channel, onClose, showCloseButton = false }) => {
+export const ChatWindow: React.FC<ChatWindowProps> = ({ title, messages, onSendMessage, isLoading, currentUserNickname, typingUsers, channel, users, onClose, showCloseButton = false }) => {
   const [input, setInput] = useState('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [isResizing, setIsResizing] = useState(false);
@@ -319,9 +320,31 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ title, messages, onSendM
 
       <div className="flex-1 p-3 lg:p-4 overflow-y-auto min-h-0">
         <div className="flex flex-col gap-3 lg:gap-3">
-          {messages.map((msg) => (
-            <MessageEntry key={msg.id} message={msg} currentUserNickname={currentUserNickname} />
-          ))}
+          {messages.map((msg) => {
+            // Find user for profile picture
+            const user = users?.find(u => u.nickname === msg.nickname);
+            
+            // Debug logging for user lookup
+            if (msg.nickname && !user) {
+              console.log(`ChatWindow: User not found for message from ${msg.nickname}`);
+              console.log(`Available users:`, users?.map(u => u.nickname));
+            } else if (user) {
+              console.log(`ChatWindow: Found user for ${msg.nickname}:`, {
+                nickname: user.nickname,
+                profilePicture: user.profilePicture,
+                hasProfilePicture: !!user.profilePicture
+              });
+            }
+            
+            return (
+              <MessageEntry 
+                key={msg.id} 
+                message={msg} 
+                currentUserNickname={currentUserNickname} 
+                user={user}
+              />
+            );
+          })}
           {typingUsers.length > 0 && (
             <div className="text-gray-400 italic text-sm px-2 flex items-center gap-2">
               <div className="flex space-x-1">

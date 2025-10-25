@@ -8,7 +8,7 @@ import { MobileNavigation } from './components/MobileNavigation';
 import { DEFAULT_CHANNELS, DEFAULT_VIRTUAL_USERS, DEFAULT_NICKNAME, SIMULATION_INTERVALS, DEFAULT_AI_MODEL, DEFAULT_TYPING_DELAY } from './constants';
 import type { Channel, Message, User, ActiveContext, PrivateMessageConversation, AppConfig } from './types';
 import { addChannelOperator, removeChannelOperator, isChannelOperator, canUserPerformAction } from './types';
-import { generateChannelActivity, generateReactionToMessage, generatePrivateMessageResponse } from './services/geminiService';
+import { generateChannelActivity, generateReactionToMessage, generatePrivateMessageResponse, generateOperatorResponse } from './services/geminiService';
 import { handleBotCommand, isBotCommand } from './services/botService';
 import { loadConfig, saveConfig, initializeStateFromConfig, saveChannelLogs, loadChannelLogs, clearChannelLogs, simulateTypingDelay } from './utils/config';
 import { 
@@ -37,6 +37,12 @@ const deduplicateChannelUsers = (users: User[]): User[] => {
     return true;
   });
 };
+
+  // Helper function to check if a user is a human user
+  const isHumanUser = (user: User, currentUserNickname: string): boolean => {
+    return user.personality === 'The human user' || user.nickname === currentUserNickname;
+  };
+
 
 // Operator persistence functions
 const saveOperatorAssignments = (channels: Channel[]) => {
@@ -292,6 +298,7 @@ const App: React.FC = () => {
     message: string;
     timestamp: number;
   }>({ isVisible: false, message: '', timestamp: 0 });
+  const [recentlyAutoOpenedPM, setRecentlyAutoOpenedPM] = useState<string | null>(null);
 
   // Helper function to migrate users: fix network users that were incorrectly assigned userType 'virtual'
   const migrateUsers = useCallback((users: User[]) => {
@@ -303,6 +310,7 @@ const App: React.FC = () => {
       return user;
     });
   }, []);
+
 
   // Save PM conversations to localStorage when they change
   useEffect(() => {
@@ -1611,6 +1619,65 @@ const App: React.FC = () => {
       // Mark PM user as having unread messages if the message is not from the current user
       if (processedMessage.nickname !== currentUserNickname) {
         setUnreadPMUsers(prev => new Set([...prev, context.with]));
+        
+        // Auto-open PM window if not already open and message is from virtual/network user
+        if (activeContext?.type !== 'pm' || activeContext?.with !== context.with) {
+          // Check if the sender is a virtual user or network user (not human)
+          const senderUser = virtualUsers.find(u => u.nickname === processedMessage.nickname) || 
+                           networkUsers.find(u => u.nickname === processedMessage.nickname);
+          
+          if (senderUser && !isHumanUser(senderUser, currentUserNickname)) {
+            pmDebug.log(`Auto-opening PM window for ${context.with} (message from ${processedMessage.nickname})`);
+            
+            // Show notification for auto-opened PM
+            showAiReactionNotification(`Private message from ${processedMessage.nickname} - opening conversation with ${context.with}`);
+            
+            // Set visual highlight for recently auto-opened PM
+            setRecentlyAutoOpenedPM(context.with);
+            setTimeout(() => setRecentlyAutoOpenedPM(null), 2000); // Clear after 2 seconds
+            
+            // Create PM conversation if it doesn't exist
+            setPrivateMessages(prev => {
+              if (!prev[context.with]) {
+                // Find the user in virtual users or network users
+                let user = virtualUsers.find(u => u.nickname === context.with);
+                if (!user) {
+                  user = networkUsers.find(u => u.nickname === context.with);
+                  if (user) {
+                    // Convert network user to User format
+                    user = {
+                      nickname: user.nickname,
+                      status: user.status,
+                      userType: 'network' as const,
+                      personality: 'Network User',
+                      languageSkills: {
+                        languages: [{ language: 'English', fluency: 'native' }]
+                      },
+                      writingStyle: {
+                        formality: 'neutral',
+                        verbosity: 'neutral',
+                        humor: 'none',
+                        emojiUsage: 'low',
+                        punctuation: 'standard'
+                      }
+                    };
+                  }
+                }
+                
+                if (user) {
+                  pmDebug.log('Creating new PM conversation for auto-open:', context.with);
+                  return {
+                    ...prev,
+                    [context.with]: { user, messages: [] }
+                  };
+                }
+              }
+              return prev;
+            });
+            
+            setActiveContext({ type: 'pm', with: context.with });
+          }
+        }
       }
     }
     
@@ -1700,6 +1767,82 @@ const App: React.FC = () => {
       }
     }
   }, [virtualUsers, ircExportStatus.connected, broadcastChannel]);
+
+  // Trigger AI operator response to op requests
+  const triggerAIOperatorResponse = useCallback(async (channel: Channel, requestingUser: string, operators: User[]) => {
+    try {
+      // Randomly select an operator to respond (70% chance someone responds)
+      if (Math.random() > 0.7) {
+        addMessageToContext({
+          id: generateUniqueMessageId(),
+          nickname: 'system',
+          content: 'No operators responded to your request',
+          timestamp: new Date(),
+          type: 'system'
+        }, { type: 'channel', name: channel.name });
+        return;
+      }
+
+      const respondingOperator = operators[Math.floor(Math.random() * operators.length)];
+      
+      // Generate AI response for the operator
+      const opResponse = await generateOperatorResponse(channel, requestingUser, respondingOperator, aiModel);
+      
+      if (opResponse) {
+        // Parse the response to check if it's granting op status
+        const [responseNickname, ...responseParts] = opResponse.split(':');
+        const responseContent = responseParts.join(':').trim();
+        
+        // Check if the response indicates granting operator status
+        const isGrantingOp = responseContent.toLowerCase().includes('op') && 
+                            (responseContent.toLowerCase().includes('grant') || 
+                             responseContent.toLowerCase().includes('give') ||
+                             responseContent.toLowerCase().includes('make') ||
+                             responseContent.toLowerCase().includes('+o'));
+        
+        if (isGrantingOp) {
+          // Grant operator status to the requesting user
+          setChannels(prevChannels => 
+            prevChannels.map(c => {
+              if (c.name === channel.name) {
+                return addChannelOperator(c, requestingUser);
+              }
+              return c;
+            })
+          );
+          
+          // Add a system message confirming the op grant
+          setTimeout(() => {
+            addMessageToContext({
+              id: generateUniqueMessageId(),
+              nickname: 'system',
+              content: `${requestingUser} is now a channel operator`,
+              timestamp: new Date(),
+              type: 'system'
+            }, { type: 'channel', name: channel.name });
+          }, 1000);
+        }
+        
+        // Add the AI operator's response
+        addMessageToContext({
+          id: generateUniqueMessageId(),
+          nickname: responseNickname.trim(),
+          content: responseContent,
+          timestamp: new Date(),
+          type: 'ai'
+        }, { type: 'channel', name: channel.name });
+      }
+    } catch (error) {
+      console.error('Error generating AI operator response:', error);
+      addMessageToContext({
+        id: generateUniqueMessageId(),
+        nickname: 'system',
+        content: 'Error processing operator request',
+        timestamp: new Date(),
+        type: 'system'
+      }, { type: 'channel', name: channel.name });
+    }
+  }, [aiModel, addMessageToContext, generateUniqueMessageId, setChannels]);
 
   // Handle joining a channel
   const handleJoinChannel = useCallback((channelName: string) => {
@@ -1836,12 +1979,20 @@ const App: React.FC = () => {
 
   // Generate autonomous private messages from virtual users
   const generateAutonomousPM = useCallback(async () => {
-    // Get all virtual users from all channels
+    // Get all virtual users from all channels, excluding human users
     const allVirtualUsers = channels.flatMap(channel => 
-      migrateUsers(channel.users).filter(u => u.userType === 'virtual')
+      migrateUsers(channel.users).filter(u => 
+        u.userType === 'virtual' && 
+        !isHumanUser(u, currentUserNickname)
+      )
     );
 
-    if (allVirtualUsers.length === 0) return;
+    if (allVirtualUsers.length === 0) {
+      simulationDebug.log('No virtual users available for autonomous PM generation (excluding human users)');
+      return;
+    }
+
+    simulationDebug.log(`Found ${allVirtualUsers.length} virtual users eligible for autonomous PM generation:`, allVirtualUsers.map(u => u.nickname));
 
     let selectedUser: User | null = null;
 
@@ -2320,6 +2471,101 @@ const App: React.FC = () => {
         return;
       }
       
+      // Handle /query command
+      if (cmd === '/query') {
+        if (parts.length < 2) {
+          addMessageToContext({
+            id: generateUniqueMessageId(),
+            nickname: 'system',
+            content: 'Usage: /query <username> (e.g., /query Alice)',
+            timestamp: new Date(),
+            type: 'system'
+          }, activeContext);
+          return;
+        }
+        
+        const targetNickname = parts[1].trim();
+        
+        // Check if user exists in any channel
+        const targetUser = channels
+          .flatMap(channel => channel.users)
+          .find(user => user.nickname === targetNickname);
+        
+        if (!targetUser) {
+          addMessageToContext({
+            id: generateUniqueMessageId(),
+            nickname: 'system',
+            content: `User ${targetNickname} not found`,
+            timestamp: new Date(),
+            type: 'system'
+          }, activeContext);
+          return;
+        }
+        
+        // Open PM with the user
+        handlePMUserClick(targetNickname);
+        
+        addMessageToContext({
+          id: generateUniqueMessageId(),
+          nickname: 'system',
+          content: `Opened private message with ${targetNickname}`,
+          timestamp: new Date(),
+          type: 'system'
+        }, { type: 'pm', with: targetNickname });
+        
+        return;
+      }
+      
+      // Handle /op command - request operator status
+      if (cmd === '/op') {
+        if (activeContext?.type !== 'channel') {
+          addMessageToContext({
+            id: generateUniqueMessageId(),
+            nickname: 'system',
+            content: 'You can only request operator status in channels',
+            timestamp: new Date(),
+            type: 'system'
+          }, activeContext);
+          return;
+        }
+
+        const activeChannel = channels.find(c => c.name === activeContext.name);
+        if (!activeChannel) return;
+
+        // Check if user is already an operator
+        if (isChannelOperator(activeChannel, currentUserNickname)) {
+          addMessageToContext({
+            id: generateUniqueMessageId(),
+            nickname: 'system',
+            content: 'You are already a channel operator',
+            timestamp: new Date(),
+            type: 'system'
+          }, activeContext);
+          return;
+        }
+
+        // Find channel operators (AI users)
+        const channelOperators = activeChannel.users.filter(user => 
+          isChannelOperator(activeChannel, user.nickname) && 
+          user.userType === 'virtual'
+        );
+
+        if (channelOperators.length === 0) {
+          addMessageToContext({
+            id: generateUniqueMessageId(),
+            nickname: 'system',
+            content: 'No operators available to grant you operator status',
+            timestamp: new Date(),
+            type: 'system'
+          }, activeContext);
+          return;
+        }
+
+        // Trigger AI operator response
+        triggerAIOperatorResponse(activeChannel, currentUserNickname, channelOperators);
+        return;
+      }
+
       // Handle /help command
       if (cmd === '/help') {
         addMessageToContext({
@@ -2331,6 +2577,8 @@ const App: React.FC = () => {
 /join <channel> - Join a channel (e.g., /join #newchannel)
 /part [reason] - Leave current channel
 /nick <newnickname> - Change your nickname
+/query <username> - Open private message with user
+/op - Request operator status from channel operators
 /help - Show this help message`,
           timestamp: new Date(),
           type: 'system'
@@ -2464,6 +2712,15 @@ const App: React.FC = () => {
     setIsLoading(true);
     setTimeout(() => setIsLoading(false), 100); // Reset quickly to allow new messages
     
+    // Create user message object for both network and local handling
+    const userMessage: Message = {
+      id: generateUniqueMessageId(),
+      nickname: currentUserNickname,
+      content,
+      timestamp: new Date(),
+      type: activeContext?.type === 'pm' ? 'pm' : 'user'
+    };
+    
     // If connected to network, send message via network
     if (isNetworkConnected && activeContext?.type === 'channel') {
       const networkService = getNetworkService();
@@ -2490,16 +2747,13 @@ const App: React.FC = () => {
       }
       
       networkService.sendMessage(activeContext.name, content);
+      
+      // Add user's message to local channel state for immediate UI display
+      addMessageToContext(userMessage, activeContext);
       return;
     }
     
-    const userMessage: Message = {
-      id: generateUniqueMessageId(),
-      nickname: currentUserNickname,
-      content,
-      timestamp: new Date(),
-      type: activeContext?.type === 'pm' ? 'pm' : 'user'
-    };
+    // Add user's message to local state for immediate UI display
     addMessageToContext(userMessage, activeContext);
     
     // Track user message time for burst mode
@@ -2670,9 +2924,14 @@ The response must be a single line in the format: "nickname: greeting message"
     const removedUsers = oldUsers.filter(oldUser => 
       !newUsers.some(newUser => newUser.nickname === oldUser.nickname)
     );
+    const updatedUsers = newUsers.filter(newUser => 
+      oldUsers.some(oldUser => oldUser.nickname === newUser.nickname) &&
+      !oldUsers.some(oldUser => oldUser.nickname === newUser.nickname && JSON.stringify(oldUser) === JSON.stringify(newUser))
+    );
     
     userListDebug.log(`Added users:`, addedUsers.map(u => u.nickname));
     userListDebug.log(`Removed users:`, removedUsers.map(u => u.nickname));
+    userListDebug.log(`Updated users:`, updatedUsers.map(u => u.nickname));
     
     // Update virtual users
     setVirtualUsers(newUsers);
@@ -2775,6 +3034,32 @@ The response must be a single line in the format: "nickname: greeting message"
             if (wasInChannel) {
               updatedChannel.users = updatedChannel.users.filter(u => u.nickname !== removedUser.nickname);
             }
+          });
+          
+          return updatedChannel;
+        })
+      );
+    }
+    
+    // Handle updated users - update them in all channels where they exist
+    if (updatedUsers.length > 0) {
+      userListDebug.log(`Updating ${updatedUsers.length} users in channels:`, updatedUsers.map(u => ({
+        nickname: u.nickname,
+        profilePicture: u.profilePicture,
+        hasProfilePicture: !!u.profilePicture
+      })));
+      
+      setChannels(prevChannels => 
+        prevChannels.map(channel => {
+          const updatedChannel = { ...channel };
+          
+          // Update users in this channel
+          updatedChannel.users = updatedChannel.users.map(channelUser => {
+            const updatedUser = updatedUsers.find(u => u.nickname === channelUser.nickname);
+            if (updatedUser) {
+              userListDebug.log(`Updating user ${channelUser.nickname} in channel ${channel.name} with profile picture:`, updatedUser.profilePicture);
+            }
+            return updatedUser || channelUser;
           });
           
           return updatedChannel;
@@ -3332,6 +3617,13 @@ The response must be a single line in the format: "nickname: greeting message"
       userListDebug.log(`Channel users count: ${activeChannel.users.length}`);
       userListDebug.log(`Channel users:`, activeChannel.users.map(u => u.nickname));
       
+      // Debug profile pictures in channel users
+      userListDebug.log(`Channel users profile pictures:`, activeChannel.users.map(u => ({
+        nickname: u.nickname,
+        profilePicture: u.profilePicture,
+        hasProfilePicture: !!u.profilePicture
+      })));
+      
       // Get network users in this channel
       const networkUsersInChannel = networkUsers.filter(networkUser => {
         // Ensure channels is an array before checking
@@ -3356,7 +3648,8 @@ The response must be a single line in the format: "nickname: greeting message"
           humor: 'none',
           emojiUsage: 'low',
           punctuation: 'standard'
-        }
+        },
+        profilePicture: undefined // Network users don't have profile pictures by default
       }));
       
       // Combine channel users with network users
@@ -3389,6 +3682,13 @@ The response must be a single line in the format: "nickname: greeting message"
       userListDebug.log(`Final unique users: ${uniqueUsers.length}`);
       userListDebug.log(`Final users:`, uniqueUsers.map(u => u.nickname));
       
+      // Debug final profile pictures
+      userListDebug.log(`Final usersInContext profile pictures:`, uniqueUsers.map(u => ({
+        nickname: u.nickname,
+        profilePicture: u.profilePicture,
+        hasProfilePicture: !!u.profilePicture
+      })));
+      
       // Only log if there are issues
       if (allUsers.length !== uniqueUsers.length) {
         userListDebug.warn(` Found duplicate users in channel ${activeChannel.name}. Original: ${allUsers.length}, Deduplicated: ${uniqueUsers.length}`);
@@ -3416,7 +3716,8 @@ The response must be a single line in the format: "nickname: greeting message"
               humor: 'none',
               emojiUsage: 'low',
               punctuation: 'standard'
-            }
+            },
+            profilePicture: undefined // Network users don't have profile pictures by default
           };
         }
       }
@@ -3809,6 +4110,7 @@ The response must be a single line in the format: "nickname: greeting message"
         privateMessageUsers={allPMUsers}
         unreadChannels={unreadChannels}
         unreadPMUsers={unreadPMUsers}
+        activeContext={activeContext}
       />
 
       {/* Mobile Navigation */}
@@ -3840,6 +4142,7 @@ The response must be a single line in the format: "nickname: greeting message"
             unreadPMUsers={unreadPMUsers}
             onOpenChatLogs={handleOpenChatLogs}
             onResetSpeakers={resetLastSpeakers}
+            recentlyAutoOpenedPM={recentlyAutoOpenedPM}
             currentUserNickname={currentUserNickname}
           />
         </div>
@@ -3872,6 +4175,7 @@ The response must be a single line in the format: "nickname: greeting message"
               onOpenChatLogs={handleOpenChatLogs}
               onResetSpeakers={resetLastSpeakers}
               currentUserNickname={currentUserNickname}
+              recentlyAutoOpenedPM={recentlyAutoOpenedPM}
             />
           </div>
         )}
@@ -3936,6 +4240,7 @@ The response must be a single line in the format: "nickname: greeting message"
               currentUserNickname={currentUserNickname}
               typingUsers={typingUsersInContext}
               channel={activeChannel}
+              users={usersInContext}
               onClose={handleCloseWindow}
               showCloseButton={true}
             />

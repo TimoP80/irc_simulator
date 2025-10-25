@@ -45,6 +45,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
   const [isRandomizing, setIsRandomizing] = useState(false);
   const [assignedChannels, setAssignedChannels] = useState<string[]>([]);
   const [pmProbability, setPmProbability] = useState<number>(25);
+  const [profilePicture, setProfilePicture] = useState<string>('');
 
   const isEditing = !!editingUser;
 
@@ -104,6 +105,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
           punctuation: editingUser.writingStyle?.punctuation || 'standard'
         });
         setPmProbability(editingUser.pmProbability ?? 25);
+        setProfilePicture(editingUser.profilePicture || '');
         // Get channels where this user is assigned
         const userChannels = channels
           .filter(channel => channel.users.some(u => u.nickname === editingUser.nickname))
@@ -125,6 +127,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
           punctuation: 'standard'
         });
         setPmProbability(10);
+        setProfilePicture('');
         setAssignedChannels([]);
       }
       setErrors({});
@@ -197,7 +200,8 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
         }]
       },
       writingStyle,
-      pmProbability
+      pmProbability,
+      profilePicture: profilePicture.trim() || undefined
     };
 
     // Handle channel assignments
@@ -266,6 +270,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
       punctuation: 'standard'
     });
     setPmProbability(10);
+    setProfilePicture('');
     setErrors({});
     onClose();
   };
@@ -609,6 +614,65 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
                   <option value="excessive">Excessive</option>
                 </select>
               </div>
+            </div>
+          </div>
+
+          {/* Profile Picture */}
+          <div className="space-y-4">
+            <h4 className="text-lg font-semibold text-gray-200 border-b border-gray-600 pb-2">
+              Profile Picture
+            </h4>
+            
+            <div>
+              <label htmlFor="profilePicture" className="block text-sm font-medium text-gray-300 mb-2">
+                Profile Picture URL
+              </label>
+              <div className="flex items-center space-x-4">
+                <input
+                  type="url"
+                  id="profilePicture"
+                  value={profilePicture}
+                  onChange={(e) => setProfilePicture(e.target.value)}
+                  placeholder="https://example.com/avatar.jpg"
+                  className="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => setProfilePicture('')}
+                  className="px-3 py-2 bg-gray-600 hover:bg-gray-500 text-gray-300 rounded-lg transition-colors duration-200"
+                >
+                  Clear
+                </button>
+              </div>
+              <p className="text-xs text-gray-400 mt-1">
+                Optional: Enter a URL to an image for this user's profile picture. Leave empty for auto-generated initials.
+              </p>
+              
+              {/* Profile Picture Preview */}
+              {profilePicture && (
+                <div className="mt-3 flex items-center space-x-3">
+                  <span className="text-sm text-gray-300">Preview:</span>
+                  <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-gray-600">
+                    <img
+                      src={profilePicture}
+                      alt="Profile preview"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        const parent = target.parentElement;
+                        if (parent) {
+                          parent.innerHTML = `
+                            <div class="w-full h-full flex items-center justify-center bg-gray-600 text-white font-semibold text-sm">
+                              Error
+                            </div>
+                          `;
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

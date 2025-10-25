@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import type { Channel, User } from '../types';
+import type { Channel, User, ActiveContext } from '../types';
 import { HashtagIcon, UserIcon } from './icons';
+import { ProfilePicture } from './ProfilePicture';
 
 interface ChannelListModalProps {
   isOpen: boolean;
@@ -13,6 +14,7 @@ interface ChannelListModalProps {
   privateMessageUsers: User[];
   unreadChannels?: Set<string>;
   unreadPMUsers?: Set<string>;
+  activeContext?: ActiveContext | null; // Add active context to track currently open channel/PM
 }
 
 export const ChannelListModal: React.FC<ChannelListModalProps> = ({
@@ -25,7 +27,8 @@ export const ChannelListModal: React.FC<ChannelListModalProps> = ({
   onOpenPM,
   privateMessageUsers,
   unreadChannels,
-  unreadPMUsers
+  unreadPMUsers,
+  activeContext
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredChannels, setFilteredChannels] = useState<Channel[]>([]);
@@ -109,31 +112,49 @@ export const ChannelListModal: React.FC<ChannelListModalProps> = ({
                 const hasUnread = unreadChannels?.has(channel.name) || false;
                 const userCount = channel.users?.length || 0;
                 const isJoined = userCount > 0;
+                const isActive = activeContext?.type === 'channel' && activeContext.name === channel.name;
                 
                 return (
                   <div
                     key={channel.name}
-                    className="flex items-center justify-between p-3 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors duration-150"
+                    className={`flex items-center justify-between p-3 rounded-lg transition-colors duration-150 ${
+                      isActive 
+                        ? 'bg-indigo-600 border border-indigo-500' 
+                        : 'bg-gray-800 hover:bg-gray-700'
+                    }`}
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="text-white font-medium truncate">{channel.name}</span>
+                        <span className={`font-medium truncate ${isActive ? 'text-white' : 'text-white'}`}>
+                          {channel.name}
+                        </span>
                         {hasUnread && (
                           <span className="text-yellow-400 text-sm font-bold">●</span>
                         )}
-                        {isJoined && (
+                        {isActive && (
+                          <span className="text-indigo-200 text-xs bg-indigo-500 px-2 py-1 rounded">
+                            Active
+                          </span>
+                        )}
+                        {isJoined && !isActive && (
                           <span className="text-green-400 text-xs bg-green-900 px-2 py-1 rounded">
                             Joined
                           </span>
                         )}
                       </div>
-                      <p className="text-gray-400 text-sm truncate">{channel.topic}</p>
-                      <p className="text-gray-500 text-xs mt-1">
+                      <p className={`text-sm truncate ${isActive ? 'text-indigo-200' : 'text-gray-400'}`}>
+                        {channel.topic}
+                      </p>
+                      <p className={`text-xs mt-1 ${isActive ? 'text-indigo-300' : 'text-gray-500'}`}>
                         {userCount} user{userCount !== 1 ? 's' : ''}
                       </p>
                     </div>
                     <div className="flex gap-2 ml-3">
-                      {isJoined ? (
+                      {isActive ? (
+                        <span className="px-3 py-1 bg-indigo-500 text-indigo-100 text-sm rounded">
+                          Current
+                        </span>
+                      ) : isJoined ? (
                         <button
                           onClick={() => handleLeaveChannel(channel.name)}
                           className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors duration-150"
@@ -169,30 +190,50 @@ export const ChannelListModal: React.FC<ChannelListModalProps> = ({
             <div className="space-y-2">
               {filteredPMUsers.map(user => {
                 const hasUnread = unreadPMUsers?.has(user.nickname) || false;
+                const isActive = activeContext?.type === 'pm' && activeContext.with === user.nickname;
                 
                 return (
                   <div
                     key={user.nickname}
-                    className="flex items-center justify-between p-3 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors duration-150"
+                    className={`flex items-center justify-between p-3 rounded-lg transition-colors duration-150 ${
+                      isActive 
+                        ? 'bg-indigo-600 border border-indigo-500' 
+                        : 'bg-gray-800 hover:bg-gray-700'
+                    }`}
                   >
                     <div className="flex items-center gap-3">
-                      <UserIcon className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                      <ProfilePicture user={user} size="sm" className="flex-shrink-0" />
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="text-white font-medium">{user.nickname}</span>
+                          <span className={`font-medium ${isActive ? 'text-white' : 'text-white'}`}>
+                            {user.nickname}
+                          </span>
                           {hasUnread && (
                             <span className="text-yellow-400 text-sm font-bold">●</span>
                           )}
+                          {isActive && (
+                            <span className="text-indigo-200 text-xs bg-indigo-500 px-2 py-1 rounded">
+                              Active
+                            </span>
+                          )}
                         </div>
-                        <p className="text-gray-400 text-sm truncate">{user.personality}</p>
+                        <p className={`text-sm truncate ${isActive ? 'text-indigo-200' : 'text-gray-400'}`}>
+                          {user.personality}
+                        </p>
                       </div>
                     </div>
-                    <button
-                      onClick={() => handleOpenPM(user.nickname)}
-                      className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded transition-colors duration-150"
-                    >
-                      Open PM
-                    </button>
+                    {isActive ? (
+                      <span className="px-3 py-1 bg-indigo-500 text-indigo-100 text-sm rounded">
+                        Current
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleOpenPM(user.nickname)}
+                        className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded transition-colors duration-150"
+                      >
+                        Open PM
+                      </button>
+                    )}
                   </div>
                 );
               })}

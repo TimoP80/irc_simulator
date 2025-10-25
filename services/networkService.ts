@@ -331,7 +331,46 @@ class NetworkService {
   private handleUserJoined(message: any): void {
     networkDebug.log(`User joined: ${message.nickname} in ${message.channel}`);
     
-    // Add user to channel
+    // Process channel data if provided (for initial user list)
+    if (message.channelData) {
+      networkDebug.log(`Received channel data in user_joined for ${message.channel}:`, message.channelData);
+      
+      // Update channel with received data
+      const channel = this.channels.get(message.channel);
+      if (channel) {
+        // Update users
+        if (message.channelData.users) {
+          message.channelData.users.forEach((user: any) => {
+            // Ensure channels is an array, not a Set
+            const normalizedUser: NetworkUser = {
+              ...user,
+              channels: Array.isArray(user.channels) ? user.channels : Array.from(user.channels || [])
+            };
+            this.users.set(user.nickname, normalizedUser);
+          });
+        }
+        
+        // Update topic
+        if (message.channelData.topic !== undefined) {
+          channel.topic = message.channelData.topic;
+        }
+        
+        networkDebug.log(`Updated channel ${message.channel} with ${message.channelData.users?.length || 0} users`);
+        
+        // Notify handlers about the updated channel state
+        this.notifyUserHandlers(Array.from(this.users.values()));
+        
+        // Notify channel data handlers about the initial channel data
+        this.notifyChannelDataHandlers({
+          channel: message.channel,
+          users: message.channelData.users || [],
+          topic: message.channelData.topic || ''
+        });
+      }
+      return;
+    }
+    
+    // Add user to channel (existing logic for individual user joins)
     const channel = this.channels.get(message.channel);
     if (channel) {
       const user: NetworkUser = {

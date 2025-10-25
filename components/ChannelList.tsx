@@ -2,6 +2,7 @@
 import React from 'react';
 import type { Channel, User, ActiveContext } from '../types';
 import { UserIcon, HashtagIcon, SettingsIcon } from './icons';
+import { ProfilePicture } from './ProfilePicture';
 
 interface ChannelListProps {
   channels: Channel[];
@@ -19,15 +20,17 @@ interface ChannelListProps {
   unreadChannels?: Set<string>;
   unreadPMUsers?: Set<string>;
   currentUserNickname: string;
+  recentlyAutoOpenedPM?: string | null;
 }
 
-export const ChannelList: React.FC<ChannelListProps> = ({ channels, privateMessageUsers, activeContext, onSelectContext, onChannelClick, onPMClick, onOpenSettings, onOpenChatLogs, onOpenChannelList, onResetSpeakers, onJoinChannel, onLeaveChannel, unreadChannels, unreadPMUsers, currentUserNickname }) => {
+export const ChannelList: React.FC<ChannelListProps> = ({ channels, privateMessageUsers, activeContext, onSelectContext, onChannelClick, onPMClick, onOpenSettings, onOpenChatLogs, onOpenChannelList, onResetSpeakers, onJoinChannel, onLeaveChannel, unreadChannels, unreadPMUsers, currentUserNickname, recentlyAutoOpenedPM }) => {
   const getButtonClass = (isActive: boolean) => 
     `w-full text-left px-4 py-2 text-sm truncate flex items-center gap-2 rounded-md transition-colors duration-150 ${
       isActive ? 'bg-indigo-500 text-white' : 'text-gray-300 hover:bg-gray-700'
     }`;
 
-  // Show only joined channels
+  // Show all channels with join status
+  const allChannels = channels;
   const joinedChannels = channels.filter(channel => 
     channel.users.some(user => user.nickname === currentUserNickname)
   );
@@ -41,19 +44,25 @@ export const ChannelList: React.FC<ChannelListProps> = ({ channels, privateMessa
       <div className="flex-1 overflow-y-auto -mr-2 lg:-mr-4 pr-2 lg:pr-4">
         <h3 className="text-xs font-bold uppercase text-gray-500 mb-2 lg:mb-2 px-2">Channels</h3>
         <div className="flex flex-col gap-1 lg:gap-1 mb-4 lg:mb-6">
-          {joinedChannels.map(channel => {
+          {allChannels.map(channel => {
             const isActive = activeContext?.type === 'channel' && activeContext.name === channel.name;
             const hasUnread = unreadChannels?.has(channel.name) || false;
+            const isJoined = channel.users.some(user => user.nickname === currentUserNickname);
             
             return (
               <div key={channel.name} className="flex items-center gap-1">
                 <button
                   onClick={() => {
-                    // Since we only show joined channels, always open the channel
-                    if (onChannelClick) {
-                      onChannelClick(channel.name);
-                    } else {
-                      onSelectContext({ type: 'channel', name: channel.name });
+                    if (isJoined) {
+                      // If joined, open the channel
+                      if (onChannelClick) {
+                        onChannelClick(channel.name);
+                      } else {
+                        onSelectContext({ type: 'channel', name: channel.name });
+                      }
+                    } else if (onJoinChannel) {
+                      // If not joined, join the channel
+                      onJoinChannel(channel.name);
                     }
                   }}
                   className={`flex-1 text-left px-3 lg:px-4 py-3 lg:py-2 text-sm lg:text-sm truncate flex items-center gap-2 lg:gap-2 rounded-md transition-colors duration-150 touch-manipulation ${
@@ -61,7 +70,9 @@ export const ChannelList: React.FC<ChannelListProps> = ({ channels, privateMessa
                       ? 'bg-indigo-500 text-white' 
                       : hasUnread 
                         ? 'text-yellow-300 hover:bg-gray-700 active:bg-gray-600' 
-                        : 'text-gray-300 hover:bg-gray-700 active:bg-gray-600'
+                        : isJoined
+                          ? 'text-gray-300 hover:bg-gray-700 active:bg-gray-600'
+                          : 'text-gray-500 hover:bg-gray-700 active:bg-gray-600'
                   }`}
                 >
                   <HashtagIcon className="h-4 w-4 lg:h-4 lg:w-4 flex-shrink-0" />
@@ -69,9 +80,12 @@ export const ChannelList: React.FC<ChannelListProps> = ({ channels, privateMessa
                   {hasUnread && (
                     <span className="text-yellow-400 text-sm font-bold ml-auto">●</span>
                   )}
+                  {!isJoined && (
+                    <span className="text-gray-500 text-xs ml-auto">(not joined)</span>
+                  )}
                 </button>
                 
-                {onLeaveChannel && (
+                {isJoined && onLeaveChannel && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -81,6 +95,19 @@ export const ChannelList: React.FC<ChannelListProps> = ({ channels, privateMessa
                     title="Leave channel"
                   >
                     ×
+                  </button>
+                )}
+                
+                {!isJoined && onJoinChannel && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onJoinChannel(channel.name);
+                    }}
+                    className="px-2 py-1 text-xs text-green-400 hover:text-green-300 hover:bg-green-900/30 rounded transition-colors duration-150 touch-manipulation"
+                    title="Join channel"
+                  >
+                    +
                   </button>
                 )}
               </div>
@@ -93,6 +120,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({ channels, privateMessa
           {privateMessageUsers.map(user => {
             const isActive = activeContext?.type === 'pm' && activeContext.with === user.nickname;
             const hasUnread = unreadPMUsers?.has(user.nickname) || false;
+            const isRecentlyAutoOpened = recentlyAutoOpenedPM === user.nickname;
             
             return (
               <button
@@ -104,15 +132,17 @@ export const ChannelList: React.FC<ChannelListProps> = ({ channels, privateMessa
                     onSelectContext({ type: 'pm', with: user.nickname });
                   }
                 }}
-                className={`w-full text-left px-3 lg:px-4 py-3 lg:py-2 text-sm lg:text-sm truncate flex items-center gap-2 lg:gap-2 rounded-md transition-colors duration-150 touch-manipulation ${
+                className={`w-full text-left px-3 lg:px-4 py-3 lg:py-2 text-sm lg:text-sm truncate flex items-center gap-2 lg:gap-2 rounded-md transition-all duration-300 touch-manipulation ${
                   isActive 
                     ? 'bg-indigo-500 text-white' 
-                    : hasUnread 
-                      ? 'text-yellow-300 hover:bg-gray-700 active:bg-gray-600' 
-                      : 'text-gray-300 hover:bg-gray-700 active:bg-gray-600'
+                    : isRecentlyAutoOpened
+                      ? 'bg-green-600/30 border border-green-500/50 text-green-200 hover:bg-green-500/40 animate-pulse'
+                      : hasUnread 
+                        ? 'text-yellow-300 hover:bg-gray-700 active:bg-gray-600' 
+                        : 'text-gray-300 hover:bg-gray-700 active:bg-gray-600'
                 }`}
               >
-                <UserIcon className="h-4 w-4 lg:h-4 lg:w-4 flex-shrink-0" />
+                <ProfilePicture user={user} size="sm" className="flex-shrink-0" />
                 <span className="truncate">{user.nickname}</span>
                 {hasUnread && (
                   <span className="text-yellow-400 text-sm font-bold ml-auto">●</span>

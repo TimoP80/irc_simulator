@@ -24,12 +24,34 @@ export const DebugLogWindow: React.FC<DebugLogWindowProps> = ({ isOpen, onClose 
   const [maxLogs, setMaxLogs] = useState(1000);
   const logsEndRef = useRef<HTMLDivElement>(null);
   const [debugConfig, setDebugConfig] = useState(getDebugConfig());
+  const logQueueRef = useRef<DebugLogEntry[]>([]);
+  const originalConsoleRef = useRef<{
+    log: typeof console.log;
+    warn: typeof console.warn;
+    error: typeof console.error;
+    info: typeof console.info;
+    debug: typeof console.debug;
+  } | null>(null);
 
-  // Capture console logs
+  // Process queued logs to avoid setState during render
+  useEffect(() => {
+    if (logQueueRef.current.length > 0) {
+      const newLogs = [...logQueueRef.current];
+      logQueueRef.current = [];
+      
+      setLogs(prev => {
+        const combined = [...prev, ...newLogs];
+        return combined.slice(-maxLogs); // Keep only the last maxLogs entries
+      });
+    }
+  }, [maxLogs]);
+
+  // Capture console logs using a more React-friendly approach
   useEffect(() => {
     if (!isOpen) return;
 
-    const originalConsole = {
+    // Store original console methods
+    originalConsoleRef.current = {
       log: console.log,
       warn: console.warn,
       error: console.error,
@@ -55,47 +77,68 @@ export const DebugLogWindow: React.FC<DebugLogWindowProps> = ({ isOpen, onClose 
         data: args.length > 1 ? args.slice(1) : undefined
       };
 
-      setLogs(prev => {
-        const newLogs = [...prev, logEntry];
-        return newLogs.slice(-maxLogs); // Keep only the last maxLogs entries
-      });
+      // Queue the log instead of calling setState directly
+      logQueueRef.current.push(logEntry);
     };
 
-    // Override console methods
+    // Override console methods with proper async handling
     console.log = (...args) => {
-      originalConsole.log(...args);
+      originalConsoleRef.current?.log(...args);
       captureLog('info', args);
     };
 
     console.warn = (...args) => {
-      originalConsole.warn(...args);
+      originalConsoleRef.current?.warn(...args);
       captureLog('warn', args);
     };
 
     console.error = (...args) => {
-      originalConsole.error(...args);
+      originalConsoleRef.current?.error(...args);
       captureLog('error', args);
     };
 
     console.info = (...args) => {
-      originalConsole.info(...args);
+      originalConsoleRef.current?.info(...args);
       captureLog('info', args);
     };
 
     console.debug = (...args) => {
-      originalConsole.debug(...args);
+      originalConsoleRef.current?.debug(...args);
       captureLog('debug', args);
     };
 
     return () => {
       // Restore original console methods
-      console.log = originalConsole.log;
-      console.warn = originalConsole.warn;
-      console.error = originalConsole.error;
-      console.info = originalConsole.info;
-      console.debug = originalConsole.debug;
+      if (originalConsoleRef.current) {
+        console.log = originalConsoleRef.current.log;
+        console.warn = originalConsoleRef.current.warn;
+        console.error = originalConsoleRef.current.error;
+        console.info = originalConsoleRef.current.info;
+        console.debug = originalConsoleRef.current.debug;
+        originalConsoleRef.current = null;
+      }
     };
   }, [isOpen, maxLogs]);
+
+  // Process queued logs asynchronously to avoid setState during render
+  useEffect(() => {
+    const processLogs = () => {
+      if (logQueueRef.current.length > 0) {
+        const newLogs = [...logQueueRef.current];
+        logQueueRef.current = [];
+        
+        setLogs(prev => {
+          const combined = [...prev, ...newLogs];
+          return combined.slice(-maxLogs);
+        });
+      }
+    };
+
+    // Process logs on next tick to avoid setState during render
+    const timeoutId = setTimeout(processLogs, 0);
+    
+    return () => clearTimeout(timeoutId);
+  }, [maxLogs]);
 
   // Auto-scroll to bottom
   useEffect(() => {

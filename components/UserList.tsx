@@ -2,6 +2,7 @@
 import React from 'react';
 import type { User, Channel } from '../types';
 import { isChannelOperator } from '../types';
+import { ProfilePicture } from './ProfilePicture';
 
 interface UserListProps {
   users: User[];
@@ -46,11 +47,7 @@ export const UserList: React.FC<UserListProps> = ({ users, onUserClick, currentU
                 ? 'bg-blue-900/40 border border-blue-500/50 text-blue-200' 
                 : 'bg-cyan-900/30 border border-cyan-500/30 text-cyan-300'
             }`}>
-              <span className={`h-2 w-2 lg:h-2 lg:w-2 rounded-full ${
-                user.status === 'online' 
-                  ? (isNetworkUser ? 'bg-blue-500' : 'bg-green-500')
-                  : 'bg-yellow-500'
-              }`}></span>
+              <ProfilePicture user={user} size="sm" className="flex-shrink-0" />
               <span className="truncate flex items-center gap-1">
                 <span className="font-bold">{user.nickname}</span>
                 <span className={`text-sm font-normal ${
@@ -79,11 +76,7 @@ export const UserList: React.FC<UserListProps> = ({ users, onUserClick, currentU
                     : 'text-gray-300 hover:bg-gray-700 active:bg-gray-600'
                 }`}
               >
-                <span className={`h-2 w-2 lg:h-2 lg:w-2 rounded-full ${
-                  user.status === 'online' 
-                    ? (isNetworkUser ? 'bg-blue-500' : 'bg-green-500')
-                    : 'bg-yellow-500'
-                }`}></span>
+                <ProfilePicture user={user} size="sm" className="flex-shrink-0" />
                 <span className="truncate">{user.nickname}</span>
                 {hasUnreadPM && (
                   <span className="text-orange-400 text-sm font-bold">●</span>

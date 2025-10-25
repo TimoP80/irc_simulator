@@ -133,11 +133,19 @@ class StationVServer extends EventEmitter {
     // Join channel
     this.joinChannel(nickname, channel);
     
-    // Send confirmation
+    // Get current users in the channel
+    const channelData = this.channels.get(channel);
+    const channelUsers = channelData ? Array.from(channelData.users.values()) : [];
+    
+    // Send confirmation with current user list
     ws.send(JSON.stringify({
       type: 'joined',
       channel,
-      nickname
+      nickname,
+      channelData: {
+        users: channelUsers,
+        topic: channelData?.topic || ''
+      }
     }));
 
     // Notify other clients
@@ -267,11 +275,19 @@ class StationVServer extends EventEmitter {
 
     this.joinChannel(nickname, channel);
 
-    // Notify other clients
+    // Get current users in the channel
+    const channelData = this.channels.get(channel);
+    const channelUsers = channelData ? Array.from(channelData.users.values()) : [];
+
+    // Notify other clients with current user list
     this.broadcastToChannel(channel, {
       type: 'user_joined',
       nickname,
-      channel
+      channel,
+      channelData: {
+        users: channelUsers,
+        topic: channelData?.topic || ''
+      }
     });
   }
 

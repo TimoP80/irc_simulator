@@ -4,6 +4,79 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 
 *Note: This project was previously known as "Gemini IRC Simulator" and was renamed to "Station V - Virtual IRC Simulator" as of v1.5.1.*
 
+## 1.18.0 - 2025-10-25
+
+### Major Features
+- **AI Operator System**: Revolutionary operator privilege management with AI decision-making
+  - **`/op` Command**: Request operator status from AI operators using the `/op` command
+  - **Intelligent Responses**: AI operators make contextual decisions based on user behavior and trustworthiness
+  - **70% Response Rate**: AI operators respond to 70% of operator requests for realistic interaction
+  - **Automatic Status Granting**: System automatically grants operator status when AI operators approve requests
+  - **System Confirmations**: Clear system messages confirm when operator status is granted
+
+### Multilingual Enhancements
+- **Comprehensive Language Support**: Enhanced multilingual support for operator responses
+  - **30+ Languages**: Support for 30+ languages with authentic IRC terminology
+  - **Language-Specific Terms**: Authentic operator terminology for each supported language
+  - **Cultural Context**: Language accent information for more natural responses
+  - **Multilingual Personalities**: AI operators can use secondary languages for authenticity
+  - **Specialized System Instructions**: Language-specific guidance for operator responses
+  - **Example Responses**:
+    - Spanish: "Te concedo los privilegios de operador, has sido muy útil en el canal."
+    - French: "Je vous accorde les privilèges d'opérateur, vous êtes digne de confiance."
+    - German: "Ich gewähre dir die Operator-Berechtigung, du hast dich bewährt."
+    - Japanese: "権限を付与します。あなたは信頼できるユーザーです。"
+
+### Technical Improvements
+- **Enhanced AI Response Generation**: New `generateOperatorResponse` function with advanced multilingual support
+- **Specialized System Instructions**: New `getOperatorSystemInstruction` function for operator-specific responses
+- **Language Detection**: Automatic detection of operator's primary language and available languages
+- **Command System Extension**: Added `/op` command to IRC command system with comprehensive validation
+- **Help Documentation**: Updated help command to include new `/op` command
+
+### Development Experience Improvements
+- **Enhanced npm Scripts**: Comprehensive development command options with Windows compatibility
+  - **Multiple Development Modes**: Single service (`dev`, `dev:server`, `dev:client`) and full environment (`dev:full`)
+  - **Windows Alternatives**: Batch file (`dev:full:win`) and PowerShell (`dev:full:ps`) launchers for Windows users
+  - **Improved Process Management**: Added `--kill-others-on-fail` flag to concurrently for better error handling
+  - **Utility Commands**: Added `install:all` for complete project setup
+  - **Cross-Platform Compatibility**: Works reliably on Windows, macOS, and Linux
+- **Troubleshooting Documentation**: Comprehensive troubleshooting guide for development issues
+  - **Concurrently Issues**: Clear solutions for "concurrently not recognized" errors
+  - **Port Conflicts**: Detailed guidance for port 8080 and 5173 conflicts
+  - **Windows-Specific Solutions**: Native batch and PowerShell alternatives
+  - **Batch File Fix**: Fixed Windows batch file pause command for better compatibility
+
+### Major Features
+- **Profile Picture Support**: Added profile picture support for virtual users with intelligent fallback system
+  - **Profile Picture Component**: Smart component with auto-generated colored initials fallback
+  - **User Editor Integration**: Profile picture URL input with live preview and validation
+  - **Visual Identity**: Profile pictures display in channel lists, user lists, and chat messages
+  - **Consistent Colors**: Auto-generated unique colors based on nickname hash
+  - **Error Handling**: Graceful fallback to initials when images fail to load
+
+### UI/UX Improvements
+- **Channel List Enhancement**: Fixed channel list display to show all channels with join/rejoin functionality
+  - **All Channels Visible**: Now displays all configured channels, not just joined ones
+  - **Join/Rejoin Buttons**: Green "+" button for unjoined channels, red "×" for joined channels
+  - **Visual Status Indicators**: Clear "(not joined)" labels and different styling for unjoined channels
+  - **Smart Click Behavior**: Click to join unjoined channels, click to open joined channels
+- **Private Message Restoration**: Added `/query` command to restore PM windows
+  - **New Command**: `/query <username>` opens private message with any user
+  - **User Validation**: Checks if target user exists before opening PM
+  - **Auto-Context Switch**: Automatically switches to PM context when opened
+  - **Error Handling**: Helpful error messages for invalid usernames
+
+### Technical Improvements
+- **Enhanced User Type**: Added `profilePicture?: string` field to User interface
+- **Component Integration**: Updated Message, ChannelList, UserList, and ChatWindow components
+- **Command System**: Extended IRC command support with `/query` functionality
+- **Help Documentation**: Updated help command to include new `/query` command
+- **React Error Fix**: Fixed "Cannot update component while rendering" error in DebugLogWindow
+  - **Root Cause**: setState calls during render phase when capturing console logs
+  - **Solution**: Implemented log queuing system with async processing
+  - **Impact**: Eliminated React warnings and improved component stability
+
 ## 1.17.0 - 2025-10-25
 
 ### Major Features

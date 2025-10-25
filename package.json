@@ -8,7 +8,13 @@
     "build": "vite build",
     "preview": "vite preview",
     "server": "node server/station-v-server-simple.js",
-    "dev:full": "concurrently \"npm run server\" \"npm run dev\""
+    "dev:full": "concurrently --kill-others-on-fail \"npm run server\" \"npm run dev\"",
+    "dev:full:win": "dev-full.bat",
+    "dev:full:ps": "powershell -ExecutionPolicy Bypass -File dev-full.ps1",
+    "dev:server": "npm run server",
+    "dev:client": "npm run dev",
+    "start": "npm run dev:full",
+    "install:all": "npm install && npm run build"
   },
   "dependencies": {
     "@google/genai": "^1.27.0",

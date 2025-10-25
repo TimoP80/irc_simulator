@@ -24,6 +24,7 @@ export interface User {
   };
   pmProbability?: number; // Probability (0-100) for autonomous private messages
   assignedChannels?: string[]; // Track which channels this user is assigned to
+  profilePicture?: string; // URL or data URL for profile picture
   // Bot-specific properties
   botCommands?: string[]; // Available bot commands
   botDescription?: string; // Description of what the bot does
