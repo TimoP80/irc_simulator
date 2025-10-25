@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import type { Message } from '../types';
 import { MessageEntry } from './Message';
 import { SendIcon } from './icons';
+import { convertEmoticonsToEmojis } from '../utils/emojiConverter';
 
 interface ChatWindowProps {
   title: string;
@@ -16,6 +17,7 @@ interface ChatWindowProps {
 
 export const ChatWindow: React.FC<ChatWindowProps> = ({ title, messages, onSendMessage, isLoading, currentUserNickname, typingUsers, channel }) => {
   const [input, setInput] = useState('');
+  const [displayInput, setDisplayInput] = useState('');
   const [isResizing, setIsResizing] = useState(false);
   const [resizeType, setResizeType] = useState<'height' | 'width-left' | 'width-right' | null>(null);
   const [chatHeight, setChatHeight] = useState<number | null>(null);
@@ -34,6 +36,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ title, messages, onSendM
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Update display input with emoji conversion
+  useEffect(() => {
+    setDisplayInput(convertEmoticonsToEmojis(input));
+  }, [input]);
 
   // Handle resize functionality
   const handleMouseDown = useCallback((e: React.MouseEvent, type: 'height' | 'width-left' | 'width-right') => {
@@ -112,7 +119,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ title, messages, onSendM
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (input.trim() && !isLoading) {
-      onSendMessage(input.trim());
+      // Convert emoticons to emojis before sending
+      const convertedInput = convertEmoticonsToEmojis(input.trim());
+      onSendMessage(convertedInput);
       setInput('');
     }
   };
@@ -188,9 +197,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ title, messages, onSendM
         <form onSubmit={handleSubmit} className="flex items-center gap-2">
           <input
             type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Type your message... (try /nick, /join, /who or !image, !weather, !help)"
+            value={displayInput}
+            onChange={(e) => {
+              // Convert emojis back to emoticons for editing
+              const rawValue = e.target.value;
+              setInput(rawValue);
+            }}
+            placeholder="Type your message... (try /nick, /join, /who or !image, !weather, !help) - Emoticons like :) will auto-convert to emojis"
             className="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-3 lg:px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm lg:text-base"
             disabled={isLoading}
           />

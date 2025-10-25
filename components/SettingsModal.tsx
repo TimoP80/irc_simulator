@@ -9,6 +9,7 @@ import { ChannelManagement } from './ChannelManagement';
 import { IRCExportSettings } from './IRCExportSettings';
 import { getDebugConfig, updateDebugConfig, setDebugEnabled, setLogLevel, toggleCategory } from '../utils/debugLogger';
 import { DataExportModal } from './DataExportModal';
+import { DebugLogWindow } from './DebugLogWindow';
 
 interface SettingsModalProps {
   onSave: (config: AppConfig) => void;
@@ -46,6 +47,7 @@ const parseUsersFromText = (text: string): User[] => {
         nickname: nickname.trim(),
         status: 'online' as const,
         personality: personalityParts.join(',').trim(),
+        userType: 'virtual' as const,
         languageSkills: {
           languages: [{ 
             language: 'English', 
@@ -54,10 +56,10 @@ const parseUsersFromText = (text: string): User[] => {
           }]
         },
         writingStyle: {
-          formality: 'casual' as const,
-          verbosity: 'moderate' as const,
-          humor: 'light' as const,
-          emojiUsage: 'minimal' as const,
+          formality: 'informal' as const,
+          verbosity: 'neutral' as const,
+          humor: 'witty' as const,
+          emojiUsage: 'low' as const,
           punctuation: 'standard' as const
         }
       };
@@ -153,6 +155,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [modelsError, setModelsError] = useState<string | null>(null);
   const [showDataExportModal, setShowDataExportModal] = useState(false);
+  const [showDebugLogWindow, setShowDebugLogWindow] = useState(false);
   
 
   // Handle Escape key to close modal
@@ -654,6 +657,30 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
 
           <div className="border-t border-gray-600 pt-6">
+            <h3 className="text-lg font-semibold text-gray-200 mb-4">Debug Tools</h3>
+            <p className="text-sm text-gray-400 mb-4">Additional tools for debugging and monitoring the application.</p>
+            
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-300">Debug Log Window</p>
+                  <p className="text-xs text-gray-400">Open a separate window to view debug logs in real-time</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowDebugLogWindow(true)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Open Debug Logs
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-600 pt-6">
             <h3 className="text-lg font-semibold text-gray-200 mb-4">Data Management</h3>
             <p className="text-sm text-gray-400 mb-4">Export all your data (channels, messages, configuration) to a JSON file for backup, or import previously exported data.</p>
             
@@ -717,6 +744,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       <DataExportModal 
         isOpen={showDataExportModal}
         onClose={() => setShowDataExportModal(false)}
+      />
+      
+      <DebugLogWindow 
+        isOpen={showDebugLogWindow}
+        onClose={() => setShowDebugLogWindow(false)}
       />
     </div>
     );
