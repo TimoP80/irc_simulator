@@ -1,5 +1,6 @@
 import React from 'react';
 import type { Message } from '../types';
+import { parseFormattedText } from '../utils/textFormatter';
 
 interface MessageProps {
   message: Message;
@@ -58,7 +59,6 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
               img.pause?.();
             }
           }}
-          crossOrigin="anonymous"
           loading="lazy"
           referrerPolicy="no-referrer"
         />
@@ -77,7 +77,7 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
     ));
   };
 
-  // Helper function to render content with links and images
+  // Helper function to render content with links, images, and text formatting
   const renderContent = (text: string) => {
     // Split content by URLs to handle them separately
     const urlRegex = /(https?:\/\/[^\s]+)/gi;
@@ -193,7 +193,6 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
                     img.pause?.();
                   }
                 }}
-                crossOrigin="anonymous"
                 loading="lazy"
                 referrerPolicy="no-referrer"
               />
@@ -218,7 +217,8 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
           return <span key={index} className="text-gray-500 italic">[Generated Image]</span>;
         }
       } else {
-        return <span key={index}>{part}</span>;
+        // Apply text formatting to non-URL parts
+        return <span key={index}>{parseFormattedText(part)}</span>;
       }
     });
   };

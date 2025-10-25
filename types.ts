@@ -22,6 +22,7 @@ export interface User {
     emojiUsage: 'none' | 'low' | 'medium' | 'high' | 'excessive';
     punctuation: 'minimal' | 'standard' | 'creative' | 'excessive';
   };
+  pmProbability?: number; // Probability (0-100) for autonomous private messages
   assignedChannels?: string[]; // Track which channels this user is assigned to
   // Bot-specific properties
   botCommands?: string[]; // Available bot commands
@@ -161,36 +162,28 @@ export const getLanguageFluency = (languageSkills: User['languageSkills'], langu
 };
 
 export const getAllLanguages = (languageSkills: User['languageSkills']): string[] => {
-  console.log(`[getAllLanguages] Input languageSkills:`, languageSkills);
-  
   if (!languageSkills) {
-    console.log(`[getAllLanguages] No languageSkills, returning English`);
     return ['English'];
   }
   
   if (isPerLanguageFormat(languageSkills)) {
     const languages = languageSkills.languages.map(l => l.language);
-    console.log(`[getAllLanguages] Per-language format detected, languages:`, languages);
     // Safety check: if no languages, return English
     return languages.length > 0 ? languages : ['English'];
   } else if (isLegacyFormat(languageSkills)) {
-    console.log(`[getAllLanguages] Legacy format detected, languages:`, languageSkills.languages);
     // Safety check: if no languages, return English
     return languageSkills.languages.length > 0 ? languageSkills.languages : ['English'];
   }
   
-  console.log(`[getAllLanguages] Neither format detected, trying fallback`);
   // Fallback for malformed data - try to extract languages if possible
   if (languageSkills && typeof languageSkills === 'object' && 'languages' in languageSkills) {
     const languages = (languageSkills as any).languages;
     if (Array.isArray(languages)) {
       const filtered = languages.filter(lang => typeof lang === 'string');
-      console.log(`[getAllLanguages] Fallback extracted languages:`, filtered);
-      return filtered;
+      return filtered.length > 0 ? filtered : ['English'];
     }
   }
   
-  console.log(`[getAllLanguages] All fallbacks failed, returning English`);
   return ['English'];
 };
 

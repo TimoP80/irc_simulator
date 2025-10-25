@@ -22,6 +22,17 @@ interface DebugConfig {
     ircExport: boolean;
     bot: boolean;
     image: boolean;
+    dataExport: boolean;
+    app: boolean;
+    message: boolean;
+    time: boolean;
+    input: boolean;
+    notification: boolean;
+    context: boolean;
+    unread: boolean;
+    content: boolean;
+    media: boolean;
+    irc: boolean;
     all: boolean; // Master switch for all categories
   };
 }
@@ -45,6 +56,17 @@ const defaultDebugConfig: DebugConfig = {
     ircExport: true,
     bot: true,
     image: true,
+    dataExport: true,
+    app: true,
+    message: true,
+    time: true,
+    input: true,
+    notification: true,
+    context: true,
+    unread: true,
+    content: true,
+    media: true,
+    irc: true,
     all: true
   }
 };
@@ -99,6 +121,7 @@ export const resetDebugConfig = () => {
 export const disableAllDebugLogging = () => {
   debugConfig = {
     enabled: false,
+    level: 'debug',
     categories: {
       ai: false,
       simulation: false,
@@ -114,6 +137,17 @@ export const disableAllDebugLogging = () => {
       ircExport: false,
       bot: false,
       image: false,
+      dataExport: false,
+      app: false,
+      message: false,
+      time: false,
+      input: false,
+      notification: false,
+      context: false,
+      unread: false,
+      content: false,
+      media: false,
+      irc: false,
       all: false
     }
   };
@@ -230,6 +264,7 @@ export const unreadDebug = new DebugLogger('unread');
 export const contentDebug = new DebugLogger('content');
 export const mediaDebug = new DebugLogger('media');
 export const ircDebug = new DebugLogger('irc');
+export const dataExportDebug = new DebugLogger('dataExport');
 
 // Convenience function to check if any debug logging is enabled
 export const isAnyDebugEnabled = (): boolean => {

@@ -44,6 +44,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [isRandomizing, setIsRandomizing] = useState(false);
   const [assignedChannels, setAssignedChannels] = useState<string[]>([]);
+  const [pmProbability, setPmProbability] = useState<number>(25);
 
   const isEditing = !!editingUser;
 
@@ -102,6 +103,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
           emojiUsage: editingUser.writingStyle?.emojiUsage || 'low',
           punctuation: editingUser.writingStyle?.punctuation || 'standard'
         });
+        setPmProbability(editingUser.pmProbability ?? 25);
         // Get channels where this user is assigned
         const userChannels = channels
           .filter(channel => channel.users.some(u => u.nickname === editingUser.nickname))
@@ -122,6 +124,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
           emojiUsage: 'low',
           punctuation: 'standard'
         });
+        setPmProbability(10);
         setAssignedChannels([]);
       }
       setErrors({});
@@ -193,7 +196,8 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
           accent: '' 
         }]
       },
-      writingStyle
+      writingStyle,
+      pmProbability
     };
 
     // Handle channel assignments
@@ -261,6 +265,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
       emojiUsage: 'low',
       punctuation: 'standard'
     });
+    setPmProbability(10);
     setErrors({});
     onClose();
   };
@@ -604,6 +609,41 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
                   <option value="excessive">Excessive</option>
                 </select>
               </div>
+            </div>
+          </div>
+
+          {/* PM Probability */}
+          <div className="space-y-4">
+            <h4 className="text-lg font-semibold text-gray-200 border-b border-gray-600 pb-2">
+              Private Message Settings
+            </h4>
+            
+            <div>
+              <label htmlFor="pmProbability" className="block text-sm font-medium text-gray-300 mb-2">
+                PM Probability ({pmProbability}%)
+              </label>
+              <div className="flex items-center space-x-4">
+                <input
+                  type="range"
+                  id="pmProbability"
+                  min="0"
+                  max="100"
+                  value={pmProbability}
+                  onChange={(e) => setPmProbability(parseInt(e.target.value))}
+                  className="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
+                />
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={pmProbability}
+                  onChange={(e) => setPmProbability(Math.max(0, Math.min(100, parseInt(e.target.value) || 0)))}
+                  className="w-20 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-gray-200 text-center focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              <p className="text-xs text-gray-400 mt-1">
+                Probability that this user will send autonomous private messages (0% = never, 100% = always when selected)
+              </p>
             </div>
           </div>
 
