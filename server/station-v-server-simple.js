@@ -102,7 +102,7 @@ class StationVServer extends EventEmitter {
     // Send confirmation with channel data
     const channelData = this.channels.get(channel);
     const channelUsers = Array.from(this.users.values()).filter(user => 
-      user.channels && user.channels.includes(channel)
+      user.channels && user.channels.has(channel)
     );
     
     ws.send(JSON.stringify({

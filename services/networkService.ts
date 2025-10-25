@@ -228,7 +228,12 @@ class NetworkService {
         // Update users
         if (message.channelData.users) {
           message.channelData.users.forEach((user: any) => {
-            this.users.set(user.nickname, user);
+            // Ensure channels is an array, not a Set
+            const normalizedUser: NetworkUser = {
+              ...user,
+              channels: Array.isArray(user.channels) ? user.channels : Array.from(user.channels || [])
+            };
+            this.users.set(user.nickname, normalizedUser);
           });
         }
         
@@ -328,7 +333,13 @@ class NetworkService {
       // Check if user already exists
       const existingUser = this.users.get(message.nickname);
       if (existingUser) {
-        existingUser.channels.push(message.channel);
+        // Ensure channels is an array before pushing
+        if (!Array.isArray(existingUser.channels)) {
+          existingUser.channels = Array.from(existingUser.channels || []);
+        }
+        if (!existingUser.channels.includes(message.channel)) {
+          existingUser.channels.push(message.channel);
+        }
       } else {
         this.users.set(message.nickname, user);
       }

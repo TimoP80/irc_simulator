@@ -2,7 +2,7 @@
 
 ### An Experiment in AI-Simulated Social Environments
 
-**Current Version: 1.16.0** - Multilingual personality descriptions, enhanced cultural diversity, and improved AI language support.
+**Current Version: 1.16.2** - Network mode support, HTML export templates, and critical bug fixes for multi-user environments.
 
 ---
 
@@ -120,6 +120,84 @@ The simulation is powered by the Gemini API, using carefully crafted prompts to 
     -   **Topic Evolution Warnings**: AI warned when conversations become stale or repetitive
     -   **Smart Topic Suggestions**: System messages suggest fresh topics when conversations get repetitive
     -   **Extended Context**: 20-message history for better AI understanding and context
+
+## 4.5. Network Mode - Multi-User Support
+
+Station V now supports **network mode**, allowing multiple human users to connect and chat together in the same virtual environment. This transforms the simulator from a single-user experience into a collaborative social space where humans and AI interact together.
+
+### Network Features
+
+- **WebSocket Server**: Built-in server for real-time communication between multiple clients
+  - **Automatic Setup**: Server starts automatically with `npm run dev:full`
+  - **Cross-Platform**: Works on Windows, macOS, and Linux
+  - **Persistent Connections**: Stable WebSocket connections with automatic reconnection
+  - **Channel Synchronization**: All users see the same channels, users, and messages
+
+- **Multi-User Chat**: Multiple human users can chat in the same channels
+  - **Real-Time Messaging**: Instant message delivery between all connected users
+  - **User Presence**: See who's online and connected to the network
+  - **Channel Management**: All users can join/leave channels together
+  - **Message History**: New users receive complete channel history upon joining
+
+- **AI Integration**: Virtual users interact with both human and network users
+  - **Smart AI Responses**: AI users respond to messages from both local and network users
+  - **Consistent Personalities**: AI maintains personalities across all user interactions
+  - **Language Awareness**: AI adapts to the language context of all users
+  - **No AI Loops**: Prevents infinite AI response loops in network mode
+
+- **Cross-Tab Synchronization**: Multiple browser tabs stay synchronized
+  - **User Lists**: User presence updates across all tabs
+  - **Messages**: All messages appear in all open tabs
+  - **AI Messages**: Virtual user messages sync across tabs
+  - **Real-Time Updates**: Changes appear instantly in all connected tabs
+
+- **Visual Indicators**: Clear distinction between user types
+  - **Network Users**: Blue background with globe icon (🌐)
+  - **Current User**: Highlighted with link icon (🔗) and cyan background
+  - **Local Users**: Standard appearance with status dots
+  - **Status Colors**: Green (online), yellow (away), blue (network)
+
+### Network Setup
+
+#### Quick Network Start
+```bash
+# Start both server and client
+npm run dev:full
+
+# Or start separately:
+npm run server    # Start WebSocket server
+npm run dev       # Start web client
+```
+
+#### Network Configuration
+- **Server Port**: Default 8080 (configurable in `server/station-v-server-simple.js`)
+- **Client Connection**: Automatically connects to `localhost:8080`
+- **Multiple Clients**: Each browser tab acts as a separate client
+- **User Nicknames**: Each client can set their own nickname
+
+#### Network Architecture
+- **WebSocket Server**: Handles all real-time communication
+- **Client Service**: Manages connections and message routing
+- **Broadcast System**: Ensures all clients receive updates
+- **Message Deduplication**: Prevents duplicate messages across clients
+- **Error Handling**: Robust reconnection and error recovery
+
+### Network Use Cases
+
+- **Collaborative Storytelling**: Multiple humans and AI create stories together
+- **Language Learning**: Practice languages with AI and other learners
+- **Social Experiments**: Observe AI behavior with multiple human participants
+- **Team Building**: Use as an icebreaker or team activity
+- **Educational Tool**: Teach AI interaction and social dynamics
+- **Entertainment**: Multi-player chat experience with AI personalities
+
+### Network Limitations
+
+- **Local Network Only**: Currently designed for local network use
+- **Single Server**: One server instance per network
+- **Browser Required**: WebSocket clients require modern browsers
+- **No Authentication**: No user authentication or security features
+- **No Persistence**: Server state is not persisted (resets on restart)
 
 ## 5. Getting Started
 
