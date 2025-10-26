@@ -282,6 +282,49 @@ npm run dev:client
 # Perfect for: Debugging specific services, custom development setups
 ```
 
+### Electron Build Development
+
+#### **Building Standalone Executables**
+```bash
+# Build Windows executable
+npm run electron:build:win
+
+# Build for current platform
+npm run electron:build
+
+# Build for all platforms
+npm run electron:build:all
+
+# Test Electron build
+npm run electron:test
+
+# Clean build artifacts
+npm run electron:clean
+```
+
+#### **The Debugging Process** 🐛
+The multiplatform executable build required extensive debugging over 2-3 hours to resolve critical issues:
+
+**Phase 1: Silent Failures**
+- Build script was exiting with no output
+- No error messages or build logs
+- Empty release directories
+- Required debugging ES module detection
+
+**Phase 2: Configuration Errors**
+- Electron-builder rejecting configuration files
+- Invalid properties causing build failures
+- File extension mismatches
+- Required cleaning up package-electron.json
+
+**Phase 3: Cross-Platform Issues**
+- PowerShell command syntax problems
+- Variable naming conflicts
+- Path handling issues
+- Required platform-specific fixes
+
+**Result**: Comprehensive error handling, step-by-step logging, and reliable cross-platform builds.
+
 ### Cursor AI Development
 
 For developers using Cursor AI to improve and enhance the codebase:
@@ -327,6 +370,33 @@ For developers using Cursor AI to improve and enhance the codebase:
 
 ## Troubleshooting
 
+### **Electron Build Issues** (Recently Resolved)
+
+**Build Script Exits Silently**: 
+- **Cause**: ES module detection failures in build scripts
+- **Solution**: Fixed with proper `fileURLToPath` usage in `scripts/build-windows-dist.js`
+- **Prevention**: Always use Node.js ES module utilities for path handling
+
+**"Cannot access 'process' before initialization" Error**:
+- **Cause**: Variable naming conflict with global `process` object
+- **Solution**: Renamed variables to `childProcess` to avoid conflicts
+- **Prevention**: Never use global object names as variable names
+
+**Electron Builder Configuration Errors**:
+- **Cause**: Invalid properties in `package-electron.json` (name, version, author)
+- **Solution**: Cleaned configuration to only include electron-builder valid properties
+- **Prevention**: Use electron-builder documentation to verify configuration properties
+
+**"Application entry file does not exist" Error**:
+- **Cause**: File extension mismatch between build output (.cjs) and configuration (.js)
+- **Solution**: Updated package.json main field to use `.cjs` extension
+- **Prevention**: Ensure file extensions match between build output and configuration
+
+**PowerShell Command Syntax Errors**:
+- **Cause**: Using bash-style `&&` operators in PowerShell
+- **Solution**: Use PowerShell-appropriate syntax with semicolons or separate commands
+- **Prevention**: Use platform-appropriate command syntax
+
 ### **Development Issues**
 
 **Concurrently Not Recognized**: 
@@ -356,6 +426,27 @@ For developers using Cursor AI to improve and enhance the codebase:
 **Network Connection**: Check that port 8080 is available for network mode
 
 ## Recent Updates
+
+### v1.19.0 - Multiplatform Executable Build (Major Debugging Effort)
+- **Standalone Windows executable** - Complete desktop application with auto-starting IRC server
+- **Cross-platform support** - Windows, macOS, and Linux builds with native installers
+- **Enhanced build process** - Robust error handling and comprehensive logging
+- **Critical debugging resolved** - Fixed multiple silent failures and configuration issues
+
+#### **The 2-3 Hour Debugging Marathon** 🐛
+The multiplatform executable build required extensive debugging to resolve several critical issues:
+
+**Silent Script Failures**: The build script was exiting with no output, leaving empty release directories. This was caused by ES module detection failures that required proper `fileURLToPath` usage instead of string concatenation.
+
+**Variable Naming Conflicts**: Build process was failing with "Cannot access 'process' before initialization" errors due to using `process` as a variable name, conflicting with the global `process` object.
+
+**Electron Builder Configuration Errors**: The electron-builder was rejecting configuration files with "unknown property" errors because `package-electron.json` contained non-electron-builder properties like `name`, `version`, and `author`.
+
+**File Extension Mismatches**: The main entry point referenced `.js` files but the build process renamed them to `.cjs` for ES module compatibility, causing "file not found" errors in the packaged application.
+
+**PowerShell Command Syntax**: Cross-platform command issues where bash-style `&&` operators don't work in PowerShell environments.
+
+**Result**: After extensive debugging, the build process now works reliably with comprehensive error handling, step-by-step logging, and proper cross-platform compatibility.
 
 ### v1.17.0 - Text Formatting & UI Improvements
 - **Rich text formatting** - Bold, italic, code blocks, spoilers, and colored text

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🧩 Vibe / Project Update Prompt (for Cursor AI)</title>
+  <link rel="stylesheet" href="vibe_styles.css">
+</head>
+<body>
+
+  <p><a href="vibe_system_overview.html">← Back to Overview</a></p>
+  <h1>🧩 Vibe / Project Update Prompt (for Cursor AI)</h1>
+
+  <p>
+    The <strong>Project Update Prompt</strong> defines how Cursor AI handles large-scale, multi-file,
+    or architectural updates across your Node.js / React / Vite / TypeScript codebase.
+  </p>
+
+  <hr>
+
+  <h2>🧠 System Context</h2>
+
+  <p>
+    The AI functions as a senior project maintainer, understanding how all components, modules, and configurations
+    interact across the stack.
+  </p>
+
+  <h3>Principles</h3>
+  <ul>
+    <li>Apply consistent architecture and code style across the project.</li>
+    <li>Manage dependency changes safely.</li>
+    <li>Preserve backward compatibility when possible.</li>
+    <li>Explain structural changes clearly in the output summary.</li>
+  </ul>
+
+  <hr>
+
+  <h2>🎯 Prompt Template</h2>
+
+  <pre><code><strong>Goal:</strong>
+&gt; ${goal}
+
+<strong>Files / Areas Affected:</strong>
+&gt; ${files}
+
+<strong>Scope of Work:</strong>
+&gt; ${scope}
+
+<strong>Functional Constraints:</strong>
+&gt; ${constraints}
+
+<strong>Output Style:</strong>
+&gt; - Show updated code and new files as needed.
+&gt; - Summarize major architectural or dependency changes.
+&gt; - Keep all outputs consistent and ready to merge.</code></pre>
+
+  <h2>✅ Example</h2>
+
+  <div class="example">
+    <p><strong>Goal:</strong> Migrate from CRA to Vite and update build scripts.</p>
+    <p><strong>Files:</strong> <code>package.json</code>, <code>vite.config.ts</code>, <code>tsconfig.json</code></p>
+    <p><strong>Scope:</strong> Whole project build configuration.</p>
+    <p><strong>Constraints:</strong> Preserve environment variables and deployment paths.</p>
+  </div>
+
+  <hr>
+
+  <p>
+    <strong>Scope:</strong> <em>Global or multi-file updates</em><br>
+    <strong>Folder:</strong> <code>.cursor/commands/project_update.md</code>
+  </p>
+
+</body>
+</html>

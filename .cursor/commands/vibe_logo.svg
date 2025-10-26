@@ -1,0 +1,22 @@
+<!-- Save as: vibe_logo.svg -->
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="72" viewBox="0 0 360 72" role="img" aria-labelledby="logotitle logodesc">
+  <title id="logotitle">4-Prompt Vibe System Logo</title>
+  <desc id="logodesc">Logo: four colored tiles with a cursor and the text "Vibe"</desc>
+  <rect width="360" height="72" fill="none"></rect>
+  <!-- tiles -->
+  <g transform="translate(12,12)">
+    <rect x="0" y="0" width="28" height="28" rx="5" fill="#38bdf8"></rect>
+    <rect x="34" y="0" width="28" height="28" rx="5" fill="#60a5fa"></rect>
+    <rect x="0" y="34" width="28" height="28" rx="5" fill="#34d399"></rect>
+    <rect x="34" y="34" width="28" height="28" rx="5" fill="#fbbf24"></rect>
+  </g>
+
+  <!-- cursor mark (slightly larger than favicon) -->
+  <path d="M120 18 L150 42 L138 46 L150 66 L120 48 L132 40 Z" fill="#0f172a" opacity="0.95"></path>
+
+  <!-- wordmark: "Vibe" -->
+  <g transform="translate(170,46)">
+    <text x="0" y="-6" font-family="Inter, Arial, sans-serif" font-weight="700" font-size="28" fill="#0f172a">Vibe</text>
+    <text x="0" y="18" font-family="Inter, Arial, sans-serif" font-weight="500" font-size="12" fill="#6b7280">4-Prompt System</text>
+  </g>
+</svg>
