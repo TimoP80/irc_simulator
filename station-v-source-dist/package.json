@@ -1,0 +1,198 @@
+{
+  "name": "station-v-executable",
+  "private": true,
+  "version": "1.19.1",
+  "description": "Station V - Virtual IRC Simulator - Desktop Executable - A cross-platform desktop application for simulating IRC chat environments with AI-powered virtual users",
+  "author": "Station V Development Team",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TimoP80/station_v_executable.git"
+  },
+  "homepage": "https://github.com/TimoP80/station_v_executable#readme",
+  "bugs": {
+    "url": "https://github.com/TimoP80/station_v_executable/issues"
+  },
+  "keywords": [
+    "irc",
+    "simulator",
+    "ai",
+    "chat",
+    "desktop",
+    "electron",
+    "virtual-users",
+    "gemini-ai"
+  ],
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:full": "concurrently --kill-others-on-fail \"npm run server\" \"npm run dev\"",
+    "dev:server": "npm run server",
+    "dev:client": "npm run dev",
+    "start": "npm run dev:full",
+    "server": "node server/station-v-server-simple.js",
+    "build": "npm run build:vite && npm run build:electron && npm run copy:config",
+    "build:vite": "cross-env ELECTRON=true vite build",
+    "build:electron": "tsc --project tsconfig.electron.json",
+    "build:all": "npm run build && npm run dist",
+    "preview": "vite preview",
+    "electron": "electron .",
+    "electron:dev": "node scripts/dev-electron.js",
+    "electron:build": "node scripts/build-windows-dist.js",
+    "electron:build:win": "node scripts/build-windows-dist.js",
+    "electron:build:portable": "node scripts/create-portable-exe.js",
+    "electron:build:single": "node scripts/create-single-exe.js",
+    "electron:clean": "rimraf dist-electron",
+    "electron:test": "node scripts/test-executable.js",
+    "copy:config": "node -e \"const fs=require('fs');const path=require('path');try{fs.copyFileSync('default-config.json','dist/default-config.json');console.log('✅ Copied default-config.json');}catch(e){console.log('⚠️ Config copy skipped:',e.message);}\"",
+    "clean": "rimraf dist release",
+    "clean:all": "rimraf dist release node_modules/.vite",
+    "type-check": "tsc --noEmit",
+    "setup:repo": "node scripts/setup-repository.js"
+  },
+  "dependencies": {
+    "@google/genai": "^1.27.0",
+    "irc-framework": "^4.14.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/electron": "^1.6.10",
+    "@types/node": "^22.18.12",
+    "@vitejs/plugin-react": "^5.0.0",
+    "autoprefixer": "^10.4.21",
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "electron": "^38.4.0",
+    "electron-builder": "^25.0.0",
+    "postcss": "^8.5.6",
+    "rimraf": "^6.0.1",
+    "tailwindcss": "^3.4.18",
+    "typescript": "~5.8.2",
+    "vite": "^6.4.0",
+    "wait-on": "^8.0.1"
+  },
+  "main": "dist-electron/main.cjs",
+  "build": {
+    "appId": "com.stationv.ircsimulator",
+    "productName": "Station V - Virtual IRC Simulator",
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/electron/dist/**/*"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "server/**/*",
+      "node_modules/**/*",
+      "!node_modules/electron/dist/**/*"
+    ],
+    "extraFiles": [
+      {
+        "from": "node_modules/electron/dist/icudtl.dat",
+        "to": "icudtl.dat"
+      },
+      {
+        "from": "node_modules/electron/dist/chrome_100_percent.pak",
+        "to": "chrome_100_percent.pak"
+      },
+      {
+        "from": "node_modules/electron/dist/chrome_200_percent.pak",
+        "to": "chrome_200_percent.pak"
+      },
+      {
+        "from": "node_modules/electron/dist/resources.pak",
+        "to": "resources.pak"
+      },
+      {
+        "from": "node_modules/electron/dist/snapshot_blob.bin",
+        "to": "snapshot_blob.bin"
+      }
+    ],
+    "extraResources": [
+      {
+        "from": "server",
+        "to": "server"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "ia32"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "favicon.ico",
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "favicon.ico",
+      "category": "public.app-category.social-networking"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "rpm",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "favicon.ico",
+      "category": "Network"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "installerIcon": "favicon.ico",
+      "uninstallerIcon": "favicon.ico"
+    },
+    "dmg": {
+      "title": "Station V - Virtual IRC Simulator",
+      "icon": "favicon.ico"
+    },
+    "publish": null
+  }
+}

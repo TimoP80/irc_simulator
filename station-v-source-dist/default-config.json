@@ -1,0 +1,458 @@
+{
+  "currentUserNickname": "user",
+  "virtualUsers": "nova, A curious tech-savvy individual who loves gadgets.\nseraph, Calm, wise, and often speaks in poetic terms.\njinx, A chaotic, funny, and unpredictable prankster.\nrex, Gruff but helpful, an expert in system administration.\nluna, An artist who is dreamy, creative, and talks about music.",
+  "channels": "#general, General chit-chat about anything and everything.\n#tech-talk, Discussing the latest in technology and software.\n#random, For off-topic conversations and random thoughts.\n#help, Ask for help with the simulator here.",
+  "simulationSpeed": "normal",
+  "aiModel": "gemini-1.5-flash",
+  "typingDelay": {
+    "min": 1000,
+    "max": 3000,
+    "enabled": true
+  },
+  "typingIndicator": {
+    "enabled": true,
+    "duration": 2000
+  },
+  "imageGeneration": {
+    "provider": "placeholder",
+    "apiKey": "",
+    "model": "stable-diffusion-xl",
+    "baseUrl": "https://api.nanobanana.ai"
+  },
+  "userObjects": [
+    {
+      "nickname": "nova",
+      "status": "online",
+      "userType": "virtual",
+      "personality": "A very curious and tech-savvy individual, loves discussing new gadgets and programming.",
+      "languageSkills": {
+        "fluency": "native",
+        "languages": ["English"],
+        "accent": ""
+      },
+      "writingStyle": {
+        "formality": "casual",
+        "verbosity": "moderate",
+        "humor": "none",
+        "emojiUsage": "rare",
+        "punctuation": "standard"
+      },
+      "profilePicture": "https://placehold.co/100x100/4F46E5/FFFFFF/png?text=N"
+    },
+    {
+      "nickname": "seraph",
+      "status": "online",
+      "userType": "virtual",
+      "personality": "Calm, wise, and often speaks in philosophical or poetic terms.",
+      "languageSkills": {
+        "fluency": "native",
+        "languages": ["English"],
+        "accent": ""
+      },
+      "writingStyle": {
+        "formality": "formal",
+        "verbosity": "verbose",
+        "humor": "none",
+        "emojiUsage": "none",
+        "punctuation": "standard"
+      },
+      "profilePicture": "https://placehold.co/100x100/059669/FFFFFF/png?text=S"
+    },
+    {
+      "nickname": "jinx",
+      "status": "online",
+      "userType": "virtual",
+      "personality": "A chaotic, funny, and unpredictable prankster who loves jokes and memes.",
+      "languageSkills": {
+        "fluency": "native",
+        "languages": ["English"],
+        "accent": ""
+      },
+      "writingStyle": {
+        "formality": "casual",
+        "verbosity": "moderate",
+        "humor": "moderate",
+        "emojiUsage": "frequent",
+        "punctuation": "dramatic"
+      },
+      "profilePicture": "https://placehold.co/100x100/DC2626/FFFFFF/png?text=J"
+    },
+    {
+      "nickname": "rex",
+      "status": "online",
+      "userType": "virtual",
+      "personality": "Gruff but helpful, an expert in system administration and network security.",
+      "languageSkills": {
+        "fluency": "native",
+        "languages": ["English"],
+        "accent": ""
+      },
+      "writingStyle": {
+        "formality": "semi_formal",
+        "verbosity": "terse",
+        "humor": "none",
+        "emojiUsage": "none",
+        "punctuation": "minimal"
+      },
+      "profilePicture": "https://placehold.co/100x100/EA580C/FFFFFF/png?text=R"
+    },
+    {
+      "nickname": "luna",
+      "status": "online",
+      "userType": "virtual",
+      "personality": "An artist who is dreamy, creative, and talks about music and art.",
+      "languageSkills": {
+        "fluency": "native",
+        "languages": ["English"],
+        "accent": ""
+      },
+      "writingStyle": {
+        "formality": "casual",
+        "verbosity": "moderate",
+        "humor": "mild",
+        "emojiUsage": "occasional",
+        "punctuation": "expressive"
+      },
+      "profilePicture": "https://placehold.co/100x100/7C3AED/FFFFFF/png?text=L"
+    }
+  ],
+  "channelObjects": [
+    {
+      "name": "#general",
+      "topic": "General chit-chat about anything and everything.",
+      "users": [
+        {
+          "nickname": "user",
+          "status": "online",
+          "userType": "virtual",
+          "personality": "The human user",
+          "languageSkills": {
+            "fluency": "native",
+            "languages": ["English"],
+            "accent": ""
+          },
+          "writingStyle": {
+            "formality": "casual",
+            "verbosity": "moderate",
+            "humor": "none",
+            "emojiUsage": "rare",
+            "punctuation": "standard"
+          },
+          "profilePicture": "https://placehold.co/100x100/6B7280/FFFFFF/png?text=U"
+        },
+        {
+          "nickname": "nova",
+          "status": "online",
+          "userType": "virtual",
+          "personality": "A very curious and tech-savvy individual, loves discussing new gadgets and programming.",
+          "languageSkills": {
+            "fluency": "native",
+            "languages": ["English"],
+            "accent": ""
+          },
+          "writingStyle": {
+            "formality": "casual",
+            "verbosity": "moderate",
+            "humor": "none",
+            "emojiUsage": "rare",
+            "punctuation": "standard"
+          },
+          "profilePicture": "https://placehold.co/100x100/4F46E5/FFFFFF/png?text=N"
+        },
+        {
+          "nickname": "seraph",
+          "status": "online",
+          "userType": "virtual",
+          "personality": "Calm, wise, and often speaks in philosophical or poetic terms.",
+          "languageSkills": {
+            "fluency": "native",
+            "languages": ["English"],
+            "accent": ""
+          },
+          "writingStyle": {
+            "formality": "formal",
+            "verbosity": "verbose",
+            "humor": "none",
+            "emojiUsage": "none",
+            "punctuation": "standard"
+          },
+          "profilePicture": "https://placehold.co/100x100/059669/FFFFFF/png?text=S"
+        },
+        {
+          "nickname": "jinx",
+          "status": "online",
+          "userType": "virtual",
+          "personality": "A chaotic, funny, and unpredictable prankster who loves jokes and memes.",
+          "languageSkills": {
+            "fluency": "native",
+            "languages": ["English"],
+            "accent": ""
+          },
+          "writingStyle": {
+            "formality": "casual",
+            "verbosity": "moderate",
+            "humor": "moderate",
+            "emojiUsage": "frequent",
+            "punctuation": "dramatic"
+          },
+          "profilePicture": "https://placehold.co/100x100/DC2626/FFFFFF/png?text=J"
+        },
+        {
+          "nickname": "rex",
+          "status": "online",
+          "userType": "virtual",
+          "personality": "Gruff but helpful, an expert in system administration and network security.",
+          "languageSkills": {
+            "fluency": "native",
+            "languages": ["English"],
+            "accent": ""
+          },
+          "writingStyle": {
+            "formality": "semi_formal",
+            "verbosity": "terse",
+            "humor": "none",
+            "emojiUsage": "none",
+            "punctuation": "minimal"
+          },
+          "profilePicture": "https://placehold.co/100x100/EA580C/FFFFFF/png?text=R"
+        }
+      ],
+      "messages": [
+        {
+          "id": 1,
+          "nickname": "system",
+          "content": "You have joined #general",
+          "timestamp": "2025-01-26T12:00:00.000Z",
+          "type": "system"
+        },
+        {
+          "id": 2,
+          "nickname": "nova",
+          "content": "Hey everyone, welcome!",
+          "timestamp": "2025-01-26T12:00:01.000Z",
+          "type": "ai"
+        }
+      ],
+      "operators": ["nova", "seraph"]
+    },
+    {
+      "name": "#tech-talk",
+      "topic": "Discussing the latest in technology and software.",
+      "users": [
+        {
+          "nickname": "user",
+          "status": "online",
+          "userType": "virtual",
+          "personality": "The human user",
+          "languageSkills": {
+            "fluency": "native",
+            "languages": ["English"],
+            "accent": ""
+          },
+          "writingStyle": {
+            "formality": "casual",
+            "verbosity": "moderate",
+            "humor": "none",
+            "emojiUsage": "rare",
+            "punctuation": "standard"
+          },
+          "profilePicture": "https://placehold.co/100x100/6B7280/FFFFFF/png?text=U"
+        },
+        {
+          "nickname": "nova",
+          "status": "online",
+          "userType": "virtual",
+          "personality": "A very curious and tech-savvy individual, loves discussing new gadgets and programming.",
+          "languageSkills": {
+            "fluency": "native",
+            "languages": ["English"],
+            "accent": ""
+          },
+          "writingStyle": {
+            "formality": "casual",
+            "verbosity": "moderate",
+            "humor": "none",
+            "emojiUsage": "rare",
+            "punctuation": "standard"
+          },
+          "profilePicture": "https://placehold.co/100x100/4F46E5/FFFFFF/png?text=N"
+        },
+        {
+          "nickname": "rex",
+          "status": "online",
+          "userType": "virtual",
+          "personality": "Gruff but helpful, an expert in system administration and network security.",
+          "languageSkills": {
+            "fluency": "native",
+            "languages": ["English"],
+            "accent": ""
+          },
+          "writingStyle": {
+            "formality": "semi_formal",
+            "verbosity": "terse",
+            "humor": "none",
+            "emojiUsage": "none",
+            "punctuation": "minimal"
+          },
+          "profilePicture": "https://placehold.co/100x100/EA580C/FFFFFF/png?text=R"
+        }
+      ],
+      "messages": [
+        {
+          "id": 1,
+          "nickname": "system",
+          "content": "You have joined #tech-talk",
+          "timestamp": "2025-01-26T12:00:00.000Z",
+          "type": "system"
+        }
+      ],
+      "operators": ["nova", "rex"]
+    },
+    {
+      "name": "#random",
+      "topic": "For off-topic conversations and random thoughts.",
+      "users": [
+        {
+          "nickname": "user",
+          "status": "online",
+          "userType": "virtual",
+          "personality": "The human user",
+          "languageSkills": {
+            "fluency": "native",
+            "languages": ["English"],
+            "accent": ""
+          },
+          "writingStyle": {
+            "formality": "casual",
+            "verbosity": "moderate",
+            "humor": "none",
+            "emojiUsage": "rare",
+            "punctuation": "standard"
+          },
+          "profilePicture": "https://placehold.co/100x100/6B7280/FFFFFF/png?text=U"
+        },
+        {
+          "nickname": "jinx",
+          "status": "online",
+          "userType": "virtual",
+          "personality": "A chaotic, funny, and unpredictable prankster who loves jokes and memes.",
+          "languageSkills": {
+            "fluency": "native",
+            "languages": ["English"],
+            "accent": ""
+          },
+          "writingStyle": {
+            "formality": "casual",
+            "verbosity": "moderate",
+            "humor": "moderate",
+            "emojiUsage": "frequent",
+            "punctuation": "dramatic"
+          },
+          "profilePicture": "https://placehold.co/100x100/DC2626/FFFFFF/png?text=J"
+        },
+        {
+          "nickname": "luna",
+          "status": "online",
+          "userType": "virtual",
+          "personality": "An artist who is dreamy, creative, and talks about music and art.",
+          "languageSkills": {
+            "fluency": "native",
+            "languages": ["English"],
+            "accent": ""
+          },
+          "writingStyle": {
+            "formality": "casual",
+            "verbosity": "moderate",
+            "humor": "mild",
+            "emojiUsage": "occasional",
+            "punctuation": "expressive"
+          },
+          "profilePicture": "https://placehold.co/100x100/7C3AED/FFFFFF/png?text=L"
+        }
+      ],
+      "messages": [
+        {
+          "id": 1,
+          "nickname": "system",
+          "content": "You have joined #random",
+          "timestamp": "2025-01-26T12:00:00.000Z",
+          "type": "system"
+        }
+      ],
+      "operators": ["jinx"]
+    },
+    {
+      "name": "#help",
+      "topic": "Ask for help with the simulator here.",
+      "users": [
+        {
+          "nickname": "user",
+          "status": "online",
+          "userType": "virtual",
+          "personality": "The human user",
+          "languageSkills": {
+            "fluency": "native",
+            "languages": ["English"],
+            "accent": ""
+          },
+          "writingStyle": {
+            "formality": "casual",
+            "verbosity": "moderate",
+            "humor": "none",
+            "emojiUsage": "rare",
+            "punctuation": "standard"
+          },
+          "profilePicture": "https://placehold.co/100x100/6B7280/FFFFFF/png?text=U"
+        },
+        {
+          "nickname": "seraph",
+          "status": "online",
+          "userType": "virtual",
+          "personality": "Calm, wise, and often speaks in philosophical or poetic terms.",
+          "languageSkills": {
+            "fluency": "native",
+            "languages": ["English"],
+            "accent": ""
+          },
+          "writingStyle": {
+            "formality": "formal",
+            "verbosity": "verbose",
+            "humor": "none",
+            "emojiUsage": "none",
+            "punctuation": "standard"
+          },
+          "profilePicture": "https://placehold.co/100x100/059669/FFFFFF/png?text=S"
+        },
+        {
+          "nickname": "rex",
+          "status": "online",
+          "userType": "virtual",
+          "personality": "Gruff but helpful, an expert in system administration and network security.",
+          "languageSkills": {
+            "fluency": "native",
+            "languages": ["English"],
+            "accent": ""
+          },
+          "writingStyle": {
+            "formality": "semi_formal",
+            "verbosity": "terse",
+            "humor": "none",
+            "emojiUsage": "none",
+            "punctuation": "minimal"
+          },
+          "profilePicture": "https://placehold.co/100x100/EA580C/FFFFFF/png?text=R"
+        }
+      ],
+      "messages": [
+        {
+          "id": 1,
+          "nickname": "system",
+          "content": "You have joined #help",
+          "timestamp": "2025-01-26T12:00:00.000Z",
+          "type": "system"
+        }
+      ],
+      "operators": ["seraph", "rex"]
+    }
+  ]
+}
