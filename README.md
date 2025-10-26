@@ -432,6 +432,7 @@ For developers using Cursor AI to improve and enhance the codebase:
 - **Cross-platform support** - Windows, macOS, and Linux builds with native installers
 - **Enhanced build process** - Robust error handling and comprehensive logging
 - **Critical debugging resolved** - Fixed multiple silent failures and configuration issues
+- **Future Electron Repository** - Once the executable building process is fully stabilized, a separate repository will be created specifically for Electron capabilities
 
 #### **The 2-3 Hour Debugging Marathon** 🐛
 The multiplatform executable build required extensive debugging to resolve several critical issues:
@@ -447,6 +448,17 @@ The multiplatform executable build required extensive debugging to resolve sever
 **PowerShell Command Syntax**: Cross-platform command issues where bash-style `&&` operators don't work in PowerShell environments.
 
 **Result**: After extensive debugging, the build process now works reliably with comprehensive error handling, step-by-step logging, and proper cross-platform compatibility.
+
+#### **Future Development Plans** 🚀
+Once the executable building process is fully stabilized and tested across all platforms, a **separate Electron-focused repository** will be created. This dedicated repository will:
+
+- **Focus exclusively on Electron capabilities** - Desktop application features and cross-platform builds
+- **Streamlined development workflow** - Optimized for desktop application development
+- **Enhanced Electron features** - Native menus, system integration, and platform-specific optimizations
+- **Simplified distribution** - Easy installer creation and app store distribution
+- **Dedicated documentation** - Electron-specific guides and troubleshooting resources
+
+This separation will allow the main Station V repository to focus on web-based features while providing a dedicated space for desktop application development and distribution.
 
 ### v1.17.0 - Text Formatting & UI Improvements
 - **Rich text formatting** - Bold, italic, code blocks, spoilers, and colored text
