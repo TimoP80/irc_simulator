@@ -5346,7 +5346,7 @@ The response must be a single line in the format: "nickname: greeting message"
 
         {/* Chat Area - Always visible in Electron, conditional on mobile */}
         <main className={`flex flex-1 flex-col border-l border-r border-gray-700 min-h-0 ${
-          isElectronApp ? 'flex' : (mobileActivePanel === 'chat' ? 'block' : 'hidden lg:flex')
+          isElectronApp ? '' : (mobileActivePanel === 'chat' ? '' : 'hidden lg:flex')
         }`}>
             {/* AI Reaction Notification */}
             {aiReactionNotification.isVisible && (

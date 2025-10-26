@@ -2,6 +2,8 @@
 
 **Version 1.19.0** - Desktop-focused distribution of Station V with AI-powered chat simulation, Discord-style quoting, enhanced AI memory system, multilingual support, network capabilities, and **cross-platform desktop compilation**.
 
+> 📌 **This is the Main Active Codebase** - See [MAIN_CODEBASE.md](MAIN_CODEBASE.md) for repository status and recent updates.
+
 ## 🖥️ Desktop Application Ready!
 
 **This is the desktop executable version of Station V!** Build standalone executables for Windows, macOS, and Linux with a single command.
@@ -579,6 +581,13 @@ For developers using Cursor AI to improve and enhance the codebase:
 **Network Connection**: Check that port 8080 is available for network mode
 
 ## Recent Updates
+
+### v1.19.1 - Main Codebase Documentation Update
+- 📌 **Added** `MAIN_CODEBASE.md` - Documents this as the main active codebase
+- 🔧 **Fixed** UI disappearing bug while typing messages (App.tsx)
+- 📝 **Updated** README with active codebase notice
+- 🗂️ **Created** ARCHIVE folder for old documentation
+- ✅ **Verified** all repository references point to correct GitHub repo
 
 ### v1.19.0 - Desktop Executable Repository (Major Milestone)
 - **Dedicated desktop repository** - Separated from main web application for focused development
