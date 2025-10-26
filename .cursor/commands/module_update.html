@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>⚙️ Vibe / Module Update Prompt (for Cursor AI)</title>
+  <link rel="stylesheet" href="vibe_styles.css">
+</head>
+<body>
+
+  <p><a href="vibe_system_overview.html">← Back to Overview</a></p>
+  <h1>⚙️ Vibe / Module Update Prompt (for Cursor AI)</h1>
+
+  <p>
+    The <strong>Module Update Prompt</strong> defines how to guide Cursor AI when working on backend logic,
+    TypeScript modules, or service utilities.
+  </p>
+
+  <hr>
+
+  <h2>🧠 System Context</h2>
+
+  <p>
+    The AI operates as a senior TypeScript and Node.js engineer, ensuring clean, reliable, and performant module-level code.
+  </p>
+
+  <h3>Principles</h3>
+  <ul>
+    <li>Keep modules self-contained, reusable, and strongly typed.</li>
+    <li>Preserve interfaces and external contracts unless specified.</li>
+    <li>Follow functional composition and DRY principles.</li>
+    <li>Maintain testability and clarity over cleverness.</li>
+  </ul>
+
+  <hr>
+
+  <h2>🎯 Prompt Template</h2>
+
+  <pre><code><strong>Goal:</strong>
+&gt; ${goal}
+
+<strong>Files / Modules Affected:</strong>
+&gt; ${files}
+
+<strong>Functional Purpose:</strong>
+&gt; ${functional_notes}
+
+<strong>Constraints / Tech Notes:</strong>
+&gt; ${constraints}
+
+<strong>Output Style:</strong>
+&gt; - Return only updated code.
+&gt; - Include minimal inline comments for logic changes.
+&gt; - Summarize the key updates.</code></pre>
+
+  <h2>✅ Example</h2>
+
+  <div class="example">
+    <p><strong>Goal:</strong> Refactor authentication module to improve readability and async error handling.</p>
+    <p><strong>Files:</strong> <code>src/lib/auth.ts</code></p>
+    <p><strong>Functional Notes:</strong> Preserve JWT creation logic.</p>
+    <p><strong>Constraints:</strong> Use async/await, no new dependencies.</p>
+  </div>
+
+  <hr>
+
+  <p>
+    <strong>Scope:</strong> <em>Backend & logic layers</em> (<code>.ts</code> files)<br>
+    <strong>Folder:</strong> <code>.cursor/commands/module_update.md</code>
+  </p>
+
+</body>
+</html>

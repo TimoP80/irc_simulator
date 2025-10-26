@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Station V - Virtual IRC Simulator</title>
+    <style>
+      body {
+        font-family: 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', "Liberation Mono", "Courier New", monospace;
+        -webkit-text-size-adjust: 100%;
+        -webkit-tap-highlight-color: transparent;
+        background-color: #111827;
+        color: #e5e7eb;
+        margin: 0;
+        padding: 0;
+      }
+      
+      /* Mobile-specific improvements */
+      @media (max-width: 768px) {
+        /* Prevent zoom on input focus */
+        input[type="text"], input[type="email"], input[type="password"], textarea, select {
+          font-size: 16px;
+        }
+        
+        /* Improve touch targets */
+        button, input[type="button"], input[type="submit"] {
+          min-height: 44px;
+          min-width: 44px;
+        }
+        
+        /* Better scrolling on mobile */
+        .overflow-y-auto {
+          -webkit-overflow-scrolling: touch;
+        }
+      }
+      
+      /* Prevent horizontal scroll on mobile */
+      html, body {
+        overflow-x: hidden;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>

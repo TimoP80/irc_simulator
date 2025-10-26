@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🎨 UI Update — Vibe System</title>
+  <link rel="stylesheet" href="vibe_styles.css">
+  <link rel="icon" type="image/svg+xml" href="vibe_favicon.svg">
+</head>
+<body class="light">
+
+  <aside class="sidebar">
+    <div class="logo"><img src="vibe_logo.svg" alt="Vibe Logo"></div>
+    <nav>
+      <h3>Navigation</h3>
+      <ul>
+        <li><a href="vibe_system_overview.html">Overview</a></li>
+        <li><a href="UI_update.html" class="active">🎨 UI Update</a></li>
+        <li><a href="module_update.html">⚙️ Module Update</a></li>
+        <li><a href="doc_update.html">📝 Doc Update</a></li>
+        <li><a href="project_update.html">🧩 Project Update</a></li>
+      </ul>
+    </nav>
+    <button id="theme-toggle">🌗 Toggle Theme</button>
+  </aside>
+
+  <main class="content">
+    <header>
+      <h1>🎨 UI Update Prompt</h1>
+      <p class="tagline">Frontend aesthetic & interaction refinement for React + TypeScript.</p>
+    </header>
+
+    <section>
+      <h2>🧠 System Context</h2>
+      <p>
+        The UI Update prompt guides Cursor AI in improving visuals and UX of React components without changing logic.
+        It focuses on <strong>Tailwind CSS</strong>, <strong>Framer Motion</strong>, and modern component styling.
+      </p>
+      <ul>
+        <li>Modify visuals only — keep business logic intact.</li>
+        <li>Use idiomatic React + TypeScript patterns.</li>
+        <li>Maintain accessibility and responsiveness.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>🎯 Prompt Template</h2>
+      <pre><code><strong>Goal:</strong> ${goal}
+<strong>Files:</strong> ${files}
+<strong>Design Intent:</strong> ${vibe_reference}
+<strong>Functional Notes:</strong> ${functional_notes}
+<strong>Constraints:</strong> ${constraints}
+
+<strong>Output Style:</strong>
+- Return only updated code.
+- Add comments explaining UX/visual choices.
+- Provide a summary of the changes.</code></pre>
+    </section>
+
+    <section>
+      <h2>✅ Example</h2>
+      <div class="example">
+        <p><strong>Goal:</strong> Add subtle glassmorphism and motion to the dashboard.</p>
+        <p><strong>Files:</strong> `src/pages/Dashboard.tsx`</p>
+        <p><strong>Vibe:</strong> Clean, light, macOS aesthetic.</p>
+      </div>
+    </section>
+
+    <footer><p>Part of the 4-Prompt Vibe System — UI Focus Scope</p></footer>
+  </main>
+
+  <script>
+    document.getElementById('theme-toggle').onclick = () => {
+      document.body.classList.toggle('dark');
+      document.body.classList.toggle('light');
+    };
+  </script>
+</body>
+</html>

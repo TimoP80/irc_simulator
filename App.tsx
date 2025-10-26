@@ -11,7 +11,7 @@ import { addChannelOperator, removeChannelOperator, isChannelOperator, canUserPe
 import { generateChannelActivity, generateReactionToMessage, generatePrivateMessageResponse, generateOperatorResponse } from './services/geminiService';
 import { handleBotCommand, isBotCommand } from './services/botService';
 import { updateChannelRelationshipMemory, initializeRelationshipMemory } from './services/relationshipMemoryService';
-import { loadConfig, saveConfig, initializeStateFromConfig, saveChannelLogs, loadChannelLogs, clearChannelLogs, simulateTypingDelay } from './utils/config';
+import { loadConfig, saveConfig, initializeStateFromConfig, saveChannelLogs, loadChannelLogs, clearChannelLogs, simulateTypingDelay, initializeConfigWithFallback } from './utils/config';
 import { 
   aiDebug, simulationDebug, networkDebug, settingsDebug, pmDebug, rateLimiterDebug, 
   urlFilterDebug, userListDebug, joinDebug, configDebug, chatLogDebug, 
@@ -173,6 +173,10 @@ const migrateChannelUsers = (channels: Channel[], virtualUsers: User[], currentU
 };
 
 const App: React.FC = () => {
+  // State for configuration initialization
+  const [isConfigInitialized, setIsConfigInitialized] = useState<boolean>(false);
+  const [configError, setConfigError] = useState<string | null>(null);
+
   // Initialize with saved config or defaults
   const [currentUserNickname, setCurrentUserNickname] = useState<string>(() => {
     const savedConfig = loadConfig();
@@ -749,58 +753,40 @@ const App: React.FC = () => {
 
   // Load channel logs from localStorage on initial render
   useEffect(() => {
-    const savedConfig = loadConfig();
-    const savedLogs = loadChannelLogs();
-    
-    configDebug.debug('useEffect running - savedConfig:', !!savedConfig, 'savedLogs:', savedLogs?.length || 0);
-    
-    // If no saved config, open settings for the user to configure the app
-    if (!savedConfig) {
-      setIsSettingsOpen(true);
-      return;
-    }
-    
-    // Merge saved logs with current channels
-    if (savedLogs && savedLogs.length > 0) {
-        configDebug.debug('Saved logs details:', savedLogs.map(c => ({ 
-          name: c.name, 
-          messageCount: c.messages?.length || 0,
-          messages: c.messages?.slice(0, 2) // Show first 2 messages
-        })));
+    const initializeApp = async () => {
+      try {
+        appDebug.log('Initializing application configuration...');
         
-        // Merge saved messages with current channels
-        setChannels(prevChannels => {
-          const mergedChannels = prevChannels.map(configuredChannel => {
-            const savedChannel = savedLogs.find(saved => saved.name === configuredChannel.name);
-            configDebug.debug(`Looking for saved channel ${configuredChannel.name}:`, {
-              found: !!savedChannel,
-              messageCount: savedChannel?.messages?.length || 0,
-              savedChannelNames: savedLogs.map(s => s.name)
-            });
-            
-            if (savedChannel && savedChannel.messages && savedChannel.messages.length > 0) {
-              // Use saved messages but keep configured users and topic
-              configDebug.debug(`Merging saved messages for ${configuredChannel.name}: ${savedChannel.messages.length} messages`);
-              return {
-                ...configuredChannel,
-                messages: savedChannel.messages, // Use saved messages
-                users: configuredChannel.users, // Keep configured users
-                topic: configuredChannel.topic  // Keep configured topic
-              };
-            } else {
-              // No saved messages for this channel, use configured channel
-              configDebug.debug(`No saved messages for ${configuredChannel.name}, using configured channel`);
-              return configuredChannel;
-            }
-          });
-          
-          configDebug.debug('Merged channels message counts:', mergedChannels.map(c => ({ name: c.name, messageCount: c.messages?.length || 0 })));
-          return mergedChannels;
-        });
-      } else {
-      configDebug.debug('No saved logs, using current channels');
-    }
-  }, []);
+        // Try to initialize config with fallback support
+        const config = await initializeConfigWithFallback('./default-config.json');
+        
+        // Update state with the initialized config
+        const { nickname, virtualUsers: configUsers, channels: configChannels, simulationSpeed, aiModel, typingDelay, typingIndicator } = initializeStateFromConfig(config);
+        
+        setCurrentUserNickname(nickname);
+        setVirtualUsers(configUsers);
+        setChannels(configChannels);
+        setSimulationSpeed(simulationSpeed);
+        setAiModel(aiModel || DEFAULT_AI_MODEL);
+        
+        if (typingDelay) {
+          setTypingDelayConfig(typingDelay);
+        }
+        if (typingIndicator) {
+          setTypingIndicatorConfig(typingIndicator);
+        }
+        
+        setIsConfigInitialized(true);
+        appDebug.log('Application configuration initialized successfully');
+      } catch (error) {
+        console.error('Failed to initialize application configuration:', error);
+        setConfigError('Failed to initialize configuration. Using default settings.');
+        setIsConfigInitialized(true); // Still allow app to run with defaults
+      }
+    };
+
+    initializeApp();
+  }, []); // Run only once on mount
 
   // Initialize chat log service
   useEffect(() => {
@@ -4999,6 +4985,37 @@ The response must be a single line in the format: "nickname: greeting message"
       networkService.offChannelData(handleNetworkChannelData);
     };
   }, [currentUserNickname, aiModel, handleNetworkChannelData, virtualUsers]);
+
+  // Show loading screen while configuration is being initialized
+  if (!isConfigInitialized) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        height: '100vh', 
+        backgroundColor: '#1a1a1a',
+        color: '#ffffff',
+        fontFamily: 'monospace'
+      }}>
+        <h1>Station V - Virtual IRC Simulator</h1>
+        <p>Initializing configuration...</p>
+        {configError && (
+          <div style={{ 
+            color: '#ff6b6b', 
+            marginTop: '20px', 
+            padding: '10px', 
+            border: '1px solid #ff6b6b',
+            borderRadius: '4px',
+            backgroundColor: '#2a1a1a'
+          }}>
+            {configError}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-screen w-screen bg-gray-800 font-mono">

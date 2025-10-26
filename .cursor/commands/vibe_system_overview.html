@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vibe System Overview — 4-Prompt Dev Method</title>
+  <link rel="stylesheet" href="vibe_styles.css">
+  <link rel="icon" type="image/svg+xml" href="vibe_favicon.svg">
+</head>
+<body class="light">
+
+  <aside class="sidebar">
+    <div class="logo">
+      <img src="vibe_logo.svg" alt="Vibe System Logo" width="180">
+    </div>
+    <nav>
+      <h3>Navigation</h3>
+      <ul>
+        <li><a href="vibe_system_overview.html" class="active">Overview</a></li>
+        <li><a href="UI_update.html">🎨 UI Update</a></li>
+        <li><a href="module_update.html">⚙️ Module Update</a></li>
+        <li><a href="doc_update.html">📝 Doc Update</a></li>
+        <li><a href="project_update.html">🧩 Project Update</a></li>
+      </ul>
+    </nav>
+    <button id="theme-toggle">🌗 Toggle Theme</button>
+  </aside>
+
+  <main class="content">
+    <header>
+      <h1>🎛️ 4-Prompt Vibe Coding System</h1>
+      <p class="tagline">A modular prompt workflow for Node.js, React, and TypeScript projects.</p>
+    </header>
+
+    <section>
+      <h2>🚀 Introduction</h2>
+      <p>
+        The <strong>4-Prompt Vibe System</strong> is a development method created for
+        <strong>Cursor AI</strong> and modern full-stack stacks such as React, Vite,
+        and Node.js. It introduces a structured, creative workflow that separates
+        intent into four distinct command scopes — each with its own <em>vibe</em>.
+      </p>
+    </section>
+
+    <section>
+      <h2>💡 Core Philosophy</h2>
+      <blockquote>“Separation of Vibe = Separation of Clarity.”</blockquote>
+      <p>
+        By splitting coding intents into four scopes, each update remains clean,
+        focused, and maintainable. It prevents AI or human developers from mixing
+        logic, design, and documentation concerns.
+      </p>
+    </section>
+
+    <section>
+      <h2>🧭 The Four Command Scopes</h2>
+
+      <div class="scope-grid">
+        <div class="scope-card">
+          <h3>🎨 UI Update (`UI_update.md`)</h3>
+          <p>For React & frontend components (<code>.tsx</code>).</p>
+          <a href="UI_update.html" class="btn">View Prompt →</a>
+        </div>
+
+        <div class="scope-card">
+          <h3>⚙️ Module Update (`module_update.md`)</h3>
+          <p>For TypeScript modules & backend logic (<code>.ts</code>).</p>
+          <a href="module_update.html" class="btn">View Prompt →</a>
+        </div>
+
+        <div class="scope-card">
+          <h3>📝 Doc Update (`doc_update.md`)</h3>
+          <p>For markdown, HTML, or text documentation.</p>
+          <a href="doc_update.html" class="btn">View Prompt →</a>
+        </div>
+
+        <div class="scope-card">
+          <h3>🧩 Project Update (`project_update.md`)</h3>
+          <p>For multi-file or architectural updates (entire repo).</p>
+          <a href="project_update.html" class="btn">View Prompt →</a>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>⚙️ Folder Setup</h2>
+      <pre><code>.cursor/
+└── commands/
+    ├── UI_update.md
+    ├── module_update.md
+    ├── doc_update.md
+    ├── project_update.md
+    ├── vibe_system_overview.html
+    ├── vibe_styles.css
+    ├── vibe_logo.svg
+    └── vibe_favicon.svg
+</code></pre>
+    </section>
+
+    <section>
+      <h2>✨ Usage Tips</h2>
+      <ul>
+        <li>Use <strong>UI_update</strong> for layout & design changes only.</li>
+        <li>Use <strong>module_update</strong> for logic or data updates.</li>
+        <li>Use <strong>doc_update</strong> for documentation and explanations.</li>
+        <li>Use <strong>project_update</strong> for large-scale restructuring.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>📘 Example Workflow</h2>
+      <p>When working in Cursor, open the Command Palette and run one of your vibe prompts:</p>
+      <pre><code>CMD + K → “Run Command” → UI_update.md
+CMD + K → “Run Command” → module_update.md</code></pre>
+      <p>
+        Each prompt defines clear expectations for Cursor’s reasoning and output,
+        giving your AI development a consistent tone and technical focus.
+      </p>
+    </section>
+
+    <footer>
+      <p>© 2025 SaunaGames — Vibe System by Timbor. All rights reserved.</p>
+    </footer>
+  </main>
+
+  <script>
+    const toggle = document.getElementById('theme-toggle');
+    toggle.addEventListener('click', () => {
+      document.body.classList.toggle('dark');
+      document.body.classList.toggle('light');
+    });
+  </script>
+
+</body>
+</html>

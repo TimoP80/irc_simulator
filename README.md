@@ -282,6 +282,99 @@ npm run dev:client
 # Perfect for: Debugging specific services, custom development setups
 ```
 
+### Electron Build Development
+
+#### **Building Standalone Executables**
+```bash
+# Build Windows executable
+npm run electron:build:win
+
+# Build for current platform
+npm run electron:build
+
+# Build for all platforms
+npm run electron:build:all
+
+# Test Electron build
+npm run electron:test
+
+# Clean build artifacts
+npm run electron:clean
+```
+
+#### **Enhanced Development Commands** (Based on Working Test App)
+```bash
+# Development with DevTools control
+npm run dev:clean          # Development without DevTools
+npm run dev:debug          # Development with DevTools open
+npm run dev:vite           # Vite dev server on port 3000
+npm run dev:vite:debug     # Vite dev server with debug mode
+
+# Electron development
+npm run dev:electron        # Wait for Vite, then start Electron
+npm run dev:electron:clean # Electron without DevTools
+npm run dev:electron:debug # Electron with DevTools open
+```
+
+#### **Distribution Commands** (Improved Build Process)
+```bash
+# Standard builds
+npm run build              # Build both Vite and Electron
+npm run build:vite         # Build Vite only
+npm run build:electron     # Build Electron only
+npm run build:all          # Build and create distribution
+
+# Windows-specific builds
+npm run dist:win           # Windows installer + portable
+npm run dist:win:dir       # Windows directory only
+npm run dist:win:portable  # Portable executable only
+npm run dist:win:no-sign   # Windows build without code signing
+
+# Cross-platform builds
+npm run dist:mac           # macOS builds
+npm run dist:linux         # Linux builds
+npm run pack               # Pack without installer
+npm run pack:win           # Windows pack only
+```
+
+#### **Utility Commands** (Troubleshooting & Maintenance)
+```bash
+# Troubleshooting
+npm run troubleshoot        # Run Windows build diagnostics
+npm run check:ports        # Check if ports 3000/5173 are in use
+npm run kill:dev          # Kill all Node.js and Electron processes
+
+# Cleanup
+npm run clean              # Clean dist and release directories
+npm run clean:all          # Clean everything including Vite cache
+
+# Type checking
+npm run type-check         # TypeScript type checking without emit
+```
+
+#### **The Debugging Process** 🐛
+The multiplatform executable build required extensive debugging over 2-3 hours to resolve critical issues:
+
+**Phase 1: Silent Failures**
+- Build script was exiting with no output
+- No error messages or build logs
+- Empty release directories
+- Required debugging ES module detection
+
+**Phase 2: Configuration Errors**
+- Electron-builder rejecting configuration files
+- Invalid properties causing build failures
+- File extension mismatches
+- Required cleaning up package-electron.json
+
+**Phase 3: Cross-Platform Issues**
+- PowerShell command syntax problems
+- Variable naming conflicts
+- Path handling issues
+- Required platform-specific fixes
+
+**Result**: Comprehensive error handling, step-by-step logging, and reliable cross-platform builds.
+
 ### Cursor AI Development
 
 For developers using Cursor AI to improve and enhance the codebase:
@@ -327,6 +420,33 @@ For developers using Cursor AI to improve and enhance the codebase:
 
 ## Troubleshooting
 
+### **Electron Build Issues** (Recently Resolved)
+
+**Build Script Exits Silently**: 
+- **Cause**: ES module detection failures in build scripts
+- **Solution**: Fixed with proper `fileURLToPath` usage in `scripts/build-windows-dist.js`
+- **Prevention**: Always use Node.js ES module utilities for path handling
+
+**"Cannot access 'process' before initialization" Error**:
+- **Cause**: Variable naming conflict with global `process` object
+- **Solution**: Renamed variables to `childProcess` to avoid conflicts
+- **Prevention**: Never use global object names as variable names
+
+**Electron Builder Configuration Errors**:
+- **Cause**: Invalid properties in `package-electron.json` (name, version, author)
+- **Solution**: Cleaned configuration to only include electron-builder valid properties
+- **Prevention**: Use electron-builder documentation to verify configuration properties
+
+**"Application entry file does not exist" Error**:
+- **Cause**: File extension mismatch between build output (.cjs) and configuration (.js)
+- **Solution**: Updated package.json main field to use `.cjs` extension
+- **Prevention**: Ensure file extensions match between build output and configuration
+
+**PowerShell Command Syntax Errors**:
+- **Cause**: Using bash-style `&&` operators in PowerShell
+- **Solution**: Use PowerShell-appropriate syntax with semicolons or separate commands
+- **Prevention**: Use platform-appropriate command syntax
+
 ### **Development Issues**
 
 **Concurrently Not Recognized**: 
@@ -356,6 +476,39 @@ For developers using Cursor AI to improve and enhance the codebase:
 **Network Connection**: Check that port 8080 is available for network mode
 
 ## Recent Updates
+
+### v1.19.0 - Multiplatform Executable Build (Major Debugging Effort)
+- **Standalone Windows executable** - Complete desktop application with auto-starting IRC server
+- **Cross-platform support** - Windows, macOS, and Linux builds with native installers
+- **Enhanced build process** - Robust error handling and comprehensive logging
+- **Critical debugging resolved** - Fixed multiple silent failures and configuration issues
+- **Future Electron Repository** - Once the executable building process is fully stabilized, a separate repository will be created specifically for Electron capabilities
+
+#### **The 2-3 Hour Debugging Marathon** 🐛
+The multiplatform executable build required extensive debugging to resolve several critical issues:
+
+**Silent Script Failures**: The build script was exiting with no output, leaving empty release directories. This was caused by ES module detection failures that required proper `fileURLToPath` usage instead of string concatenation.
+
+**Variable Naming Conflicts**: Build process was failing with "Cannot access 'process' before initialization" errors due to using `process` as a variable name, conflicting with the global `process` object.
+
+**Electron Builder Configuration Errors**: The electron-builder was rejecting configuration files with "unknown property" errors because `package-electron.json` contained non-electron-builder properties like `name`, `version`, and `author`.
+
+**File Extension Mismatches**: The main entry point referenced `.js` files but the build process renamed them to `.cjs` for ES module compatibility, causing "file not found" errors in the packaged application.
+
+**PowerShell Command Syntax**: Cross-platform command issues where bash-style `&&` operators don't work in PowerShell environments.
+
+**Result**: After extensive debugging, the build process now works reliably with comprehensive error handling, step-by-step logging, and proper cross-platform compatibility.
+
+#### **Future Development Plans** 🚀
+Once the executable building process is fully stabilized and tested across all platforms, a **separate Electron-focused repository** will be created. This dedicated repository will:
+
+- **Focus exclusively on Electron capabilities** - Desktop application features and cross-platform builds
+- **Streamlined development workflow** - Optimized for desktop application development
+- **Enhanced Electron features** - Native menus, system integration, and platform-specific optimizations
+- **Simplified distribution** - Easy installer creation and app store distribution
+- **Dedicated documentation** - Electron-specific guides and troubleshooting resources
+
+This separation will allow the main Station V repository to focus on web-based features while providing a dedicated space for desktop application development and distribution.
 
 ### v1.17.0 - Text Formatting & UI Improvements
 - **Rich text formatting** - Bold, italic, code blocks, spoilers, and colored text

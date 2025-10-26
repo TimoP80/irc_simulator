@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>📝 Vibe / Documentation Update Prompt (for Cursor AI)</title>
+  <link rel="stylesheet" href="vibe_styles.css">
+</head>
+<body>
+
+  <p><a href="vibe_system_overview.html">← Back to Overview</a></p>
+  <h1>📝 Vibe / Documentation Update Prompt (for Cursor AI)</h1>
+
+  <p>
+    The <strong>Doc Update Prompt</strong> standardizes how Cursor AI should improve or generate documentation files
+    such as <code>.md</code>, <code>.html</code>, <code>.txt</code>, and <code>.php</code>.
+  </p>
+
+  <hr>
+
+  <h2>🧠 System Context</h2>
+
+  <p>
+    Cursor AI acts as a technical writer and developer hybrid, producing clear and structured documentation that matches
+    the tone of professional open-source projects.
+  </p>
+
+  <h3>Principles</h3>
+  <ul>
+    <li>Be accurate, concise, and accessible.</li>
+    <li>Use Markdown or HTML appropriately.</li>
+    <li>Preserve code examples, formatting, and readability.</li>
+    <li>Provide real context — no filler language or vague descriptions.</li>
+  </ul>
+
+  <hr>
+
+  <h2>🎯 Prompt Template</h2>
+
+  <pre><code><strong>Goal:</strong>
+&gt; ${goal}
+
+<strong>Files Affected:</strong>
+&gt; ${files}
+
+<strong>Audience / Use Context:</strong>
+&gt; ${audience}
+
+<strong>Key Points / Topics:</strong>
+&gt; ${topics}
+
+<strong>Output Style:</strong>
+&gt; - Output cleanly formatted documentation.
+&gt; - Include tables, code blocks, and headings where helpful.
+&gt; - Maintain a friendly, professional tone.</code></pre>
+
+  <h2>✅ Example</h2>
+
+  <div class="example">
+    <p><strong>Goal:</strong> Update README with new API usage instructions.</p>
+    <p><strong>Files:</strong> <code>README.md</code></p>
+    <p><strong>Audience:</strong> Developers integrating our SDK.</p>
+    <p><strong>Topics:</strong> Installation, environment setup, and sample requests.</p>
+  </div>
+
+  <hr>
+
+  <p>
+    <strong>Scope:</strong> <em>Documentation and explanatory files</em><br>
+    <strong>Folder:</strong> <code>.cursor/commands/doc_update.md</code>
+  </p>
+
+</body>
+</html>

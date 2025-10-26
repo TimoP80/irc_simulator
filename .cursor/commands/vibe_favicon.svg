@@ -1,0 +1,15 @@
+<!-- Save as: vibe_favicon.svg -->
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-labelledby="favtitle favdesc">
+  <title id="favtitle">Vibe System Favicon</title>
+  <desc id="favdesc">Minimal cursor with four-color tile accent</desc>
+  <rect width="64" height="64" rx="10" fill="#0f172a"></rect>
+  <!-- four tiles top-left -->
+  <g transform="translate(8,8)">
+    <rect x="0" y="0" width="12" height="12" rx="2" fill="#38bdf8"></rect>
+    <rect x="14" y="0" width="12" height="12" rx="2" fill="#60a5fa"></rect>
+    <rect x="0" y="14" width="12" height="12" rx="2" fill="#34d399"></rect>
+    <rect x="14" y="14" width="12" height="12" rx="2" fill="#fbbf24"></rect>
+  </g>
+  <!-- cursor -->
+  <path d="M40 12 L52 28 L44 30 L48 44 L36 30 L40 28 Z" fill="#ffffff" opacity="0.95"></path>
+</svg>

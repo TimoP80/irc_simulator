@@ -2,10 +2,34 @@
   "name": "station-v-virtual-chat-simulator",
   "private": true,
   "version": "1.19.0",
+  "description": "Station V - Virtual IRC Simulator - A desktop application for simulating IRC chat environments",
+  "author": "Station V Development Team",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "dev:clean": "cross-env OPEN_DEVTOOLS=false vite",
+    "dev:debug": "cross-env OPEN_DEVTOOLS=true vite",
+    "dev:vite": "vite --port 3000 --host 0.0.0.0",
+    "dev:vite:debug": "vite --port 3000 --host 0.0.0.0 --debug",
+    "dev:electron": "wait-on http://localhost:3000 && electron .",
+    "dev:electron:clean": "cross-env OPEN_DEVTOOLS=false wait-on http://localhost:3000 && electron .",
+    "dev:electron:debug": "cross-env OPEN_DEVTOOLS=true wait-on http://localhost:3000 && electron .",
+    "build": "npm run build:vite && npm run build:electron && npm run copy:config",
+    "build:vite": "vite build",
+    "build:electron": "tsc --project tsconfig.electron.json",
+    "build:all": "npm run build && npm run dist",
+    "dist": "npm run build && electron-builder",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:win:dir": "npm run build && electron-builder --win --dir",
+    "dist:win:portable": "npm run build && electron-builder --win --config.win.target=portable",
+    "dist:win:no-sign": "cross-env CSC_IDENTITY_AUTO_DISCOVERY=false npm run build && electron-builder --win",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:linux": "npm run build && electron-builder --linux",
+    "pack": "npm run build && electron-builder --dir",
+    "pack:win": "npm run build && electron-builder --win --dir",
+    "build:windows": "node scripts/build-windows-dist.js",
+    "build:portable": "npm run build && electron-builder --win --config.win.target=portable",
+    "build:installer": "npm run build && electron-builder --win --config.win.target=nsis",
     "preview": "vite preview",
     "server": "node server/station-v-server-simple.js",
     "dev:full": "concurrently --kill-others-on-fail \"npm run server\" \"npm run dev\"",
@@ -14,7 +38,27 @@
     "dev:server": "npm run server",
     "dev:client": "npm run dev",
     "start": "npm run dev:full",
-    "install:all": "npm install && npm run build"
+    "install:all": "npm install && npm run build",
+    "electron": "electron .",
+    "electron:dev": "node scripts/dev-electron.js",
+    "electron:build": "node scripts/build-multiplatform.js current",
+    "electron:build:win": "node scripts/build-windows-dist.js",
+    "electron:build:mac": "node scripts/build-multiplatform.js current",
+    "electron:build:linux": "node scripts/build-multiplatform.js current",
+    "electron:build:all": "node scripts/build-multiplatform.js all",
+    "electron:dist": "npm run build:electron && electron-builder --publish=never",
+    "electron:pack": "npm run build:electron && electron-builder --dir",
+    "build:electron-main": "tsc -p tsconfig.electron.json",
+    "electron:clean": "rimraf dist-electron",
+    "electron:rebuild": "npm run electron:clean && npm run build:electron",
+    "electron:test": "node scripts/test-electron-build.js",
+    "copy:config": "node -e \"const fs=require('fs');const path=require('path');try{fs.copyFileSync('default-config.json','dist/default-config.json');console.log('✅ Copied default-config.json');}catch(e){console.log('⚠️ Config copy skipped:',e.message);}\"",
+    "troubleshoot": "node scripts/troubleshoot-windows.js",
+    "clean": "rimraf dist release",
+    "clean:all": "rimraf dist release node_modules/.vite",
+    "check:ports": "netstat -ano | findstr \"3000\\|5173\"",
+    "kill:dev": "taskkill /F /IM node.exe /IM electron.exe 2>nul || echo \"No processes to kill\"",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@google/genai": "^1.27.0",
@@ -24,10 +68,139 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@types/electron": "^1.6.10",
     "@types/node": "^22.18.12",
     "@vitejs/plugin-react": "^5.0.0",
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "electron": "^38.4.0",
+    "electron-builder": "^25.0.0",
+    "rimraf": "^6.0.1",
     "typescript": "~5.8.2",
     "vite": "^6.4.0",
-    "concurrently": "^8.2.2"
+    "wait-on": "^8.0.1"
+  },
+  "main": "dist-electron/main.cjs",
+  "build": {
+    "appId": "com.stationv.ircsimulator",
+    "productName": "Station V - Virtual IRC Simulator",
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/electron/dist/**/*"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "server/**/*",
+      "node_modules/**/*",
+      "!node_modules/electron/dist/**/*"
+    ],
+    "extraFiles": [
+      {
+        "from": "node_modules/electron/dist/icudtl.dat",
+        "to": "icudtl.dat"
+      },
+      {
+        "from": "node_modules/electron/dist/chrome_100_percent.pak",
+        "to": "chrome_100_percent.pak"
+      },
+      {
+        "from": "node_modules/electron/dist/chrome_200_percent.pak",
+        "to": "chrome_200_percent.pak"
+      },
+      {
+        "from": "node_modules/electron/dist/resources.pak",
+        "to": "resources.pak"
+      },
+      {
+        "from": "node_modules/electron/dist/snapshot_blob.bin",
+        "to": "snapshot_blob.bin"
+      }
+    ],
+    "extraResources": [
+      {
+        "from": "server",
+        "to": "server"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "ia32"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "favicon.ico",
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "favicon.ico",
+      "category": "public.app-category.social-networking"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "rpm",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "favicon.ico",
+      "category": "Network"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "installerIcon": "favicon.ico",
+      "uninstallerIcon": "favicon.ico"
+    },
+    "dmg": {
+      "title": "Station V - Virtual IRC Simulator",
+      "icon": "favicon.ico"
+    },
+    "publish": null
   }
 }

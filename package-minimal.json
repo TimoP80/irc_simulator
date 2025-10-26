@@ -1,0 +1,17 @@
+{
+  "name": "station-v-minimal-test",
+  "version": "1.0.0",
+  "main": "dist-electron/main-minimal.js",
+  "appId": "com.stationv.minimaltest",
+  "productName": "Station V - Minimal Test",
+  "directories": {
+    "output": "release-minimal"
+  },
+  "files": [
+    "dist-electron/main-minimal.js"
+  ],
+  "win": {
+    "target": "portable",
+    "arch": ["x64"]
+  }
+}

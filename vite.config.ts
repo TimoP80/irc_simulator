@@ -4,6 +4,10 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
+    const isElectron = process.env.ELECTRON === 'true';
+    
+    console.log('Vite config - ELECTRON:', process.env.ELECTRON, 'isElectron:', isElectron);
+    
     return {
       server: {
         port: 3000,
@@ -12,15 +16,19 @@ export default defineConfig(({ mode }) => {
       plugins: [react()],
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
+        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+        'process.env.ELECTRON': JSON.stringify(isElectron)
       },
       resolve: {
         alias: {
           '@': path.resolve(__dirname, '.'),
         }
       },
+      base: isElectron ? './' : '/',
       build: {
+        // Use different HTML template for Electron
         rollupOptions: {
+          input: isElectron ? 'index-electron.html' : 'index.html',
           output: {
             manualChunks: {
               // Split vendor libraries into separate chunks

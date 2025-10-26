@@ -1,5 +1,6 @@
 import type { AppConfig, User, Channel } from '../types';
 import { DEFAULT_NICKNAME, DEFAULT_VIRTUAL_USERS, DEFAULT_CHANNELS, DEFAULT_TYPING_DELAY, DEFAULT_TYPING_INDICATOR } from '../constants';
+import { configInitService } from '../services/configInitializationService';
 
 const CONFIG_STORAGE_KEY = 'gemini-irc-simulator-config';
 const CHANNEL_LOGS_STORAGE_KEY = 'station-v-channel-logs';
@@ -60,6 +61,33 @@ export const loadConfig = (): AppConfig | null => {
   } catch (error) {
     console.error("Failed to load config from localStorage:", error);
     return null;
+  }
+};
+
+/**
+ * Initializes configuration with fallback support for executable builds.
+ * This function ensures the app can start even without existing data.
+ * @param configPath Optional path to default configuration JSON file
+ * @returns Promise<AppConfig> Always returns a valid configuration
+ */
+export const initializeConfigWithFallback = async (configPath?: string): Promise<AppConfig> => {
+  console.log('[Config Init] Initializing configuration with fallback support...');
+  
+  try {
+    // Try to load saved configuration first
+    const savedConfig = loadConfig();
+    
+    // Initialize using the config service
+    const config = await configInitService.initializeConfig(savedConfig, configPath);
+    
+    console.log('[Config Init] Configuration initialized successfully');
+    return config;
+  } catch (error) {
+    console.error('[Config Init] Error during config initialization:', error);
+    
+    // Ultimate fallback - create minimal config
+    console.log('[Config Init] Using ultimate fallback configuration');
+    return configInitService.createFallbackConfig();
   }
 };
 
