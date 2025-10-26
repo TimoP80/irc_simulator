@@ -34,7 +34,6 @@ export const ChatLogManager: React.FC<ChatLogManagerProps> = ({ isOpen, onClose,
   }, [selectedChannel]);
 
   const loadData = async () => {
-    console.log('[ChatLogManager] loadData called');
     setIsLoading(true);
     
     try {
@@ -44,11 +43,6 @@ export const ChatLogManager: React.FC<ChatLogManagerProps> = ({ isOpen, onClose,
         chatLogService.getStorageSize()
       ]);
       
-      console.log('[ChatLogManager] Loaded data:', { 
-        channelsCount: channelsData.length, 
-        currentChannel, 
-        channels: channelsData.map(c => c.channelName) 
-      });
       
       setChannels(channelsData);
       setStats(statsData);
@@ -57,14 +51,11 @@ export const ChatLogManager: React.FC<ChatLogManagerProps> = ({ isOpen, onClose,
       // Set initial channel selection - always select a channel if available
       if (channelsData.length > 0) {
         if (currentChannel && channelsData.some(c => c.channelName === currentChannel)) {
-          console.log('[ChatLogManager] Selecting current channel:', currentChannel);
           setSelectedChannel(currentChannel);
         } else {
-          console.log('[ChatLogManager] Selecting first channel:', channelsData[0].channelName);
           setSelectedChannel(channelsData[0].channelName);
         }
       } else {
-        console.log('[ChatLogManager] No channels available');
         setSelectedChannel('');
       }
     } catch (error) {
@@ -73,16 +64,13 @@ export const ChatLogManager: React.FC<ChatLogManagerProps> = ({ isOpen, onClose,
     } finally {
       setIsLoading(false);
       setIsInitialized(true);
-      console.log('[ChatLogManager] loadData completed, selectedChannel:', selectedChannel);
     }
   };
 
   const loadMessages = async (channelName: string) => {
     // Don't set loading state for message loading to prevent button flashing
-    console.log('[ChatLogManager] loadMessages called for channel:', channelName);
     try {
       const messagesData = await chatLogService.getMessages(channelName, 500);
-      console.log('[ChatLogManager] Loaded messages:', messagesData.length, 'for channel:', channelName);
       setMessages(messagesData);
     } catch (error) {
       console.error('Failed to load messages:', error);

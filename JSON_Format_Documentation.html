@@ -690,8 +690,8 @@
                 <div class="code-block">
 {
   "enabled": "boolean",
-  "baseDelay": "number", // milliseconds
-  "maxDelay": "number"   // milliseconds
+  "baseDelay": "number", // milliseconds (default: 500)
+  "maxDelay": "number"   // milliseconds (default: 15000, range: 1000-30000)
 }
                 </div>
 
@@ -707,7 +707,7 @@
   "typingDelay": {
     "enabled": true,
     "baseDelay": 500,
-    "maxDelay": 3000
+    "maxDelay": 15000
   },
   "userObjects": [
     { /* Full User object for nova */ },

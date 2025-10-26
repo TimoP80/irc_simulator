@@ -45,8 +45,13 @@ export const DEFAULT_AI_MODEL = 'gemini-2.5-flash' as const;
 // Default typing delay settings
 export const DEFAULT_TYPING_DELAY = {
   enabled: true,
-  baseDelay: 500,  // Reduced from 1000ms to 500ms for better Tier 1 API compatibility
-  maxDelay: 3000   // Reduced from 5000ms to 3000ms for better Tier 1 API compatibility
+  baseDelay: 500,  // Base delay for all messages
+  maxDelay: 15000  // Increased to 15 seconds for more realistic typing simulation
+} as const;
+
+// Default typing indicator settings
+export const DEFAULT_TYPING_INDICATOR = {
+  mode: 'private_only' as const  // Show typing indicator only in private message windows by default
 } as const;
 
 // Default list of virtual users for the simulation.
@@ -57,7 +62,7 @@ export const DEFAULT_VIRTUAL_USERS: User[] = [
     userType: 'virtual',
     personality: 'A very curious and tech-savvy individual, loves discussing new gadgets and programming.',
     languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
-    writingStyle: { formality: 'informal', verbosity: 'neutral', humor: 'none', emojiUsage: 'low', punctuation: 'standard' },
+    writingStyle: { formality: 'casual', verbosity: 'moderate', humor: 'none', emojiUsage: 'rare', punctuation: 'standard' },
     profilePicture: 'https://placehold.co/100x100/4F46E5/FFFFFF/png?text=N'
   },
   { 
@@ -75,7 +80,7 @@ export const DEFAULT_VIRTUAL_USERS: User[] = [
     userType: 'virtual',
     personality: 'A chaotic, funny, and unpredictable prankster who loves jokes and memes.',
     languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
-    writingStyle: { formality: 'informal', verbosity: 'neutral', humor: 'slapstick', emojiUsage: 'high', punctuation: 'excessive' },
+    writingStyle: { formality: 'casual', verbosity: 'moderate', humor: 'moderate', emojiUsage: 'frequent', punctuation: 'dramatic' },
     profilePicture: 'https://placehold.co/100x100/DC2626/FFFFFF/png?text=J'
   },
   { 
@@ -84,7 +89,7 @@ export const DEFAULT_VIRTUAL_USERS: User[] = [
     userType: 'virtual',
     personality: 'Gruff but helpful, an expert in system administration and network security.',
     languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
-    writingStyle: { formality: 'neutral', verbosity: 'terse', humor: 'none', emojiUsage: 'none', punctuation: 'minimal' },
+    writingStyle: { formality: 'semi_formal', verbosity: 'terse', humor: 'none', emojiUsage: 'none', punctuation: 'minimal' },
     profilePicture: 'https://placehold.co/100x100/EA580C/FFFFFF/png?text=R'
   },
   { 
@@ -93,7 +98,7 @@ export const DEFAULT_VIRTUAL_USERS: User[] = [
     userType: 'virtual',
     personality: 'An artist who is dreamy, creative, and talks about music, art, and nature.',
     languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
-    writingStyle: { formality: 'informal', verbosity: 'verbose', humor: 'none', emojiUsage: 'high', punctuation: 'standard' },
+    writingStyle: { formality: 'casual', verbosity: 'verbose', humor: 'none', emojiUsage: 'frequent', punctuation: 'standard' },
     profilePicture: 'https://placehold.co/100x100/7C3AED/FFFFFF/png?text=L'
   },
   { 
@@ -111,7 +116,7 @@ export const DEFAULT_VIRTUAL_USERS: User[] = [
     userType: 'virtual',
     personality: 'Excitable and easily distracted, often making typos and using internet slang.',
     languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
-    writingStyle: { formality: 'informal', verbosity: 'neutral', humor: 'slapstick', emojiUsage: 'high', punctuation: 'excessive' },
+    writingStyle: { formality: 'casual', verbosity: 'moderate', humor: 'moderate', emojiUsage: 'frequent', punctuation: 'dramatic' },
     profilePicture: 'https://placehold.co/100x100/DB2777/FFFFFF/png?text=G'
   },
   { 
@@ -133,7 +138,7 @@ export const DEFAULT_BOT_USERS: User[] = [
     userType: 'bot',
     personality: 'A helpful bot that generates AI images and provides visual content.',
     languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
-    writingStyle: { formality: 'neutral', verbosity: 'neutral', humor: 'none', emojiUsage: 'medium', punctuation: 'standard' },
+    writingStyle: { formality: 'semi_formal', verbosity: 'moderate', humor: 'none', emojiUsage: 'moderate', punctuation: 'standard' },
     botCommands: ['!image', '!img'],
     botDescription: 'Generates AI images based on text prompts',
     botCapabilities: ['image_generation', 'visual_content']
@@ -144,7 +149,7 @@ export const DEFAULT_BOT_USERS: User[] = [
     userType: 'bot',
     personality: 'An informative bot that provides weather, time, and general information.',
     languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
-    writingStyle: { formality: 'formal', verbosity: 'neutral', humor: 'none', emojiUsage: 'low', punctuation: 'standard' },
+    writingStyle: { formality: 'formal', verbosity: 'moderate', humor: 'none', emojiUsage: 'rare', punctuation: 'standard' },
     botCommands: ['!weather', '!time', '!info', '!help'],
     botDescription: 'Provides weather, time, and informational services',
     botCapabilities: ['weather', 'time', 'information', 'help']
@@ -155,7 +160,7 @@ export const DEFAULT_BOT_USERS: User[] = [
     userType: 'bot',
     personality: 'A fun and entertaining bot that tells jokes, shares quotes, and provides amusement.',
     languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
-    writingStyle: { formality: 'informal', verbosity: 'neutral', humor: 'witty', emojiUsage: 'high', punctuation: 'standard' },
+    writingStyle: { formality: 'casual', verbosity: 'moderate', humor: 'witty', emojiUsage: 'frequent', punctuation: 'standard' },
     botCommands: ['!quote', '!joke', '!fact'],
     botDescription: 'Provides entertainment with quotes, jokes, and interesting facts',
     botCapabilities: ['quotes', 'jokes', 'facts', 'entertainment']
@@ -166,7 +171,7 @@ export const DEFAULT_BOT_USERS: User[] = [
     userType: 'bot',
     personality: 'A utility bot that helps with calculations, translations, and searches.',
     languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
-    writingStyle: { formality: 'neutral', verbosity: 'terse', humor: 'none', emojiUsage: 'low', punctuation: 'standard' },
+    writingStyle: { formality: 'semi_formal', verbosity: 'terse', humor: 'none', emojiUsage: 'rare', punctuation: 'standard' },
     botCommands: ['!translate', '!calc', '!search'],
     botDescription: 'Provides utility functions like translation, calculation, and search',
     botCapabilities: ['translation', 'calculation', 'search', 'utilities']
@@ -185,7 +190,7 @@ export const DEFAULT_CHANNELS: Channel[] = [
         userType: 'virtual',
         personality: 'The human user',
         languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
-        writingStyle: { formality: 'informal', verbosity: 'neutral', humor: 'none', emojiUsage: 'low', punctuation: 'standard' },
+        writingStyle: { formality: 'casual', verbosity: 'moderate', humor: 'none', emojiUsage: 'rare', punctuation: 'standard' },
         profilePicture: 'https://placehold.co/100x100/6B7280/FFFFFF/png?text=U'
       }, 
       ...DEFAULT_VIRTUAL_USERS.slice(0, 5)
@@ -206,7 +211,7 @@ export const DEFAULT_CHANNELS: Channel[] = [
         userType: 'virtual',
         personality: 'The human user',
         languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
-        writingStyle: { formality: 'informal', verbosity: 'neutral', humor: 'none', emojiUsage: 'low', punctuation: 'standard' },
+        writingStyle: { formality: 'casual', verbosity: 'moderate', humor: 'none', emojiUsage: 'rare', punctuation: 'standard' },
         profilePicture: 'https://placehold.co/100x100/6B7280/FFFFFF/png?text=U'
       },
       DEFAULT_VIRTUAL_USERS.find(u => u.nickname === 'nova')!,
@@ -230,7 +235,7 @@ export const DEFAULT_CHANNELS: Channel[] = [
         userType: 'virtual',
         personality: 'The human user',
         languageSkills: { fluency: 'native', languages: ['English'], accent: '' },
-        writingStyle: { formality: 'informal', verbosity: 'neutral', humor: 'none', emojiUsage: 'low', punctuation: 'standard' },
+        writingStyle: { formality: 'casual', verbosity: 'moderate', humor: 'none', emojiUsage: 'rare', punctuation: 'standard' },
         profilePicture: 'https://placehold.co/100x100/6B7280/FFFFFF/png?text=U'
       },
       DEFAULT_VIRTUAL_USERS.find(u => u.nickname === 'jinx')!,

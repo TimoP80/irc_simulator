@@ -5,20 +5,20 @@ import { ChatWindow } from './components/ChatWindow';
 import { SettingsModal } from './components/SettingsModal';
 import { ChannelListModal } from './components/ChannelListModal';
 import { MobileNavigation } from './components/MobileNavigation';
-import { DEFAULT_CHANNELS, DEFAULT_VIRTUAL_USERS, DEFAULT_NICKNAME, SIMULATION_INTERVALS, DEFAULT_AI_MODEL, DEFAULT_TYPING_DELAY } from './constants';
+import { DEFAULT_CHANNELS, DEFAULT_VIRTUAL_USERS, DEFAULT_NICKNAME, SIMULATION_INTERVALS, DEFAULT_AI_MODEL, DEFAULT_TYPING_DELAY, DEFAULT_TYPING_INDICATOR } from './constants';
 import type { Channel, Message, User, ActiveContext, PrivateMessageConversation, AppConfig } from './types';
 import { addChannelOperator, removeChannelOperator, isChannelOperator, canUserPerformAction } from './types';
 import { generateChannelActivity, generateReactionToMessage, generatePrivateMessageResponse, generateOperatorResponse } from './services/geminiService';
 import { handleBotCommand, isBotCommand } from './services/botService';
+import { updateChannelRelationshipMemory, initializeRelationshipMemory } from './services/relationshipMemoryService';
 import { loadConfig, saveConfig, initializeStateFromConfig, saveChannelLogs, loadChannelLogs, clearChannelLogs, simulateTypingDelay } from './utils/config';
 import { 
   aiDebug, simulationDebug, networkDebug, settingsDebug, pmDebug, rateLimiterDebug, 
-  urlFilterDebug, userListDebug, joinDebug, configDebug, chatLogDebug, ircExportDebug, 
+  urlFilterDebug, userListDebug, joinDebug, configDebug, chatLogDebug, 
   botDebug, imageDebug, disableAllDebugLogging, enableAllDebugLogging, getDebugConfig,
   appDebug, messageDebug, timeDebug, inputDebug, notificationDebug, contextDebug, 
   unreadDebug, contentDebug, mediaDebug, ircDebug
 } from './utils/debugLogger';
-import { getIRCExportService, getDefaultIRCExportConfig, type IRCExportConfig, type IRCExportStatus, type IRCExportMessage } from './services/ircExportService';
 import { getChatLogService, initializeChatLogs } from './services/chatLogService';
 import { ChatLogManager } from './components/ChatLogManager';
 import { NetworkConnection } from './components/NetworkConnection';
@@ -124,7 +124,6 @@ const migrateChannelUsers = (channels: Channel[], virtualUsers: User[], currentU
     );
     
     if (hasAllUsers || hasTooManyUsers) {
-      simulationDebug.log(`Resetting users for channel ${channel.name} (had ${channel.users.length} users)`);
       
       // Reset to default channel-specific users based on channel name
       let channelSpecificUsers: User[] = [];
@@ -162,7 +161,7 @@ const migrateChannelUsers = (channels: Channel[], virtualUsers: User[], currentU
                 accent: ''
               }]
             },
-            writingStyle: { formality: 'informal' as const, verbosity: 'neutral' as const, humor: 'none' as const, emojiUsage: 'low' as const, punctuation: 'standard' as const }
+            writingStyle: { formality: 'casual' as const, verbosity: 'moderate' as const, humor: 'none' as const, emojiUsage: 'rare' as const, punctuation: 'standard' as const }
           },
           ...channelSpecificUsers
         ]
@@ -183,9 +182,11 @@ const App: React.FC = () => {
     const savedConfig = loadConfig();
     if (savedConfig) {
       const { virtualUsers: configUsers } = initializeStateFromConfig(savedConfig);
-      return loadUserChannelAssignments(configUsers);
+      const usersWithAssignments = loadUserChannelAssignments(configUsers);
+      // Initialize relationship memory for all virtual users
+      return usersWithAssignments.map(user => initializeRelationshipMemory(user));
     }
-    return DEFAULT_VIRTUAL_USERS;
+    return DEFAULT_VIRTUAL_USERS.map(user => initializeRelationshipMemory(user));
   });
   const [channels, setChannels] = useState<Channel[]>(() => {
     const savedConfig = loadConfig();
@@ -272,6 +273,10 @@ const App: React.FC = () => {
   const [typingDelayConfig, setTypingDelayConfig] = useState(() => {
     const savedConfig = loadConfig();
     return savedConfig?.typingDelay || DEFAULT_TYPING_DELAY;
+  });
+  const [typingIndicatorConfig, setTypingIndicatorConfig] = useState(() => {
+    const savedConfig = loadConfig();
+    return savedConfig?.typingIndicator || DEFAULT_TYPING_INDICATOR;
   });
   const [imageGenerationConfig, setImageGenerationConfig] = useState(() => {
     const savedConfig = loadConfig();
@@ -451,16 +456,6 @@ const App: React.FC = () => {
     });
   }, []);
   
-  // IRC Export state
-  const [ircExportConfig, setIrcExportConfig] = useState<IRCExportConfig>(getDefaultIRCExportConfig());
-  const [ircExportStatus, setIrcExportStatus] = useState<IRCExportStatus>({
-    connected: false,
-    server: '',
-    channel: '',
-    nickname: '',
-    lastActivity: null,
-    error: null
-  });
   
   const simulationIntervalRef = useRef<number | null>(null);
   const lastSimErrorTimestampRef = useRef<number>(0);
@@ -490,7 +485,6 @@ const App: React.FC = () => {
   // Auto-join users to channels that only have the current user
   // Function to reset last speakers tracking to force more diverse user selection
   const resetLastSpeakers = useCallback(() => {
-    simulationDebug.log('Resetting last speakers tracking to force diverse user selection');
     setLastSpeakersReset(prev => prev + 1);
     
     // Clear recent messages to reset the "recent speakers" tracking
@@ -608,7 +602,6 @@ const App: React.FC = () => {
   // Handle virtual user bot commands
   const handleVirtualUserBotCommand = async (content: string, user: User, channelName: string) => {
     try {
-      simulationDebug.log(` Processing bot command from ${user.nickname}: ${content}`);
       
       // First, add the original bot command message so users can see what was executed
       const commandMessage: Message = {
@@ -625,7 +618,6 @@ const App: React.FC = () => {
       const botUser = channel?.users.find(u => u.userType === 'bot');
       
       if (!botUser) {
-        simulationDebug.log(` No bot available in channel ${channelName}`);
         return null;
       }
       
@@ -648,7 +640,6 @@ const App: React.FC = () => {
       
       const botResponse = await handleBotCommand(content, botUser, channelName, aiModel, imageGenerationConfig);
       if (botResponse) {
-        simulationDebug.log(` Bot response generated for ${user.nickname}'s command`);
         return botResponse;
       }
       
@@ -819,15 +810,12 @@ const App: React.FC = () => {
   // Ensure channels have users after initialization
   useEffect(() => {
     if (channels.length > 0 && virtualUsers.length > 0) {
-      userListDebug.log('Checking if channels need users after initialization');
-      
       const channelsNeedingUsers = channels.filter(channel => {
         const virtualUsersInChannel = channel.users.filter(u => u.nickname !== currentUserNickname);
         return virtualUsersInChannel.length === 0;
       });
       
       if (channelsNeedingUsers.length > 0) {
-        userListDebug.log(`Found ${channelsNeedingUsers.length} channels without virtual users, auto-joining`);
         autoJoinUsersToEmptyChannels();
       }
     }
@@ -862,7 +850,7 @@ const App: React.FC = () => {
     settingsDebug.log('saveConfig called successfully');
     
     // Initialize state from the new config
-    const { nickname, virtualUsers, channels: newChannels, simulationSpeed, aiModel: savedAiModel, typingDelay } = initializeStateFromConfig(config);
+    const { nickname, virtualUsers, channels: newChannels, simulationSpeed, aiModel: savedAiModel, typingDelay, typingIndicator } = initializeStateFromConfig(config);
     settingsDebug.log('Saving settings with aiModel:', savedAiModel);
     setCurrentUserNickname(nickname);
     setVirtualUsers(virtualUsers);
@@ -874,6 +862,14 @@ const App: React.FC = () => {
     setSimulationSpeed(simulationSpeed);
     setAiModel(savedAiModel || DEFAULT_AI_MODEL);
     settingsDebug.log('Set aiModel to:', savedAiModel || DEFAULT_AI_MODEL);
+    
+    // Update typing delay and indicator configurations
+    if (typingDelay) {
+      setTypingDelayConfig(typingDelay);
+    }
+    if (typingIndicator) {
+      setTypingIndicatorConfig(typingIndicator);
+    }
     
     // Clear PM conversations and unread status when settings are reset
     setPrivateMessages({});
@@ -935,45 +931,6 @@ const App: React.FC = () => {
     setIsChatLogOpen(false);
   };
 
-  // IRC Export handlers
-  const handleIrcExportConfigChange = (newConfig: IRCExportConfig) => {
-    setIrcExportConfig(newConfig);
-  };
-
-  const handleIrcExportConnect = async () => {
-    try {
-      const ircService = getIRCExportService();
-      await ircService.connect(ircExportConfig);
-      
-      const status = ircService.getStatus();
-      setIrcExportStatus(status);
-      ircDebug.log('Connected successfully');
-    } catch (error) {
-      ircDebug.error('Connection failed:', error);
-      setIrcExportStatus(prev => ({
-        ...prev,
-        error: error instanceof Error ? error.message : 'Connection failed'
-      }));
-    }
-  };
-
-  const handleIrcExportDisconnect = async () => {
-    try {
-      const ircService = getIRCExportService();
-      await ircService.disconnect();
-      setIrcExportStatus({
-        connected: false,
-        server: '',
-        channel: '',
-        nickname: '',
-        lastActivity: null,
-        error: null
-      });
-      ircDebug.log('Disconnected successfully');
-    } catch (error) {
-      ircDebug.error('Disconnect failed:', error);
-    }
-  };
 
   const setTyping = (nickname: string, isTyping: boolean) => {
     setTypingUsers(prev => {
@@ -985,6 +942,33 @@ const App: React.FC = () => {
       }
       return newSet;
     });
+  };
+
+  // Helper function to parse PM responses and remove username prefixes
+  const parsePMResponse = (response: string, aiNickname: string): string => {
+    let content = response.trim();
+    
+    // Check if the response starts with the AI user's nickname followed by a colon
+    const usernamePrefix = `${aiNickname}:`;
+    if (content.startsWith(usernamePrefix)) {
+      content = content.substring(usernamePrefix.length).trim();
+    }
+    
+    // Also check for other common patterns like "nickname: " or "nickname - "
+    const alternativePatterns = [
+      `${aiNickname}: `,
+      `${aiNickname} - `,
+      `${aiNickname} `,
+    ];
+    
+    for (const pattern of alternativePatterns) {
+      if (content.startsWith(pattern)) {
+        content = content.substring(pattern.length).trim();
+        break;
+      }
+    }
+    
+    return content;
   };
 
   // Function to track conversation patterns and suggest topic changes
@@ -1527,7 +1511,7 @@ const App: React.FC = () => {
   const withConcurrencyLimit = useCallback(async (fn: () => Promise<any>, context: string): Promise<any> => {
     // Wait if we're at the limit
     while (concurrentRequests >= MAX_CONCURRENT_REQUESTS) {
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 200));
     }
     
     // Add delay between requests to prevent overload
@@ -1583,7 +1567,14 @@ const App: React.FC = () => {
               return c;
             }
             
-            return { ...c, messages: [...(c.messages || []), processedMessage].slice(-1000) };
+            // Update relationship memory for all virtual users in the channel
+            const updatedUsers = updateChannelRelationshipMemory(c.users, processedMessage, context.name);
+            
+            return { 
+              ...c, 
+              messages: [...(c.messages || []), processedMessage].slice(-1000),
+              users: updatedUsers
+            };
           }
           return c;
         });
@@ -1686,15 +1677,6 @@ const App: React.FC = () => {
       setUnreadChannels(prev => new Set([...prev, context.name]));
     }
 
-    // Export to IRC if enabled and message is from AI
-    if (ircExportStatus.connected && (message.type === 'ai' || message.type === 'user')) {
-      const ircService = getIRCExportService();
-      if (ircService && ircService.isConnected()) {
-        ircService.sendMessage(message.content, message.nickname).catch(error => {
-          ircDebug.error('Failed to send message:', error);
-        });
-      }
-    }
 
     // Broadcast AI messages to network users
     if (isNetworkConnected && message.type === 'ai' && context.type === 'channel') {
@@ -1766,7 +1748,7 @@ const App: React.FC = () => {
         }
       }
     }
-  }, [virtualUsers, ircExportStatus.connected, broadcastChannel]);
+  }, [virtualUsers, broadcastChannel]);
 
   // Trigger AI operator response to op requests
   const triggerAIOperatorResponse = useCallback(async (channel: Channel, requestingUser: string, operators: User[]) => {
@@ -1849,8 +1831,6 @@ const App: React.FC = () => {
     const channel = channels.find(c => c.name === channelName);
     if (!channel) return;
 
-    userListDebug.log(`Joining channel: ${channelName}`);
-    userListDebug.log(`Channel users before join:`, channel.users.map(u => u.nickname));
 
     // Add current user to channel if not already present
     const isUserInChannel = channel.users.some(u => u.nickname === currentUserNickname);
@@ -1867,7 +1847,7 @@ const App: React.FC = () => {
             accent: ''
           }]
         },
-        writingStyle: { formality: 'informal' as const, verbosity: 'neutral' as const, humor: 'none' as const, emojiUsage: 'low' as const, punctuation: 'standard' as const }
+        writingStyle: { formality: 'casual' as const, verbosity: 'moderate' as const, humor: 'none' as const, emojiUsage: 'rare' as const, punctuation: 'standard' as const }
       };
 
       setChannels(prev => prev.map(c => 
@@ -1891,8 +1871,6 @@ const App: React.FC = () => {
     // Ensure channel has virtual users (auto-join if needed)
     const virtualUsersInChannel = channel.users.filter(u => u.nickname !== currentUserNickname);
     if (virtualUsersInChannel.length === 0) {
-      userListDebug.log(`Channel ${channelName} has no virtual users, auto-joining some`);
-      
       // Select 2-4 random virtual users to join this channel
       const availableUsers = virtualUsers.filter(u => 
         !channels.some(c => c.name !== channelName && c.users.some(cu => cu.nickname === u.nickname))
@@ -1902,8 +1880,6 @@ const App: React.FC = () => {
         const numUsersToJoin = Math.min(Math.floor(Math.random() * 3) + 2, availableUsers.length); // 2-4 users
         const shuffledUsers = [...availableUsers].sort(() => Math.random() - 0.5);
         const usersToJoin = shuffledUsers.slice(0, numUsersToJoin);
-        
-        userListDebug.log(`Auto-joining users to ${channelName}:`, usersToJoin.map(u => u.nickname));
         
         setChannels(prev => prev.map(c => 
           c.name === channelName 
@@ -1934,7 +1910,6 @@ const App: React.FC = () => {
     const channel = channels.find(c => c.name === channelName);
     if (!channel) return;
 
-    userListDebug.log(`Leaving channel: ${channelName}`);
 
     // Remove current user from channel
     setChannels(prev => prev.map(c => 
@@ -1958,10 +1933,8 @@ const App: React.FC = () => {
     if (activeContext?.type === 'channel' && activeContext.name === channelName) {
       const remainingChannels = channels.filter(c => c.name !== channelName && c.users.some(u => u.nickname === currentUserNickname));
       if (remainingChannels.length > 0) {
-        userListDebug.log(`Switching to another channel: ${remainingChannels[0].name}`);
         setActiveContext({ type: 'channel', name: remainingChannels[0].name });
       } else {
-        userListDebug.log(`No other channels available, clearing context`);
         setActiveContext(null);
       }
     }
@@ -1976,6 +1949,875 @@ const App: React.FC = () => {
       setActiveContext(null);
     }
   }, [activeContext, handleLeaveChannel]);
+
+  // Generate contextually appropriate trigger message for autonomous PMs
+  const generateContextualTriggerMessage = useCallback((conversation: PrivateMessageConversation, currentUserNickname: string): Message => {
+    const messages = conversation.messages;
+    const lastMessage = messages[messages.length - 1];
+    const conversationLength = messages.length;
+    const aiUser = conversation.user;
+    
+    // Get AI user's personality traits for personalized responses
+    const personality = aiUser.personality || 'friendly';
+    const writingStyle = aiUser.writingStyle || {
+      formality: 'casual',
+      verbosity: 'moderate',
+      humor: 'moderate',
+      emojiUsage: 'moderate',
+      punctuation: 'standard'
+    };
+    
+    // Helper function to generate personality-appropriate responses
+    const generatePersonalityResponse = (baseResponses: string[], personality: string, writingStyle: any): string => {
+      let selectedResponse = baseResponses[Math.floor(Math.random() * baseResponses.length)];
+      
+      // Adjust response based on personality
+      switch (personality) {
+        case 'shy':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been quietly");
+          selectedResponse = selectedResponse.replace(/I love/g, "I kind of like");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's nice");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's interesting, I think");
+          break;
+        case 'confident':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've definitely been");
+          selectedResponse = selectedResponse.replace(/I think/g, "I know");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's awesome");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's fascinating");
+          break;
+        case 'curious':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been really curious about");
+          selectedResponse = selectedResponse.replace(/What's/g, "I'm really curious - what's");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's so interesting");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's incredibly interesting");
+          break;
+        case 'philosophical':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been contemplating");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's thought-provoking");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's deeply interesting");
+          selectedResponse = selectedResponse.replace(/What's/g, "What do you think about");
+          break;
+        case 'humorous':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been hilariously");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's pretty cool, not gonna lie");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's interesting... and by interesting I mean weird");
+          selectedResponse = selectedResponse.replace(/What's/g, "What's the deal with");
+          break;
+        case 'supportive':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been thinking about how you");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's really cool");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's really interesting");
+          selectedResponse = selectedResponse.replace(/What's/g, "How are you feeling about");
+          break;
+        case 'analytical':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been analyzing");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's logically sound");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's analytically interesting");
+          selectedResponse = selectedResponse.replace(/What's/g, "What's the data on");
+          break;
+        case 'creative':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been creatively exploring");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's artistically cool");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's creatively interesting");
+          selectedResponse = selectedResponse.replace(/What's/g, "What's your creative take on");
+          break;
+        case 'adventurous':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been adventurously");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's exciting");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's thrilling");
+          selectedResponse = selectedResponse.replace(/What's/g, "What's the most exciting thing about");
+          break;
+        case 'wise':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been reflecting on");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's insightful");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's wise");
+          selectedResponse = selectedResponse.replace(/What's/g, "What wisdom do you have about");
+          break;
+        case 'mysterious':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been quietly observing");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's intriguing");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's mysterious");
+          selectedResponse = selectedResponse.replace(/What's/g, "What secrets do you know about");
+          break;
+        case 'energetic':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been enthusiastically");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's AMAZING");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's SO interesting");
+          selectedResponse = selectedResponse.replace(/What's/g, "What's the most exciting thing about");
+          break;
+        case 'calm':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been peacefully");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's nice");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's quite interesting");
+          selectedResponse = selectedResponse.replace(/What's/g, "What's your peaceful perspective on");
+          break;
+        case 'sarcastic':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been 'enjoying'");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's... cool");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's... interesting");
+          selectedResponse = selectedResponse.replace(/What's/g, "What's the deal with");
+          break;
+        case 'optimistic':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been positively");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's wonderful");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's fascinating");
+          selectedResponse = selectedResponse.replace(/What's/g, "What's the best thing about");
+          break;
+        case 'pessimistic':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been thinking about how");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's... okay");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's... interesting, I guess");
+          selectedResponse = selectedResponse.replace(/What's/g, "What's the worst thing about");
+          break;
+        case 'romantic':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been lovingly");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's beautiful");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's enchanting");
+          selectedResponse = selectedResponse.replace(/What's/g, "What's the most beautiful thing about");
+          break;
+        case 'rebellious':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been defiantly");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's badass");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's subversive");
+          selectedResponse = selectedResponse.replace(/What's/g, "What's the most rebellious thing about");
+          break;
+        case 'loyal':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been faithfully");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's trustworthy");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's dependable");
+          selectedResponse = selectedResponse.replace(/What's/g, "What's the most reliable thing about");
+          break;
+        case 'independent':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been independently");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's self-sufficient");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's autonomous");
+          selectedResponse = selectedResponse.replace(/What's/g, "What's the most independent thing about");
+          break;
+        case 'empathetic':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been feeling");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's touching");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's emotionally interesting");
+          selectedResponse = selectedResponse.replace(/What's/g, "How do you feel about");
+          break;
+        case 'logical':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been logically");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's rational");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's logically sound");
+          selectedResponse = selectedResponse.replace(/What's/g, "What's the logical explanation for");
+          break;
+        case 'intuitive':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been intuitively");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's instinctive");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's intuitive");
+          selectedResponse = selectedResponse.replace(/What's/g, "What's your gut feeling about");
+          break;
+        case 'perfectionist':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been meticulously");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's precise");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's perfectly interesting");
+          selectedResponse = selectedResponse.replace(/What's/g, "What's the perfect way to");
+          break;
+        case 'spontaneous':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been randomly");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's unexpected");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's surprising");
+          selectedResponse = selectedResponse.replace(/What's/g, "What's the most random thing about");
+          break;
+        case 'traditional':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been traditionally");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's classic");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's traditional");
+          selectedResponse = selectedResponse.replace(/What's/g, "What's the traditional way to");
+          break;
+        case 'modern':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been modernly");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's trendy");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's contemporary");
+          selectedResponse = selectedResponse.replace(/What's/g, "What's the modern approach to");
+          break;
+        case 'mystical':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been mystically");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's magical");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's mystical");
+          selectedResponse = selectedResponse.replace(/What's/g, "What's the mystical meaning of");
+          break;
+        case 'scientific':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been scientifically");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's empirical");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's scientifically interesting");
+          selectedResponse = selectedResponse.replace(/What's/g, "What's the scientific explanation for");
+          break;
+        case 'artistic':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been artistically");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's beautiful");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's aesthetically interesting");
+          selectedResponse = selectedResponse.replace(/What's/g, "What's the artistic interpretation of");
+          break;
+        case 'practical':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been practically");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's useful");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's practical");
+          selectedResponse = selectedResponse.replace(/What's/g, "What's the practical application of");
+          break;
+        case 'dreamy':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been dreamily");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's dreamy");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's ethereal");
+          selectedResponse = selectedResponse.replace(/What's/g, "What's the dreamiest thing about");
+          break;
+        case 'realistic':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been realistically");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's realistic");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's realistically interesting");
+          selectedResponse = selectedResponse.replace(/What's/g, "What's the realistic perspective on");
+          break;
+        case 'idealistic':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been ideally");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's ideal");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's ideally interesting");
+          selectedResponse = selectedResponse.replace(/What's/g, "What's the ideal way to");
+          break;
+        case 'cynical':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been cynically");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's... cool, I guess");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's... interesting, if you say so");
+          selectedResponse = selectedResponse.replace(/What's/g, "What's the catch with");
+          break;
+        case 'naive':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been innocently");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's so cool");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's so interesting");
+          selectedResponse = selectedResponse.replace(/What's/g, "What's the simple truth about");
+          break;
+        case 'sophisticated':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been sophisticatedly");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's refined");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's sophisticated");
+          selectedResponse = selectedResponse.replace(/What's/g, "What's the sophisticated approach to");
+          break;
+        case 'simple':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been simply");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's nice");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's simple");
+          selectedResponse = selectedResponse.replace(/What's/g, "What's the simple way to");
+          break;
+        case 'complex':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been complexly");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's complex");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's complexly interesting");
+          selectedResponse = selectedResponse.replace(/What's/g, "What's the complex nature of");
+          break;
+        case 'gentle':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been gently");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's gentle");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's gently interesting");
+          selectedResponse = selectedResponse.replace(/What's/g, "What's the gentlest way to");
+          break;
+        case 'intense':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been intensely");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's intense");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's intensely interesting");
+          selectedResponse = selectedResponse.replace(/What's/g, "What's the most intense thing about");
+          break;
+        case 'playful':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been playfully");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's fun");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's playfully interesting");
+          selectedResponse = selectedResponse.replace(/What's/g, "What's the most fun thing about");
+          break;
+        case 'serious':
+          selectedResponse = selectedResponse.replace(/I've been/g, "I've been seriously");
+          selectedResponse = selectedResponse.replace(/That's cool/g, "That's serious");
+          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's seriously interesting");
+          selectedResponse = selectedResponse.replace(/What's/g, "What's the serious aspect of");
+          break;
+        case 'friendly':
+        default:
+          // Keep original response for friendly personality
+          break;
+      }
+      
+      // Adjust response based on writing style
+      if (writingStyle.formality === 'ultra_formal') {
+        selectedResponse = selectedResponse.replace(/I've been/g, "I have been");
+        selectedResponse = selectedResponse.replace(/That's/g, "That is");
+        selectedResponse = selectedResponse.replace(/What's/g, "What is");
+        selectedResponse = selectedResponse.replace(/I'm/g, "I am");
+        selectedResponse = selectedResponse.replace(/I'll/g, "I will");
+        selectedResponse = selectedResponse.replace(/I'd/g, "I would");
+        selectedResponse = selectedResponse.replace(/I can't/g, "I cannot");
+        selectedResponse = selectedResponse.replace(/don't/g, "do not");
+        selectedResponse = selectedResponse.replace(/won't/g, "will not");
+        selectedResponse = selectedResponse.replace(/can't/g, "cannot");
+      } else if (writingStyle.formality === 'ultra_casual') {
+        selectedResponse = selectedResponse.replace(/I have been/g, "I've been");
+        selectedResponse = selectedResponse.replace(/That is/g, "That's");
+        selectedResponse = selectedResponse.replace(/What is/g, "What's");
+        selectedResponse = selectedResponse.replace(/I am/g, "I'm");
+        selectedResponse = selectedResponse.replace(/I will/g, "I'll");
+        selectedResponse = selectedResponse.replace(/I would/g, "I'd");
+        selectedResponse = selectedResponse.replace(/I cannot/g, "I can't");
+        selectedResponse = selectedResponse.replace(/do not/g, "don't");
+        selectedResponse = selectedResponse.replace(/will not/g, "won't");
+        selectedResponse = selectedResponse.replace(/cannot/g, "can't");
+      }
+      
+      // Add emojis based on emoji usage style
+      if (writingStyle.emojiUsage === 'frequent' || writingStyle.emojiUsage === 'excessive') {
+        selectedResponse += " 😊";
+      } else if (writingStyle.emojiUsage === 'emoji_only') {
+        selectedResponse = "😊 " + selectedResponse + " 😊";
+      }
+      
+      return selectedResponse;
+    };
+    
+    // Enhanced conversation analysis with memory system
+    const recentTopics = messages.slice(-5).map(msg => msg.content.toLowerCase());
+    const allTopics = messages.map(msg => msg.content.toLowerCase());
+    
+    // Topic detection with frequency tracking
+    const topicKeywords = {
+      work: ['work', 'job', 'career', 'office', 'business', 'company', 'profession', 'employment'],
+      tech: ['tech', 'computer', 'programming', 'code', 'software', 'technology', 'coding', 'development', 'ai', 'artificial intelligence'],
+      personal: ['family', 'friend', 'relationship', 'personal', 'life', 'myself', 'me', 'i am', 'i feel', 'i think'],
+      hobby: ['hobby', 'game', 'music', 'movie', 'book', 'sport', 'art', 'creative', 'fun', 'entertainment'],
+      travel: ['travel', 'trip', 'vacation', 'journey', 'visit', 'place', 'country', 'city', 'adventure'],
+      food: ['food', 'eat', 'cook', 'restaurant', 'meal', 'recipe', 'taste', 'delicious', 'hungry'],
+      weather: ['weather', 'rain', 'sunny', 'cold', 'hot', 'temperature', 'climate', 'season'],
+      health: ['health', 'exercise', 'fitness', 'doctor', 'medical', 'wellness', 'sick', 'healthy'],
+      education: ['school', 'university', 'college', 'study', 'learn', 'education', 'student', 'teacher', 'class']
+    };
+    
+    // Count topic frequency to avoid repetition
+    const topicFrequency: { [key: string]: number } = {};
+    Object.keys(topicKeywords).forEach(topic => {
+      topicFrequency[topic] = allTopics.reduce((count, content) => {
+        return count + topicKeywords[topic as keyof typeof topicKeywords].filter(keyword => 
+          content.includes(keyword)
+        ).length;
+      }, 0);
+    });
+    
+    // Find recently discussed topics (last 3 messages)
+    const recentTopicFrequency: { [key: string]: number } = {};
+    const recentMessages = messages.slice(-3);
+    Object.keys(topicKeywords).forEach(topic => {
+      recentTopicFrequency[topic] = recentMessages.reduce((count, msg) => {
+        return count + topicKeywords[topic as keyof typeof topicKeywords].filter(keyword => 
+          msg.content.toLowerCase().includes(keyword)
+        ).length;
+      }, 0);
+    });
+    
+    // Detect current topics
+    const hasWorkTopic = recentTopics.some(content => 
+      topicKeywords.work.some(keyword => content.includes(keyword))
+    );
+    const hasTechTopic = recentTopics.some(content => 
+      topicKeywords.tech.some(keyword => content.includes(keyword))
+    );
+    const hasPersonalTopic = recentTopics.some(content => 
+      topicKeywords.personal.some(keyword => content.includes(keyword))
+    );
+    const hasHobbyTopic = recentTopics.some(content => 
+      topicKeywords.hobby.some(keyword => content.includes(keyword))
+    );
+    const hasTravelTopic = recentTopics.some(content => 
+      topicKeywords.travel.some(keyword => content.includes(keyword))
+    );
+    const hasFoodTopic = recentTopics.some(content => 
+      topicKeywords.food.some(keyword => content.includes(keyword))
+    );
+    const hasWeatherTopic = recentTopics.some(content => 
+      topicKeywords.weather.some(keyword => content.includes(keyword))
+    );
+    const hasHealthTopic = recentTopics.some(content => 
+      topicKeywords.health.some(keyword => content.includes(keyword))
+    );
+    const hasEducationTopic = recentTopics.some(content => 
+      topicKeywords.education.some(keyword => content.includes(keyword))
+    );
+    
+    // Find topics that haven't been discussed recently to introduce variety
+    const undiscussedTopics = Object.keys(topicKeywords).filter(topic => 
+      recentTopicFrequency[topic] === 0 && topicFrequency[topic] < 3
+    );
+    
+    // Find overused topics to avoid
+    const overusedTopics = Object.keys(topicKeywords).filter(topic => 
+      recentTopicFrequency[topic] > 2 || topicFrequency[topic] > 5
+    );
+    
+    // If no conversation history, use varied openers
+    if (conversationLength === 0) {
+      const openers = [
+        "Hey there! How's it going?",
+        "Hi! I was just thinking about you",
+        "Hello! Hope you're having a good day",
+        "Hey! I wanted to share something with you",
+        "Hi there! I have a question for you",
+        "Hey! I was wondering about something",
+        "Hello! I've been meaning to talk to you",
+        "Hi! I had an interesting thought today",
+        "Hey there! I wanted to get your opinion on something",
+        "Hi! I've been thinking about our conversation"
+      ];
+      return {
+        id: generateUniqueMessageId(),
+        nickname: currentUserNickname,
+        content: generatePersonalityResponse(openers, personality, writingStyle),
+        timestamp: new Date(),
+        type: 'user'
+      };
+    }
+    
+    // If last message was from AI user, create varied responses
+    if (lastMessage.nickname !== currentUserNickname) {
+      const aiResponses = [
+        "That's really interesting! I hadn't thought of it that way",
+        "I see what you mean. That makes a lot of sense",
+        "That's a great point! I agree with you on that",
+        "Tell me more about that - I'm curious",
+        "That's cool! I love learning new things",
+        "I understand what you're saying. It's helpful",
+        "That's fascinating! I've been thinking about something similar",
+        "I see your perspective. That's a good way to look at it",
+        "That's interesting! I have a question about that",
+        "I agree with you. That's exactly how I feel too",
+        "That's helpful! I've been wondering about that",
+        "I see what you mean. That reminds me of something",
+        "That's a good point! I hadn't considered that angle",
+        "I understand. That's really insightful",
+        "That's cool! I've been thinking about that too"
+      ];
+      return {
+        id: generateUniqueMessageId(),
+        nickname: currentUserNickname,
+        content: generatePersonalityResponse(aiResponses, personality, writingStyle),
+        timestamp: new Date(),
+        type: 'user'
+      };
+    }
+    
+    // If last message was from human user, create sophisticated follow-ups
+    const lastContent = lastMessage.content.toLowerCase();
+    
+    // Question-based continuations (ask follow-up questions)
+    if (Math.random() < 0.3) {
+      const questionPatterns = [
+        "That's interesting! What made you think of that?",
+        "I see what you mean. How did that happen?",
+        "That's cool! What's your experience with that been like?",
+        "I understand. What do you think about [related topic]?",
+        "That's fascinating! Have you always felt that way?",
+        "I see your point. What would you do in that situation?",
+        "That's helpful! How did you figure that out?",
+        "I agree. What's your take on [related topic]?",
+        "That's interesting! What do you think about [related topic]?",
+        "I see what you mean. What's your opinion on [related topic]?"
+      ];
+      return {
+        id: generateUniqueMessageId(),
+        nickname: currentUserNickname,
+        content: generatePersonalityResponse(questionPatterns, personality, writingStyle),
+        timestamp: new Date(),
+        type: 'user'
+      };
+    }
+    
+    // Story-based continuations (share related experiences)
+    if (Math.random() < 0.25) {
+      const storyPatterns = [
+        "That reminds me of something that happened to me...",
+        "I had a similar experience once...",
+        "That's interesting! I once...",
+        "I can relate to that. I remember when...",
+        "That's cool! I've had a similar situation...",
+        "I understand what you mean. I once...",
+        "That's fascinating! I remember...",
+        "I see what you mean. I had a similar experience...",
+        "That's helpful! I once...",
+        "I agree. I remember when..."
+      ];
+      return {
+        id: generateUniqueMessageId(),
+        nickname: currentUserNickname,
+        content: generatePersonalityResponse(storyPatterns, personality, writingStyle),
+        timestamp: new Date(),
+        type: 'user'
+      };
+    }
+    
+    // Topic-based continuations with memory-aware variety
+    // Avoid overused topics and prefer undiscussed ones
+    const shouldAvoidTopic = (topic: string) => overusedTopics.includes(topic);
+    const shouldPreferTopic = (topic: string) => undiscussedTopics.includes(topic);
+    
+    // Work topic responses (avoid if overused)
+    if (hasWorkTopic && !shouldAvoidTopic('work') && Math.random() < 0.4) {
+      const workResponses = [
+        "Work has been on my mind too lately",
+        "I've been thinking about work-life balance",
+        "What's your work environment like?",
+        "I've been considering a career change",
+        "Work can be so unpredictable sometimes",
+        "I've been learning new skills for work",
+        "What's the most challenging part of your job?",
+        "I've been working on some interesting projects",
+        "Work stress can be overwhelming",
+        "I've been thinking about work goals"
+      ];
+      return {
+        id: generateUniqueMessageId(),
+        nickname: currentUserNickname,
+        content: generatePersonalityResponse(workResponses, personality, writingStyle),
+        timestamp: new Date(),
+        type: 'user'
+      };
+    }
+    
+    // Tech topic responses (avoid if overused)
+    if (hasTechTopic && !shouldAvoidTopic('tech') && Math.random() < 0.4) {
+      const techResponses = [
+        "Technology is evolving so fast these days",
+        "I've been learning about new tech trends",
+        "What's your favorite programming language?",
+        "I've been working on some coding projects",
+        "Tech can be both exciting and overwhelming",
+        "I've been following some interesting tech news",
+        "What do you think about AI developments?",
+        "I've been exploring new software tools",
+        "Tech has changed so much in recent years",
+        "I've been thinking about tech ethics"
+      ];
+      return {
+        id: generateUniqueMessageId(),
+        nickname: currentUserNickname,
+        content: generatePersonalityResponse(techResponses, personality, writingStyle),
+        timestamp: new Date(),
+        type: 'user'
+      };
+    }
+    
+    // Personal topic responses (avoid if overused)
+    if (hasPersonalTopic && !shouldAvoidTopic('personal') && Math.random() < 0.4) {
+      const personalResponses = [
+        "Family relationships can be complex",
+        "I've been thinking about my relationships",
+        "What's your family like?",
+        "I've been working on personal growth",
+        "Friendships require effort to maintain",
+        "I've been reflecting on my values",
+        "What's most important to you in life?",
+        "I've been trying to be more mindful",
+        "Personal growth is a journey",
+        "I've been thinking about my priorities"
+      ];
+      return {
+        id: generateUniqueMessageId(),
+        nickname: currentUserNickname,
+        content: generatePersonalityResponse(personalResponses, personality, writingStyle),
+        timestamp: new Date(),
+        type: 'user'
+      };
+    }
+    
+    // Hobby topic responses (avoid if overused)
+    if (hasHobbyTopic && !shouldAvoidTopic('hobby') && Math.random() < 0.4) {
+      const hobbyResponses = [
+        "I've been getting into new hobbies lately",
+        "What do you do for fun?",
+        "I've been exploring creative outlets",
+        "Hobbies are so important for mental health",
+        "I've been learning new skills",
+        "What's your favorite way to relax?",
+        "I've been trying new activities",
+        "Hobbies can be so therapeutic",
+        "I've been discovering new interests",
+        "What brings you joy?"
+      ];
+      return {
+        id: generateUniqueMessageId(),
+        nickname: currentUserNickname,
+        content: generatePersonalityResponse(hobbyResponses, personality, writingStyle),
+        timestamp: new Date(),
+        type: 'user'
+      };
+    }
+    
+    // Travel topic responses (prefer if undiscussed)
+    if (hasTravelTopic && !shouldAvoidTopic('travel') && Math.random() < 0.4) {
+      const travelResponses = [
+        "I've been thinking about traveling lately",
+        "What's your favorite place you've visited?",
+        "I love exploring new places",
+        "Travel can be so enriching",
+        "I've been planning a trip",
+        "What's your dream destination?",
+        "I've been reminiscing about past trips",
+        "Travel broadens the mind",
+        "I've been looking at travel photos",
+        "What's the most interesting place you've been?"
+      ];
+      return {
+        id: generateUniqueMessageId(),
+        nickname: currentUserNickname,
+        content: generatePersonalityResponse(travelResponses, personality, writingStyle),
+        timestamp: new Date(),
+        type: 'user'
+      };
+    }
+    
+    // Food topic responses (prefer if undiscussed)
+    if (hasFoodTopic && !shouldAvoidTopic('food') && Math.random() < 0.4) {
+      const foodResponses = [
+        "I've been trying new recipes lately",
+        "What's your favorite type of cuisine?",
+        "I love cooking and experimenting",
+        "Food brings people together",
+        "I've been exploring different restaurants",
+        "What's your go-to comfort food?",
+        "I've been learning about different cultures through food",
+        "Cooking can be so therapeutic",
+        "I've been trying to eat healthier",
+        "What's the best meal you've ever had?"
+      ];
+      return {
+        id: generateUniqueMessageId(),
+        nickname: currentUserNickname,
+        content: generatePersonalityResponse(foodResponses, personality, writingStyle),
+        timestamp: new Date(),
+        type: 'user'
+      };
+    }
+    
+    // Weather topic responses (prefer if undiscussed)
+    if (hasWeatherTopic && !shouldAvoidTopic('weather') && Math.random() < 0.4) {
+      const weatherResponses = [
+        "The weather has been so unpredictable lately",
+        "I love this time of year",
+        "Weather affects my mood so much",
+        "I've been enjoying the seasonal changes",
+        "What's your favorite season?",
+        "I've been paying attention to weather patterns",
+        "Weather can be so beautiful",
+        "I've been planning activities based on the weather",
+        "What's the weather like where you are?",
+        "I've been appreciating the natural world more"
+      ];
+      return {
+        id: generateUniqueMessageId(),
+        nickname: currentUserNickname,
+        content: generatePersonalityResponse(weatherResponses, personality, writingStyle),
+        timestamp: new Date(),
+        type: 'user'
+      };
+    }
+    
+    // Health topic responses (prefer if undiscussed)
+    if (hasHealthTopic && !shouldAvoidTopic('health') && Math.random() < 0.4) {
+      const healthResponses = [
+        "I've been focusing on my health lately",
+        "What do you do to stay healthy?",
+        "I've been trying to exercise more",
+        "Health is so important",
+        "I've been learning about nutrition",
+        "What's your favorite way to stay active?",
+        "I've been working on my mental health",
+        "Self-care is so important",
+        "I've been trying to get more sleep",
+        "What's your approach to wellness?"
+      ];
+      return {
+        id: generateUniqueMessageId(),
+        nickname: currentUserNickname,
+        content: generatePersonalityResponse(healthResponses, personality, writingStyle),
+        timestamp: new Date(),
+        type: 'user'
+      };
+    }
+    
+    // Education topic responses (prefer if undiscussed)
+    if (hasEducationTopic && !shouldAvoidTopic('education') && Math.random() < 0.4) {
+      const educationResponses = [
+        "I've been learning so much lately",
+        "What's something new you've learned recently?",
+        "I love the process of learning",
+        "Education opens so many doors",
+        "I've been taking online courses",
+        "What's your favorite subject to study?",
+        "I've been reading a lot",
+        "Learning never stops",
+        "I've been trying to expand my knowledge",
+        "What's the most interesting thing you've studied?"
+      ];
+      return {
+        id: generateUniqueMessageId(),
+        nickname: currentUserNickname,
+        content: generatePersonalityResponse(educationResponses, personality, writingStyle),
+        timestamp: new Date(),
+        type: 'user'
+      };
+    }
+    
+    // Introduce new topics if undiscussed topics are available
+    if (undiscussedTopics.length > 0 && Math.random() < 0.3) {
+      const randomUndiscussedTopic = undiscussedTopics[Math.floor(Math.random() * undiscussedTopics.length)];
+      
+      const newTopicResponses: { [key: string]: string[] } = {
+        travel: [
+          "I've been thinking about traveling lately",
+          "What's your favorite place you've visited?",
+          "I love exploring new places",
+          "Travel can be so enriching"
+        ],
+        food: [
+          "I've been trying new recipes lately",
+          "What's your favorite type of cuisine?",
+          "I love cooking and experimenting",
+          "Food brings people together"
+        ],
+        weather: [
+          "The weather has been so unpredictable lately",
+          "I love this time of year",
+          "Weather affects my mood so much",
+          "I've been enjoying the seasonal changes"
+        ],
+        health: [
+          "I've been focusing on my health lately",
+          "What do you do to stay healthy?",
+          "I've been trying to exercise more",
+          "Health is so important"
+        ],
+        education: [
+          "I've been learning so much lately",
+          "What's something new you've learned recently?",
+          "I love the process of learning",
+          "Education opens so many doors"
+        ]
+      };
+      
+      if (newTopicResponses[randomUndiscussedTopic]) {
+        return {
+          id: generateUniqueMessageId(),
+          nickname: currentUserNickname,
+          content: generatePersonalityResponse(newTopicResponses[randomUndiscussedTopic], personality, writingStyle),
+          timestamp: new Date(),
+          type: 'user'
+        };
+      }
+    }
+    
+    // Observation-based continuations (share thoughts and observations)
+    if (Math.random() < 0.2) {
+      const observationPatterns = [
+        "I've been noticing something interesting lately...",
+        "I had a random thought today...",
+        "I've been observing how people...",
+        "I noticed something curious...",
+        "I've been thinking about patterns...",
+        "I had an interesting realization...",
+        "I've been paying attention to...",
+        "I noticed something that made me think...",
+        "I've been reflecting on...",
+        "I had a thought about..."
+      ];
+      return {
+        id: generateUniqueMessageId(),
+        nickname: currentUserNickname,
+        content: generatePersonalityResponse(observationPatterns, personality, writingStyle),
+        timestamp: new Date(),
+        type: 'user'
+      };
+    }
+    
+    // Topic shift continuations (introduce new topics)
+    if (Math.random() < 0.15) {
+      const topicShifts = [
+        "Speaking of that, I've been thinking about something else...",
+        "That reminds me, I wanted to ask you about...",
+        "On a different note, I've been wondering...",
+        "Changing the subject a bit, I've been thinking...",
+        "That's interesting! By the way, I've been curious about...",
+        "I see what you mean. Speaking of which, I've been...",
+        "That's cool! I also wanted to mention...",
+        "I understand. On another topic, I've been...",
+        "That's helpful! I also wanted to ask...",
+        "I agree. I also wanted to share..."
+      ];
+      return {
+        id: generateUniqueMessageId(),
+        nickname: currentUserNickname,
+        content: generatePersonalityResponse(topicShifts, personality, writingStyle),
+        timestamp: new Date(),
+        type: 'user'
+      };
+    }
+    
+    // Conversation length-based responses
+    if (conversationLength < 3) {
+      const earlyResponses = [
+        "That's really interesting! I'm enjoying our conversation",
+        "I see what you mean. This is fascinating",
+        "Tell me more about that - I'm curious",
+        "That's cool! I love learning new things",
+        "I understand. This is helpful",
+        "That's a good point! I hadn't thought of that",
+        "I see your perspective. That's insightful",
+        "That's fascinating! I'm learning a lot",
+        "I agree with you. This is great",
+        "That's helpful! I appreciate you sharing"
+      ];
+      return {
+        id: generateUniqueMessageId(),
+        nickname: currentUserNickname,
+        content: generatePersonalityResponse(earlyResponses, personality, writingStyle),
+        timestamp: new Date(),
+        type: 'user'
+      };
+    } else if (conversationLength < 8) {
+      const midResponses = [
+        "I've been thinking about what you said earlier",
+        "That reminds me of something we discussed",
+        "I have a question about what you mentioned",
+        "That's a good point! I've been reflecting on that",
+        "I see what you mean. I've been considering that",
+        "That's interesting! I've been thinking about that too",
+        "I understand. I've been processing what you said",
+        "That's helpful! I've been reflecting on our conversation",
+        "I agree. I've been thinking about that perspective",
+        "That's fascinating! I've been considering that angle"
+      ];
+      return {
+        id: generateUniqueMessageId(),
+        nickname: currentUserNickname,
+        content: generatePersonalityResponse(midResponses, personality, writingStyle),
+        timestamp: new Date(),
+        type: 'user'
+      };
+    } else {
+      const deepResponses = [
+        "I've been thinking deeply about what you said",
+        "That reminds me of our earlier conversation about...",
+        "I have a deeper question about what you mentioned",
+        "That's a profound point! I've been reflecting on that",
+        "I see what you mean. I've been contemplating that",
+        "That's insightful! I've been processing that thought",
+        "I understand. I've been meditating on that perspective",
+        "That's helpful! I've been reflecting on our discussion",
+        "I agree. I've been considering that deeply",
+        "That's fascinating! I've been exploring that idea"
+      ];
+      return {
+        id: generateUniqueMessageId(),
+        nickname: currentUserNickname,
+        content: generatePersonalityResponse(deepResponses, personality, writingStyle),
+        timestamp: new Date(),
+        type: 'user'
+      };
+    }
+  }, [generateUniqueMessageId]);
 
   // Generate autonomous private messages from virtual users
   const generateAutonomousPM = useCallback(async () => {
@@ -1992,7 +2834,6 @@ const App: React.FC = () => {
       return;
     }
 
-    simulationDebug.log(`Found ${allVirtualUsers.length} virtual users eligible for autonomous PM generation:`, allVirtualUsers.map(u => u.nickname));
 
     let selectedUser: User | null = null;
 
@@ -2001,10 +2842,16 @@ const App: React.FC = () => {
       // Prioritize the current PM user for follow-up messages
       const currentPMUser = allVirtualUsers.find(u => u.nickname === activeContext.with);
       if (currentPMUser) {
-        const pmProb = currentPMUser.pmProbability ?? 25;
+        let pmProb = currentPMUser.pmProbability ?? 25;
+        
+        // Afterhours Protocol: Increase PM probability during nocturnal hours
+        const afterhoursActive = isAfterhoursProtocol();
+        if (afterhoursActive) {
+          pmProb = Math.min(pmProb * 1.5, 50); // Increase PM probability by 50% during afterhours
+        }
+        
         if (Math.random() < (pmProb / 100)) {
           selectedUser = currentPMUser;
-          simulationDebug.log(`Selected current PM user ${currentPMUser.nickname} for follow-up message`);
         }
       }
     }
@@ -2018,13 +2865,11 @@ const App: React.FC = () => {
       });
 
       if (eligibleUsers.length === 0) {
-        simulationDebug.log('No eligible users for autonomous PM generation');
         return;
       }
 
       // Randomly select from eligible users
       selectedUser = eligibleUsers[Math.floor(Math.random() * eligibleUsers.length)];
-      simulationDebug.log(`Selected new PM user ${selectedUser.nickname} for initial message`);
     }
 
     const randomUser = selectedUser;
@@ -2034,36 +2879,35 @@ const App: React.FC = () => {
     
     for (let i = 0; i < numMessages; i++) {
       try {
-        // Create a dummy message to trigger PM response
-        const dummyMessage: Message = {
-          id: generateUniqueMessageId(),
-          nickname: currentUserNickname,
-          content: "Hello", // Simple trigger message
-          timestamp: new Date(),
-          type: 'user'
-        };
-
         // Create conversation object
         const conversation: PrivateMessageConversation = {
           user: randomUser,
           messages: privateMessages[randomUser.nickname]?.messages || []
         };
 
-        // Generate PM content
-        const pmContent = await generatePrivateMessageResponse(
+        // Generate contextually appropriate trigger message based on conversation history
+        const triggerMessage = generateContextualTriggerMessage(conversation, currentUserNickname);
+        
+        simulationDebug.log(`Using contextual trigger message: "${triggerMessage.content}" for PM from ${randomUser.nickname}`);
+
+        // Generate PM content using the contextual trigger
+        const pmResponse = await generatePrivateMessageResponse(
           conversation,
-          dummyMessage,
+          triggerMessage,
           currentUserNickname,
           aiModel
         );
 
-        if (pmContent) {
+        if (pmResponse) {
+          // Parse the response to remove any username prefix (e.g., "TiiaV: <message>" -> "<message>")
+          const pmContent = parsePMResponse(pmResponse, randomUser.nickname);
+
           const pmMessage: Message = {
             id: generateUniqueMessageId(),
             nickname: randomUser.nickname,
             content: pmContent,
             timestamp: new Date(),
-            type: 'ai'
+            type: 'pm'
           };
 
           // Add to PM conversation
@@ -2083,7 +2927,7 @@ const App: React.FC = () => {
         simulationDebug.error(`Failed to generate PM message ${i + 1} from ${randomUser.nickname}:`, error);
       }
     }
-  }, [activeContext, channels, currentUserNickname, privateMessages, aiModel, addMessageToContext, setUnreadPMUsers, generateUniqueMessageId]);
+  }, [activeContext, channels, currentUserNickname, privateMessages, aiModel, addMessageToContext, setUnreadPMUsers, generateUniqueMessageId, generateContextualTriggerMessage]);
 
   // Refs to avoid circular dependencies in useEffect
   const channelsRef = useRef(channels);
@@ -2098,31 +2942,6 @@ const App: React.FC = () => {
     addMessageToContextRef.current = addMessageToContext;
   }, [addMessageToContext]);
 
-  // Handle IRC Export messages
-  useEffect(() => {
-    if (ircExportStatus.connected) {
-      const ircService = getIRCExportService();
-      if (ircService) {
-        ircService.onMessage((message: IRCExportMessage) => {
-          if (message.type === 'import') {
-            // Add message from IRC to Station V
-            const ircMessage: Message = {
-              id: generateUniqueMessageId(),
-              nickname: message.nickname,
-              content: message.content,
-              timestamp: message.timestamp,
-              type: 'user'
-            };
-            
-            // Add to the active channel if we're in one
-            if (activeContext?.type === 'channel') {
-              addMessageToContext(ircMessage, activeContext);
-            }
-          }
-        });
-      }
-    }
-  }, [ircExportStatus.connected, activeContext, addMessageToContext]);
 
   const handleCommand = (command: string) => {
     // Basic command handling for web app
@@ -2330,7 +3149,7 @@ const App: React.FC = () => {
                 accent: ''
               }]
             },
-            writingStyle: { formality: 'informal' as const, verbosity: 'neutral' as const, humor: 'none' as const, emojiUsage: 'low' as const, punctuation: 'standard' as const }
+            writingStyle: { formality: 'casual' as const, verbosity: 'moderate' as const, humor: 'none' as const, emojiUsage: 'rare' as const, punctuation: 'standard' as const }
           }],
           messages: [],
           topic: '',
@@ -2688,8 +3507,14 @@ const App: React.FC = () => {
     }, activeContext);
   };
 
-  const handleSendMessage = async (content: string) => {
-    notificationDebug.log('handleSendMessage called with content:', content, 'activeContext:', activeContext);
+  // Handle quoting a message
+  const handleQuoteMessage = useCallback((message: Message) => {
+    // This will be handled by the ChatWindow component internally
+    // The quoted message will be passed to handleSendMessage when the user sends their reply
+  }, []);
+
+  const handleSendMessage = async (content: string, quotedMessage?: Message) => {
+    notificationDebug.log('handleSendMessage called with content:', content, 'activeContext:', activeContext, 'quotedMessage:', quotedMessage);
     
     if (content.startsWith('/')) {
       handleCommand(content);
@@ -2718,7 +3543,14 @@ const App: React.FC = () => {
       nickname: currentUserNickname,
       content,
       timestamp: new Date(),
-      type: activeContext?.type === 'pm' ? 'pm' : 'user'
+      type: activeContext?.type === 'pm' ? 'pm' : 'user',
+      quotedMessage: quotedMessage ? {
+        id: quotedMessage.id,
+        nickname: quotedMessage.nickname,
+        content: quotedMessage.content,
+        timestamp: quotedMessage.timestamp,
+        type: quotedMessage.type
+      } : undefined
     };
     
     // If connected to network, send message via network
@@ -2798,30 +3630,78 @@ const App: React.FC = () => {
         }
         
         if (aiResponse) {
-          const aiMessages = aiResponse.split('\n').filter(line => line.includes(':'));
-          for (let index = 0; index < aiMessages.length; index++) {
-            const msgLine = aiMessages[index];
-            const [nickname, ...contentParts] = msgLine.split(':');
-            const content = contentParts.join(':').trim();
-            if (nickname && content && nickname.trim()) {
-              // Show typing indicator for AI response
-              setTyping(nickname.trim(), true);
+          if (activeContext?.type === 'pm') {
+            // For PM responses, parse the response to remove any username prefix
+            const aiNickname = activeContext.with;
+            const content = parsePMResponse(aiResponse, aiNickname);
+            
+            if (content) {
               
-              // Simulate typing delay for each AI response message
-              simulationDebug.debug(`Simulating typing delay for AI response: "${content}"`);
-              await simulateTypingDelay(content.length, typingDelayConfig);
+              // Show typing indicator for AI response
+              console.log(`[Typing Debug] PM Response - Setting typing for ${aiNickname}, content length: ${content.length}`);
+              console.log(`[Typing Debug] PM Response - Typing delay config:`, typingDelayConfig);
+              setTyping(aiNickname, true);
+              
+              // Ensure minimum delay for typing indicator visibility
+              await new Promise(resolve => setTimeout(resolve, 200));
+              
+              // Simulate typing delay for AI response
+              simulationDebug.debug(`Simulating typing delay for PM response: "${content}"`);
+              if (typingDelayConfig.enabled) {
+                await simulateTypingDelay(content.length, typingDelayConfig);
+              } else {
+                // If typing delay is disabled, still wait a bit to show the indicator
+                await new Promise(resolve => setTimeout(resolve, 500));
+              }
               
               // Hide typing indicator
-              setTyping(nickname.trim(), false);
+              console.log(`[Typing Debug] PM Response - Removing typing for ${aiNickname}`);
+              setTyping(aiNickname, false);
               
               const aiMessage: Message = {
                 id: generateUniqueMessageId(),
-                nickname: nickname.trim(),
+                nickname: aiNickname,
                 content: content,
                 timestamp: new Date(),
-                type: activeContext?.type === 'pm' ? 'pm' : 'ai'
+                type: 'pm'
               };
               addMessageToContext(aiMessage, activeContext);
+            }
+          } else {
+            // For channel responses, parse the traditional "nickname: message" format
+            const aiMessages = aiResponse.split('\n').filter(line => line.includes(':'));
+            for (let index = 0; index < aiMessages.length; index++) {
+              const msgLine = aiMessages[index];
+              const [nickname, ...contentParts] = msgLine.split(':');
+              const content = contentParts.join(':').trim();
+              if (nickname && content && nickname.trim()) {
+                // Show typing indicator for AI response
+                setTyping(nickname.trim(), true);
+                
+                // Ensure minimum delay for typing indicator visibility
+                await new Promise(resolve => setTimeout(resolve, 200));
+                
+                // Simulate typing delay for each AI response message
+                simulationDebug.debug(`Simulating typing delay for AI response: "${content}"`);
+                if (typingDelayConfig.enabled) {
+                  await simulateTypingDelay(content.length, typingDelayConfig);
+                } else {
+                  // If typing delay is disabled, still wait a bit to show the indicator
+                  await new Promise(resolve => setTimeout(resolve, 500));
+                }
+                
+                // Hide typing indicator
+                setTyping(nickname.trim(), false);
+                
+                const aiMessage: Message = {
+                  id: generateUniqueMessageId(),
+                  nickname: nickname.trim(),
+                  content: content,
+                  timestamp: new Date(),
+                  type: 'ai'
+                };
+                addMessageToContext(aiMessage, activeContext);
+              }
             }
           }
         }
@@ -2890,9 +3770,17 @@ The response must be a single line in the format: "nickname: greeting message"
             // Show typing indicator for greeting
             setTyping(nickname.trim(), true);
             
+            // Ensure minimum delay for typing indicator visibility
+            await new Promise(resolve => setTimeout(resolve, 200));
+            
             // Simulate typing delay for greeting messages
             simulationDebug.debug(`Simulating typing delay for greeting: "${content}"`);
-            await simulateTypingDelay(content.length, typingDelayConfig);
+            if (typingDelayConfig.enabled) {
+              await simulateTypingDelay(content.length, typingDelayConfig);
+            } else {
+              // If typing delay is disabled, still wait a bit to show the indicator
+              await new Promise(resolve => setTimeout(resolve, 500));
+            }
             
             // Hide typing indicator
             setTyping(nickname.trim(), false);
@@ -2915,8 +3803,6 @@ The response must be a single line in the format: "nickname: greeting message"
 
   // Enhanced user management with dynamic channel joining
   const handleUsersChange = useCallback((newUsers: User[]) => {
-    userListDebug.log(`handleUsersChange called with ${newUsers.length} users:`, newUsers.map(u => u.nickname));
-    
     const oldUsers = virtualUsers;
     const addedUsers = newUsers.filter(newUser => 
       !oldUsers.some(oldUser => oldUser.nickname === newUser.nickname)
@@ -2928,10 +3814,6 @@ The response must be a single line in the format: "nickname: greeting message"
       oldUsers.some(oldUser => oldUser.nickname === newUser.nickname) &&
       !oldUsers.some(oldUser => oldUser.nickname === newUser.nickname && JSON.stringify(oldUser) === JSON.stringify(newUser))
     );
-    
-    userListDebug.log(`Added users:`, addedUsers.map(u => u.nickname));
-    userListDebug.log(`Removed users:`, removedUsers.map(u => u.nickname));
-    userListDebug.log(`Updated users:`, updatedUsers.map(u => u.nickname));
     
     // Update virtual users
     setVirtualUsers(newUsers);
@@ -3043,12 +3925,6 @@ The response must be a single line in the format: "nickname: greeting message"
     
     // Handle updated users - update them in all channels where they exist
     if (updatedUsers.length > 0) {
-      userListDebug.log(`Updating ${updatedUsers.length} users in channels:`, updatedUsers.map(u => ({
-        nickname: u.nickname,
-        profilePicture: u.profilePicture,
-        hasProfilePicture: !!u.profilePicture
-      })));
-      
       setChannels(prevChannels => 
         prevChannels.map(channel => {
           const updatedChannel = { ...channel };
@@ -3056,9 +3932,6 @@ The response must be a single line in the format: "nickname: greeting message"
           // Update users in this channel
           updatedChannel.users = updatedChannel.users.map(channelUser => {
             const updatedUser = updatedUsers.find(u => u.nickname === channelUser.nickname);
-            if (updatedUser) {
-              userListDebug.log(`Updating user ${channelUser.nickname} in channel ${channel.name} with profile picture:`, updatedUser.profilePicture);
-            }
             return updatedUser || channelUser;
           });
           
@@ -3068,37 +3941,75 @@ The response must be a single line in the format: "nickname: greeting message"
     }
   }, [virtualUsers, activeContext, channels, addMessageToContext, generateGreetingForNewUser, aiModel]);
 
-  // Function to adjust simulation frequency based on time of day
+  // Afterhours Protocol detection
+  const isAfterhoursProtocol = useCallback((): boolean => {
+    const now = new Date();
+    const hour = now.getHours();
+    const dayOfWeek = now.getDay(); // 0 = Sunday, 6 = Saturday
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+    
+    // Afterhours Protocol: Invert weekend activity patterns for nocturnal users
+    // Weekends: More active during late night/early morning hours (22:00-06:00)
+    // Weekdays: More active during traditional night hours (23:00-05:00)
+    if (isWeekend) {
+      // Weekend nocturnal pattern: Peak activity 22:00-06:00
+      return hour >= 22 || hour < 6;
+    } else {
+      // Weekday nocturnal pattern: Peak activity 23:00-05:00
+      return hour >= 23 || hour < 5;
+    }
+  }, []);
+
+  // Function to adjust simulation frequency based on time of day and Afterhours Protocol
   const getTimeAdjustedInterval = useCallback((baseInterval: number): number => {
     const now = new Date();
     const hour = now.getHours();
     const dayOfWeek = now.getDay();
     const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+    const afterhoursActive = isAfterhoursProtocol();
     
     let multiplier = 1.0;
     
-    if (hour >= 6 && hour < 12) {
-      // Morning: Slightly more active
-      multiplier = isWeekend ? 0.9 : 0.8; // Less aggressive than before
-    } else if (hour >= 12 && hour < 17) {
-      // Afternoon: Normal activity
-      multiplier = isWeekend ? 0.95 : 1.0;
-    } else if (hour >= 17 && hour < 21) {
-      // Evening: Peak social time - but not too aggressive
-      multiplier = 0.7; // Less aggressive than before
-    } else if (hour >= 21 && hour < 24) {
-      // Late evening: Winding down
-      multiplier = isWeekend ? 0.9 : 1.3;
+    if (afterhoursActive) {
+      // Afterhours Protocol: Inverted activity patterns for nocturnal users
+      if (hour >= 22 || hour < 6) {
+        // Peak afterhours activity: Much more frequent simulation
+        multiplier = isWeekend ? 0.4 : 0.5; // Very active during nocturnal peak
+      } else if (hour >= 6 && hour < 12) {
+        // Afterhours wind-down: Still active but slowing
+        multiplier = 0.8;
+      } else if (hour >= 12 && hour < 17) {
+        // Afterhours quiet: Minimal activity
+        multiplier = 2.0;
+      } else if (hour >= 17 && hour < 22) {
+        // Afterhours awakening: Gradually increasing
+        multiplier = 1.2;
+      }
     } else {
-      // Late night/early morning: Very quiet
-      multiplier = 2.5; // Even slower than before
+      // Standard time patterns for non-nocturnal users
+      if (hour >= 6 && hour < 12) {
+        // Morning: Slightly more active
+        multiplier = isWeekend ? 0.9 : 0.8; // Less aggressive than before
+      } else if (hour >= 12 && hour < 17) {
+        // Afternoon: Normal activity
+        multiplier = isWeekend ? 0.95 : 1.0;
+      } else if (hour >= 17 && hour < 21) {
+        // Evening: Peak social time - but not too aggressive
+        multiplier = 0.7; // Less aggressive than before
+      } else if (hour >= 21 && hour < 24) {
+        // Late evening: Winding down
+        multiplier = isWeekend ? 0.9 : 1.3;
+      } else {
+        // Late night/early morning: Very quiet
+        multiplier = 2.5; // Even slower than before
+      }
     }
     
     const adjustedInterval = Math.round(baseInterval * multiplier);
-    timeDebug.log(` Hour: ${hour}, Weekend: ${isWeekend}, Multiplier: ${multiplier.toFixed(2)}, Adjusted interval: ${adjustedInterval}ms`);
+    timeDebug.log(` Hour: ${hour}, Weekend: ${isWeekend}, Afterhours: ${afterhoursActive}, Multiplier: ${multiplier.toFixed(2)}, Adjusted interval: ${adjustedInterval}ms`);
     
     return adjustedInterval;
-  }, []);
+  }, [isAfterhoursProtocol]);
 
   // Function to occasionally reset conversations to prevent staleness
   const shouldResetConversation = useCallback((channelName: string) => {
@@ -3276,9 +4187,17 @@ The response must be a single line in the format: "nickname: greeting message"
             // Regular message - show typing indicator
           setTyping(nickname.trim(), true);
           
+          // Ensure minimum delay for typing indicator visibility
+          await new Promise(resolve => setTimeout(resolve, 200));
+          
           // Simulate typing delay before adding the message
           simulationDebug.debug(`Simulating typing delay for message: "${content}"`);
-          await simulateTypingDelay(content.length, typingDelayConfig);
+          if (typingDelayConfig.enabled) {
+            await simulateTypingDelay(content.length, typingDelayConfig);
+          } else {
+            // If typing delay is disabled, still wait a bit to show the indicator
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
           
           // Hide typing indicator
           setTyping(nickname.trim(), false);
@@ -3376,8 +4295,16 @@ The response must be a single line in the format: "nickname: greeting message"
                   // Regular message - show typing indicator
                   setTyping(nickname.trim(), true);
                   
+                  // Ensure minimum delay for typing indicator visibility
+                  await new Promise(resolve => setTimeout(resolve, 200));
+                  
                   // Simulate typing delay
-                  await simulateTypingDelay(content.length, typingDelayConfig);
+                  if (typingDelayConfig.enabled) {
+                    await simulateTypingDelay(content.length, typingDelayConfig);
+                  } else {
+                    // If typing delay is disabled, still wait a bit to show the indicator
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                  }
                   
                   // Hide typing indicator
                   setTyping(nickname.trim(), false);
@@ -3434,9 +4361,17 @@ The response must be a single line in the format: "nickname: greeting message"
                   // Regular message - show typing indicator for burst message
                   setTyping(nickname.trim(), true);
                   
+                  // Ensure minimum delay for typing indicator visibility
+                  await new Promise(resolve => setTimeout(resolve, 200));
+                  
                   // Simulate typing delay for burst message too
                   simulationDebug.debug(`Simulating typing delay for burst message: "${content}"`);
-                  await simulateTypingDelay(content.length, typingDelayConfig);
+                  if (typingDelayConfig.enabled) {
+                    await simulateTypingDelay(content.length, typingDelayConfig);
+                  } else {
+                    // If typing delay is disabled, still wait a bit to show the indicator
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                  }
                   
                   // Hide typing indicator
                   setTyping(nickname.trim(), false);
@@ -3509,14 +4444,20 @@ The response must be a single line in the format: "nickname: greeting message"
     
     let pmChance = 0.05; // Base 5% chance (reduced from 10%)
     
+    // Afterhours Protocol: Increase PM activity during nocturnal hours
+    const afterhoursActive = isAfterhoursProtocol();
+    if (afterhoursActive) {
+      pmChance = 0.08; // 8% base chance during afterhours
+    }
+    
     if (isInPM && currentPMUser) {
       // Higher chance for follow-up PMs when already in PM conversation
-      pmChance = 0.3; // 30% chance for follow-up PMs (reduced from 60%)
-      simulationDebug.log(`Higher PM chance (30%) for ongoing conversation with ${currentPMUser}`);
+      pmChance = afterhoursActive ? 0.4 : 0.3; // 40% during afterhours, 30% normally
+      simulationDebug.log(`Higher PM chance (${pmChance * 100}%) for ongoing conversation with ${currentPMUser}`);
     } else if (hasUsersWithPMProbability) {
       // Lower chance for initial PMs
-      pmChance = 0.1; // 10% chance for initial PMs (reduced from 20%)
-      simulationDebug.log(`Standard PM chance (10%) for initial PMs`);
+      pmChance = afterhoursActive ? 0.08 : 0.1; // 8% during afterhours, 10% normally
+      simulationDebug.log(`Standard PM chance (${pmChance * 100}%) for initial PMs`);
     }
     
     if (hasUsersWithPMProbability && Math.random() < pmChance) {
@@ -3598,9 +4539,6 @@ The response must be a single line in the format: "nickname: greeting message"
   const activeChannel = useMemo(() => {
     if (activeContext?.type === 'channel') {
       const channel = channels.find(c => c.name === activeContext.name);
-      userListDebug.log(`Finding activeChannel for context: ${activeContext.name}`);
-      userListDebug.log(`Available channels:`, channels.map(c => c.name));
-      userListDebug.log(`Found channel:`, channel ? `${channel.name} with ${channel.users.length} users` : 'null');
       return channel;
     }
     return undefined;
@@ -3655,8 +4593,6 @@ The response must be a single line in the format: "nickname: greeting message"
       // Combine channel users with network users
       let allUsers = [...activeChannel.users, ...convertedNetworkUsers];
       
-      userListDebug.log(`Combined users before filtering: ${allUsers.length}`);
-      
       // If network is connected, exclude the default human user (currentUserNickname) 
       // but only if it's not a network user (to avoid filtering out the actual network user)
       if (isNetworkConnected) {
@@ -3668,7 +4604,6 @@ The response must be a single line in the format: "nickname: greeting message"
           // Filter out the default human user
           return user.nickname !== currentUserNickname;
         });
-        userListDebug.log(`After network filtering: ${allUsers.length}`);
       }
       
       // Deduplicate users by nickname to prevent React key collisions
@@ -3678,16 +4613,6 @@ The response must be a single line in the format: "nickname: greeting message"
         }
         return acc;
       }, [] as User[]);
-      
-      userListDebug.log(`Final unique users: ${uniqueUsers.length}`);
-      userListDebug.log(`Final users:`, uniqueUsers.map(u => u.nickname));
-      
-      // Debug final profile pictures
-      userListDebug.log(`Final usersInContext profile pictures:`, uniqueUsers.map(u => ({
-        nickname: u.nickname,
-        profilePicture: u.profilePicture,
-        hasProfilePicture: !!u.profilePicture
-      })));
       
       // Only log if there are issues
       if (allUsers.length !== uniqueUsers.length) {
@@ -3835,10 +4760,10 @@ The response must be a single line in the format: "nickname: greeting message"
             languages: [{ language: 'English', fluency: 'native' as const, accent: 'neutral' }]
           },
           writingStyle: {
-            formality: 'informal' as const,
-            verbosity: 'neutral' as const,
+            formality: 'casual' as const,
+            verbosity: 'moderate' as const,
             humor: 'none' as const,
-            emojiUsage: 'low' as const,
+            emojiUsage: 'rare' as const,
             punctuation: 'standard' as const
           },
           userType: 'network' as const
@@ -4085,11 +5010,6 @@ The response must be a single line in the format: "nickname: greeting message"
           onChannelsChange={setChannels} 
           currentUsers={virtualUsers}
           onUsersChange={handleUsersChange}
-          ircExportConfig={ircExportConfig}
-          ircExportStatus={ircExportStatus}
-          onIrcExportConfigChange={handleIrcExportConfigChange}
-          onIrcExportConnect={handleIrcExportConnect}
-          onIrcExportDisconnect={handleIrcExportDisconnect}
         />
       )}
       {isChatLogOpen && (
@@ -4243,6 +5163,9 @@ The response must be a single line in the format: "nickname: greeting message"
               users={usersInContext}
               onClose={handleCloseWindow}
               showCloseButton={true}
+              typingIndicatorMode={typingIndicatorConfig.mode}
+              isPrivateMessage={activeContext?.type === 'pm'}
+              onQuoteMessage={handleQuoteMessage}
             />
           </main>
 

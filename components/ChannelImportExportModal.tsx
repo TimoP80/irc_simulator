@@ -35,10 +35,8 @@ export const ChannelImportExportModal: React.FC<ChannelImportExportModalProps> =
 
   const handleExportCSV = () => {
     try {
-      console.log('Exporting channels CSV, count:', channels.length);
       const csvContent = exportChannelsToCSV(channels);
       downloadFile(csvContent, `station-v-channels-${new Date().toISOString().split('T')[0]}.csv`, 'text/csv');
-      console.log('CSV export completed');
     } catch (error) {
       console.error('Error exporting CSV:', error);
       alert('Error exporting CSV: ' + (error instanceof Error ? error.message : 'Unknown error'));
@@ -47,10 +45,8 @@ export const ChannelImportExportModal: React.FC<ChannelImportExportModalProps> =
 
   const handleExportJSON = () => {
     try {
-      console.log('Exporting channels JSON, count:', channels.length);
       const jsonContent = exportChannelsToJSON(channels);
       downloadFile(jsonContent, `station-v-channels-${new Date().toISOString().split('T')[0]}.json`, 'application/json');
-      console.log('JSON export completed');
     } catch (error) {
       console.error('Error exporting JSON:', error);
       alert('Error exporting JSON: ' + (error instanceof Error ? error.message : 'Unknown error'));

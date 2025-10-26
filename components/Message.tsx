@@ -28,7 +28,7 @@ const getUserColor = (nickname: string, currentUserNickname: string) => {
 };
 
 export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickname, user }) => {
-  const { nickname, content, timestamp, type, command, images, links, botCommand } = message;
+  const { nickname, content, timestamp, type, command, images, links, botCommand, quotedMessage } = message;
   const time = new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   
   // Check if this is a bot message
@@ -225,6 +225,33 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
     });
   };
 
+  // Helper function to render quoted message (Discord-style)
+  const renderQuotedMessage = () => {
+    if (!quotedMessage) return null;
+    
+    const quotedTime = new Date(quotedMessage.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const quotedNicknameColor = getUserColor(quotedMessage.nickname, currentUserNickname);
+    
+    return (
+      <div className="mb-2 ml-4 border-l-2 border-gray-500 pl-3 bg-gray-800/30 rounded-r-md">
+        <div className="flex items-center gap-2 text-xs text-gray-400 mb-1">
+          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+          </svg>
+          <span className={`${quotedNicknameColor} font-semibold`}>{quotedMessage.nickname}</span>
+          <span className="text-gray-500">•</span>
+          <span>{quotedTime}</span>
+        </div>
+        <div className="text-sm text-gray-300 break-words">
+          {quotedMessage.content.length > 200 
+            ? `${quotedMessage.content.substring(0, 200)}...` 
+            : quotedMessage.content
+          }
+        </div>
+      </div>
+    );
+  };
+
   if (type === 'system') {
     return (
       <div className="flex items-center gap-2 lg:gap-4 text-xs lg:text-sm">
@@ -242,6 +269,8 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
       <div className="flex items-start gap-2 lg:gap-4 text-xs lg:text-sm">
         <span className="text-gray-600 font-semibold flex-shrink-0 w-12 lg:w-14 text-right">{time}</span>
         <div className="flex-1">
+          {/* Render quoted message if present */}
+          {renderQuotedMessage()}
           <span className="text-gray-500 italic break-words">
             * <span className={`${nicknameColor} font-bold`}>{nickname}</span> <span className="text-gray-200">{renderContent(content)}</span>
           </span>
@@ -337,6 +366,8 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
               </span>
             )}
           </div>
+          {/* Render quoted message if present */}
+          {renderQuotedMessage()}
           <div className="text-gray-200 break-words whitespace-pre-wrap bg-gray-800 p-2 rounded border-l-2 border-amber-500">
             {renderContent(content)}
           </div>
@@ -374,6 +405,8 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
           )}
           <span className={`${nicknameColor} font-bold`}>{nickname}</span>
         </div>
+        {/* Render quoted message if present */}
+        {renderQuotedMessage()}
         <div className="text-gray-200 break-words whitespace-pre-wrap">
           {renderContent(content)}
         </div>

@@ -1,10 +1,10 @@
 # Station V - Virtual IRC Simulator
 
-**Version 1.18.0** - AI-powered chat simulation with enhanced personality attributes, multilingual support, network capabilities, and AI operator system.
+**Version 1.19.0** - AI-powered chat simulation with Discord-style quoting, enhanced AI memory system, multilingual support, network capabilities, and AI operator system.
 
 ## Overview
 
-Station V is a web application that simulates a classic IRC chat environment where you're the only human user. Every other user, message, and interaction is generated in real-time by Google's Gemini AI, creating a living digital terrarium of AI personalities.
+Station V is a web application that simulates a classic IRC chat environment where you're the only human user. Every other user, message, and interaction is generated in real-time by Google's Gemini AI, creating a living digital terrarium of AI personalities with realistic relationships and memory.
 
 ## Quick Start
 
@@ -31,16 +31,32 @@ Station V is a web application that simulates a classic IRC chat environment whe
    # Windows users having issues with concurrently
    npm run dev:full:win
    ```
-6. **Open** `http://localhost:5173/` (or the port shown in terminal) in your browser
+6. **Open** `http://localhost:3000/` (or the port shown in terminal) in your browser
 
 ## Key Features
 
 ### 🤖 AI-Powered Simulation
 - **Fully AI-driven world** - Every user besides you is an AI agent with unique personalities
 - **Real-time conversations** - AI users chat autonomously and respond to your messages
+- **Enhanced AI Memory** - Virtual users remember relationships and interactions across channels
 - **Advanced personalities** - Detailed language skills, writing styles, and cultural traits
 - **Enhanced personality attributes** - 7 formality levels, 7 verbosity levels, 9 humor styles, 7 emoji usage patterns, 7 punctuation styles
 - **Multilingual support** - AI users can communicate in multiple languages
+
+### 💬 Discord-Style Quoting System
+- **Message Quoting** - Reply to any message with Discord-style quote rendering
+- **Interactive Controls** - Hover-to-show reply buttons on all messages
+- **Quote Preview** - See quoted message preview before sending your reply
+- **Cross-User Support** - Both virtual and human users can quote messages
+- **Network Compatibility** - Full quote support in both local and network modes
+
+### 🧠 AI Memory & Relationships
+- **Relationship Tracking** - AI users remember their relationships with you across channels
+- **5-Level Progression** - Relationships evolve from stranger → acquaintance → friendly → close → enemy
+- **Channel Memory** - AI remembers which channels you've interacted in together
+- **Topic Memory** - Tracks shared interests and conversation topics
+- **Sentiment Analysis** - AI analyzes interaction sentiment for realistic relationship building
+- **Memory Decay** - Relationships naturally cool down after periods of inactivity
 
 ### 🎭 User Management
 - **Create AI personalities** - Detailed customization with language skills and writing styles
@@ -121,6 +137,27 @@ Station V offers unprecedented control over AI personality traits with 7 distinc
 - **Artistic** - Creative punctuation patterns
 - **Experimental** - Unconventional punctuation use
 
+### 💬 Discord-Style Quoting System
+- **Reply to Messages** - Click the "Reply" button that appears on hover over any message
+- **Quote Preview** - See a preview of the quoted message above your input field
+- **Remove Quotes** - Click the X button to remove a quote before sending
+- **Cross-User Support** - Both virtual users and human users can quote messages
+- **Network Compatibility** - Quote functionality works in both local and network modes
+- **Visual Design** - Beautiful Discord-style quote rendering with left border and user information
+
+### 🧠 AI Memory & Relationship System
+- **Relationship Progression** - AI users build relationships with you over time:
+  - **Stranger** - First-time interactions
+  - **Acquaintance** - After 5+ interactions
+  - **Friendly** - After 20+ interactions over multiple days
+  - **Close** - After 50+ interactions with shared topics
+  - **Enemy** - Rare, based on negative sentiment patterns
+- **Channel Memory** - AI remembers which channels you've interacted in together
+- **Topic Tracking** - AI tracks shared interests like programming, gaming, music, etc.
+- **Sentiment Analysis** - AI analyzes whether interactions are positive, neutral, or negative
+- **Memory Decay** - Relationships cool down after 7+ days of inactivity
+- **Contextual Responses** - AI users reference past conversations and shared experiences
+
 ### 📊 Data Management
 - **Chat log database** - Complete message history with search and filtering
 - **Export options** - HTML, JSON, and CSV export formats
@@ -166,7 +203,7 @@ npm run preview      # Preview production build
 #### **Development Server Options**
 ```bash
 # Single service development
-npm run dev          # Start Vite client only (http://localhost:5173)
+npm run dev          # Start Vite client only (http://localhost:3000)
 npm run dev:server   # Start WebSocket server only (ws://localhost:8080)
 npm run dev:client   # Alias for 'npm run dev'
 
@@ -198,7 +235,7 @@ npm start            # Alias for dev:full
 
 # Individual services
 npm run dev:server   # WebSocket server only (ws://localhost:8080)
-npm run dev:client   # Web client only (http://localhost:5173)
+npm run dev:client   # Web client only (http://localhost:3000)
 
 # Windows alternatives if concurrently fails
 npm run dev:full:win # Batch file launcher
@@ -216,14 +253,14 @@ npm run dev:full:ps  # PowerShell launcher
 #### **Single-User Development** (Most Common)
 ```bash
 npm run dev          # Start Vite client only
-# Open http://localhost:5173 in browser
+# Open http://localhost:3000 in browser
 # Perfect for: UI development, AI personality testing, single-user features
 ```
 
 #### **Multi-User Development** (Network Features)
 ```bash
 npm run dev:full     # Start both server and client
-# Open http://localhost:5173 in browser
+# Open http://localhost:3000 in browser
 # Perfect for: Network features, multi-user testing, WebSocket development
 ```
 
@@ -301,7 +338,7 @@ For developers using Cursor AI to improve and enhance the codebase:
 
 **Port Already in Use**:
 - **Port 8080**: WebSocket server port conflict
-- **Port 5173**: Vite development server port conflict
+- **Port 3000**: Vite development server port conflict
 - **Solutions**: 
   - Kill existing processes using the ports
   - Vite will automatically try alternative ports (3000, 3001, 3002, etc.)

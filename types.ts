@@ -29,12 +29,41 @@ export interface User {
   botCommands?: string[]; // Available bot commands
   botDescription?: string; // Description of what the bot does
   botCapabilities?: string[]; // What the bot can do (image generation, weather, etc.)
+  // Enhanced AI memory system
+  relationshipMemory?: UserRelationshipMemory; // Track relationships with other users
 }
 
 export type MessageType = 'system' | 'user' | 'ai' | 'pm' | 'action' | 'notice' | 'topic' | 'kick' | 'ban' | 'join' | 'part' | 'quit' | 'bot';
 
 // Bot command types
 export type BotCommandType = 'image' | 'weather' | 'time' | 'info' | 'help' | 'quote' | 'joke' | 'fact' | 'translate' | 'calc' | 'search';
+
+// Enhanced AI memory system interfaces
+export interface UserRelationshipMemory {
+  relationships: Record<string, UserRelationship>; // Key: other user's nickname
+  lastUpdated: Date;
+}
+
+export interface UserRelationship {
+  nickname: string; // The other user's nickname
+  relationshipLevel: 'stranger' | 'acquaintance' | 'friendly' | 'close' | 'enemy';
+  sharedChannels: string[]; // Channels where they've interacted
+  interactionCount: number; // Total number of interactions
+  lastInteraction: Date; // When they last interacted
+  firstMet: Date; // When they first met
+  sharedTopics: string[]; // Topics they've discussed together
+  interactionHistory: InteractionRecord[]; // Recent interaction records
+  personalityNotes?: string; // AI's notes about this user's personality
+  relationshipNotes?: string; // AI's notes about the relationship dynamic
+}
+
+export interface InteractionRecord {
+  timestamp: Date;
+  channel: string;
+  interactionType: 'message_exchange' | 'topic_discussion' | 'reaction' | 'quote' | 'pm';
+  context: string; // Brief context of the interaction
+  sentiment?: 'positive' | 'neutral' | 'negative'; // How the AI perceived the interaction
+}
 
 export interface Message {
   id: number;
@@ -49,6 +78,14 @@ export interface Message {
   // Bot-specific message properties
   botCommand?: BotCommandType; // Type of bot command that generated this message
   botResponse?: any; // Bot response data (image URL, weather data, etc.)
+  // Quote/reply functionality
+  quotedMessage?: {
+    id: number;
+    nickname: string;
+    content: string;
+    timestamp: Date;
+    type: MessageType;
+  }; // Reference to the message being quoted/replied to
 }
 
 export interface Channel {
@@ -84,6 +121,10 @@ export interface AppConfig {
     enabled: boolean;
     baseDelay: number; // Base delay in milliseconds
     maxDelay: number; // Maximum delay in milliseconds
+  };
+  // Typing indicator configuration
+  typingIndicator: {
+    mode: 'all' | 'private_only' | 'none'; // Show in all windows, only private messages, or never
   };
   // Store full user objects for proper persistence of language skills and writing styles
   userObjects?: User[];

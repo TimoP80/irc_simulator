@@ -10,7 +10,7 @@ start "Station V Client" cmd /k "npm run dev"
 echo.
 echo Both servers are starting in separate windows.
 echo WebSocket server: http://localhost:8080
-echo Web client: http://localhost:5173
+echo Web client: http://localhost:3000
 echo.
 echo Press any key to exit this launcher...
 pause

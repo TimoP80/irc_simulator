@@ -1,5 +1,5 @@
 import type { AppConfig, User, Channel } from '../types';
-import { DEFAULT_NICKNAME, DEFAULT_VIRTUAL_USERS, DEFAULT_CHANNELS, DEFAULT_TYPING_DELAY } from '../constants';
+import { DEFAULT_NICKNAME, DEFAULT_VIRTUAL_USERS, DEFAULT_CHANNELS, DEFAULT_TYPING_DELAY, DEFAULT_TYPING_INDICATOR } from '../constants';
 
 const CONFIG_STORAGE_KEY = 'gemini-irc-simulator-config';
 const CHANNEL_LOGS_STORAGE_KEY = 'station-v-channel-logs';
@@ -190,10 +190,10 @@ const parseVirtualUsers = (usersString: string): User[] => {
                     }]
                 },
                 writingStyle: {
-                    formality: 'informal' as const,
-                    verbosity: 'neutral' as const,
+                    formality: 'casual' as const,
+                    verbosity: 'moderate' as const,
                     humor: 'none' as const,
-                    emojiUsage: 'low' as const,
+                    emojiUsage: 'rare' as const,
                     punctuation: 'standard' as const
                 }
             };
@@ -250,7 +250,7 @@ const parseChannels = (channelsString: string, allVirtualUsers: User[], currentU
                                 accent: ''
                             }]
                         },
-                        writingStyle: { formality: 'informal' as const, verbosity: 'neutral' as const, humor: 'none' as const, emojiUsage: 'low' as const, punctuation: 'standard' as const }
+                        writingStyle: { formality: 'casual' as const, verbosity: 'moderate' as const, humor: 'none' as const, emojiUsage: 'rare' as const, punctuation: 'standard' as const }
                     }
                 ],
                 messages: [
@@ -291,7 +291,7 @@ export const initializeStateFromConfig = (config: AppConfig) => {
                             accent: ''
                         }]
                     },
-                    writingStyle: { formality: 'informal' as const, verbosity: 'neutral' as const, humor: 'none' as const, emojiUsage: 'low' as const, punctuation: 'standard' as const }
+                    writingStyle: { formality: 'casual' as const, verbosity: 'moderate' as const, humor: 'none' as const, emojiUsage: 'rare' as const, punctuation: 'standard' as const }
                 } : user
             )
         }));
@@ -314,7 +314,7 @@ export const initializeStateFromConfig = (config: AppConfig) => {
                             accent: ''
                         }]
                     },
-                    writingStyle: { formality: 'informal' as const, verbosity: 'neutral' as const, humor: 'none' as const, emojiUsage: 'low' as const, punctuation: 'standard' as const }
+                    writingStyle: { formality: 'casual' as const, verbosity: 'moderate' as const, humor: 'none' as const, emojiUsage: 'rare' as const, punctuation: 'standard' as const }
                 },
                 ...c.users.filter(u => u.nickname !== DEFAULT_NICKNAME) // Keep original channel users, just update current user
             ]
@@ -324,8 +324,9 @@ export const initializeStateFromConfig = (config: AppConfig) => {
     const simulationSpeed = config.simulationSpeed || 'normal';
     const aiModel = config.aiModel || 'gemini-2.5-flash';
     const typingDelay = config.typingDelay || DEFAULT_TYPING_DELAY;
+    const typingIndicator = config.typingIndicator || DEFAULT_TYPING_INDICATOR;
 
-    return { nickname, virtualUsers, channels, simulationSpeed, aiModel, typingDelay };
+    return { nickname, virtualUsers, channels, simulationSpeed, aiModel, typingDelay, typingIndicator };
 };
 
 /**
@@ -544,13 +545,16 @@ export const simulateTypingDelay = async (
     return Promise.resolve();
   }
   
-  // Calculate delay based on message length (longer messages take more time to type)
-  const lengthFactor = Math.min(messageLength / 100, 3); // Cap at 3x for very long messages
-  const randomFactor = 0.5 + Math.random() * 1.5; // Random factor between 0.5 and 2.0
+  // Calculate delay based on message length with more realistic scaling
+  // For very long messages, use logarithmic scaling to prevent excessive delays
+  const lengthFactor = Math.min(messageLength / 50, 8); // More aggressive scaling, cap at 8x
+  const randomFactor = 0.3 + Math.random() * 1.4; // Random factor between 0.3 and 1.7
   
-  // Calculate final delay: base + (length factor * random factor)
+  // Calculate final delay: base + (length factor * random factor * scaling factor)
+  // Use a scaling factor that increases with message length for more realistic typing
+  const scalingFactor = messageLength > 200 ? 800 : 500; // Higher scaling for longer messages
   const calculatedDelay = Math.min(
-    typingConfig.baseDelay + (lengthFactor * 500 * randomFactor),
+    typingConfig.baseDelay + (lengthFactor * scalingFactor * randomFactor),
     typingConfig.maxDelay
   );
   

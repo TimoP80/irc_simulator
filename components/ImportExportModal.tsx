@@ -39,10 +39,8 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
 
   const handleExportCSV = () => {
     try {
-      console.log('Exporting users CSV, count:', users.length);
       const csvContent = exportUsersToCSV(users);
       downloadFile(csvContent, `station-v-users-${new Date().toISOString().split('T')[0]}.csv`, 'text/csv');
-      console.log('CSV export completed');
     } catch (error) {
       console.error('Error exporting CSV:', error);
       alert('Error exporting CSV: ' + error.message);
@@ -51,10 +49,8 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
 
   const handleExportJSON = () => {
     try {
-      console.log('Exporting users JSON, count:', users.length);
       const jsonContent = exportUsersToJSON(users);
       downloadFile(jsonContent, `station-v-users-${new Date().toISOString().split('T')[0]}.json`, 'application/json');
-      console.log('JSON export completed');
     } catch (error) {
       console.error('Error exporting JSON:', error);
       alert('Error exporting JSON: ' + error.message);
@@ -63,17 +59,9 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
 
   const handleExportChannelHTML = (channel: Channel) => {
     try {
-      console.log('Exporting channel HTML for:', channel.name);
-      console.log('Channel data:', { 
-        name: channel.name, 
-        messageCount: channel.messages?.length || 0,
-        messages: channel.messages?.slice(0, 3) // Show first 3 messages for debugging
-      });
       const htmlContent = exportChannelToHTML(channel, currentUserNickname);
       const filename = `station-v-${channel.name.replace('#', '')}-${new Date().toISOString().split('T')[0]}.html`;
-      console.log('Generated HTML content length:', htmlContent.length);
       downloadFile(htmlContent, filename, 'text/html');
-      console.log('Download initiated successfully');
     } catch (error) {
       console.error('Error exporting channel HTML:', error);
       alert('Error exporting channel HTML: ' + error.message);
@@ -82,17 +70,9 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
 
   const handleExportAllChannelsHTML = () => {
     try {
-      console.log('Exporting all channels HTML, count:', validChannels.length);
-      console.log('Channels data:', validChannels.map(c => ({ 
-        name: c.name, 
-        messageCount: c.messages?.length || 0,
-        messages: c.messages?.slice(0, 3) // Show first 3 messages for debugging
-      })));
       const htmlContent = exportAllChannelsToHTML(validChannels, currentUserNickname);
       const filename = `station-v-all-channels-${new Date().toISOString().split('T')[0]}.html`;
-      console.log('Generated HTML content length:', htmlContent.length);
       downloadFile(htmlContent, filename, 'text/html');
-      console.log('Download initiated successfully');
     } catch (error) {
       console.error('Error exporting all channels HTML:', error);
       alert('Error exporting all channels HTML: ' + error.message);
@@ -192,14 +172,6 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
     users: channel.users || []
   }));
   
-  console.log('ImportExportModal - channels prop:', channels.map(c => ({ 
-    name: c.name, 
-    messageCount: c.messages?.length || 0 
-  })));
-  console.log('ImportExportModal - validChannels:', validChannels.map(c => ({ 
-    name: c.name, 
-    messageCount: c.messages?.length || 0 
-  })));
 
   // Add error boundary for debugging
   try {

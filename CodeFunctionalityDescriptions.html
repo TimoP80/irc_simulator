@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Station V - Code Functionality Descriptions</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .nav {
+            background: #34495e;
+            padding: 15px 40px;
+            border-bottom: 1px solid #2c3e50;
+        }
+
+        .nav ul {
+            list-style: none;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .nav a {
+            color: #ecf0f1;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .nav a:hover {
+            background: #3498db;
+            color: white;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .section {
+            margin-bottom: 50px;
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .section h2 {
+            color: #2c3e50;
+            font-size: 2em;
+            margin-bottom: 20px;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+
+        .section h3 {
+            color: #34495e;
+            font-size: 1.5em;
+            margin: 25px 0 15px 0;
+            display: flex;
+            align-items: center;
+        }
+
+        .file-icon {
+            width: 30px;
+            height: 30px;
+            margin-right: 10px;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        .module-card {
+            background: #f8f9fa;
+            border-left: 5px solid #3498db;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 0 10px 10px 0;
+            transition: all 0.3s ease;
+        }
+
+        .module-card:hover {
+            transform: translateX(5px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .module-card h4 {
+            color: #2c3e50;
+            font-size: 1.3em;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+        }
+
+        .module-card .file-path {
+            color: #7f8c8d;
+            font-size: 0.9em;
+            margin-bottom: 15px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .function-list {
+            margin: 15px 0;
+        }
+
+        .function-item {
+            background: white;
+            padding: 10px 15px;
+            margin: 8px 0;
+            border-radius: 8px;
+            border-left: 3px solid #e74c3c;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .function-item .function-name {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+
+        .function-item .function-desc {
+            color: #555;
+            margin-left: 10px;
+        }
+
+        .code-block {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            overflow-x: auto;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .feature-card {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+        }
+
+        .feature-card h4 {
+            margin-bottom: 10px;
+            font-size: 1.2em;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            margin: 30px 0;
+            flex-wrap: wrap;
+        }
+
+        .stat {
+            text-align: center;
+            padding: 20px;
+            background: #ecf0f1;
+            border-radius: 10px;
+            margin: 10px;
+            min-width: 150px;
+        }
+
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .stat-label {
+            color: #7f8c8d;
+            font-size: 0.9em;
+        }
+
+        .footer {
+            background: #2c3e50;
+            color: white;
+            text-align: center;
+            padding: 30px;
+            font-size: 0.9em;
+        }
+
+        @media (max-width: 768px) {
+            .nav ul {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .stats {
+                flex-direction: column;
+            }
+            
+            .feature-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📚 Code Functionality Descriptions</h1>
+            <p>Station V - Virtual IRC Simulator v1.18.0 - Complete Module Documentation</p>
+        </div>
+
+        <nav class="nav">
+            <ul>
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#core-files">Core Files</a></li>
+                <li><a href="#components">React Components</a></li>
+                <li><a href="#services">Services</a></li>
+                <li><a href="#utils">Utilities</a></li>
+                <li><a href="#types">Type Definitions</a></li>
+                <li><a href="#config">Configuration</a></li>
+            </ul>
+        </nav>
+
+        <div class="content">
+            <section id="overview" class="section">
+                <h2>🎯 Project Overview</h2>
+                <p>Station V is a sophisticated web application that simulates a classic IRC chat environment using AI-powered virtual users. The application is built with React, TypeScript, and integrates with Google's Gemini AI for generating realistic chat interactions.</p>
+                
+                <div class="stats">
+                    <div class="stat">
+                        <div class="stat-number">39</div>
+                        <div class="stat-label">Total Files</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-number">20,336</div>
+                        <div class="stat-label">Lines of Code</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-number">18</div>
+                        <div class="stat-label">React Components</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-number">15+</div>
+                        <div class="stat-label">TypeScript Modules</div>
+                    </div>
+                </div>
+
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h4>🤖 AI-Powered</h4>
+                        <p>Google Gemini AI integration for realistic chat simulation</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>🌍 Multilingual</h4>
+                        <p>Support for 30+ languages with cultural context</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>🎭 Personality System</h4>
+                        <p>Advanced personality attributes with 7 levels each</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>👑 Operator System</h4>
+                        <p>AI operators with /op command functionality</p>
+                    </div>
+                </div>
+            </section>
+
+            <section id="core-files" class="section">
+                <h2>🏗️ Core Application Files</h2>
+                
+                <div class="module-card">
+                    <h4>
+                        <span class="file-icon" style="background: #61dafb;">TSX</span>
+                        App.tsx
+                    </h4>
+                    <div class="file-path">Main application component (4,332 lines)</div>
+                    <p><strong>Primary Function:</strong> The main React component that orchestrates the entire application. It manages global state, handles user interactions, coordinates AI responses, and provides the core chat simulation logic.</p>
+                    
+                    <div class="function-list">
+                        <div class="function-item">
+                            <span class="function-name">handleSendMessage()</span>
+                            <span class="function-desc">Processes user messages and triggers AI responses</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">generateAutonomousPM()</span>
+                            <span class="function-desc">Generates spontaneous private messages from AI users</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">generateChannelActivity()</span>
+                            <span class="function-desc">Creates autonomous channel conversations</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">triggerAIOperatorResponse()</span>
+                            <span class="function-desc">Handles AI operator responses to /op requests</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">addMessageToContext()</span>
+                            <span class="function-desc">Adds messages to appropriate chat contexts</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="module-card">
+                    <h4>
+                        <span class="file-icon" style="background: #3178c6;">TS</span>
+                        types.ts
+                    </h4>
+                    <div class="file-path">Type definitions and interfaces (312 lines)</div>
+                    <p><strong>Primary Function:</strong> Defines all TypeScript interfaces, types, and utility functions used throughout the application. Includes user types, message types, channel structures, and migration functions for enhanced personality attributes.</p>
+                    
+                    <div class="function-list">
+                        <div class="function-item">
+                            <span class="function-name">User interface</span>
+                            <span class="function-desc">Defines user structure with personality attributes</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">Channel interface</span>
+                            <span class="function-desc">Defines channel structure with operators and messages</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">migrateWritingStyle()</span>
+                            <span class="function-desc">Migrates old personality attributes to new format</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">getWritingStyle()</span>
+                            <span class="function-desc">Safely retrieves user writing style with migration</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="module-card">
+                    <h4>
+                        <span class="file-icon" style="background: #3178c6;">TS</span>
+                        constants.ts
+                    </h4>
+                    <div class="file-path">Application constants and defaults (237 lines)</div>
+                    <p><strong>Primary Function:</strong> Contains all application constants, default values, configuration settings, and predefined data used throughout the application.</p>
+                    
+                    <div class="function-list">
+                        <div class="function-item">
+                            <span class="function-name">DEFAULT_CHANNELS</span>
+                            <span class="function-desc">Predefined channel configurations</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">DEFAULT_VIRTUAL_USERS</span>
+                            <span class="function-desc">Default AI user personalities</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">SIMULATION_INTERVALS</span>
+                            <span class="function-desc">Timing configurations for AI activities</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">DEFAULT_AI_MODEL</span>
+                            <span class="function-desc">Default Gemini AI model configuration</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="module-card">
+                    <h4>
+                        <span class="file-icon" style="background: #61dafb;">TSX</span>
+                        index.tsx
+                    </h4>
+                    <div class="file-path">Application entry point (13 lines)</div>
+                    <p><strong>Primary Function:</strong> The main entry point that renders the React application to the DOM. Initializes the App component and sets up the root element.</p>
+                </div>
+            </section>
+
+            <section id="components" class="section">
+                <h2>⚛️ React Components</h2>
+                
+                <div class="module-card">
+                    <h4>
+                        <span class="file-icon" style="background: #61dafb;">TSX</span>
+                        ChatWindow.tsx
+                    </h4>
+                    <div class="file-path">Main chat interface component (453 lines)</div>
+                    <p><strong>Primary Function:</strong> Renders the main chat interface for channels and private messages. Displays message history, handles user input, and manages the chat UI state.</p>
+                    
+                    <div class="function-list">
+                        <div class="function-item">
+                            <span class="function-name">MessageEntry</span>
+                            <span class="function-desc">Individual message display component</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">MessageInput</span>
+                            <span class="function-desc">User input handling and message sending</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">TypingIndicator</span>
+                            <span class="function-desc">Shows when users are typing</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="module-card">
+                    <h4>
+                        <span class="file-icon" style="background: #61dafb;">TSX</span>
+                        ChannelList.tsx
+                    </h4>
+                    <div class="file-path">Channel and user list component (196 lines)</div>
+                    <p><strong>Primary Function:</strong> Displays the list of channels and private message users. Handles navigation between different chat contexts and shows unread message indicators.</p>
+                    
+                    <div class="function-list">
+                        <div class="function-item">
+                            <span class="function-name">Channel buttons</span>
+                            <span class="function-desc">Clickable channel navigation</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">PM user list</span>
+                            <span class="function-desc">Private message user navigation</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">Unread indicators</span>
+                            <span class="function-desc">Visual indicators for unread messages</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="module-card">
+                    <h4>
+                        <span class="file-icon" style="background: #61dafb;">TSX</span>
+                        UserList.tsx
+                    </h4>
+                    <div class="file-path">User management list component (110 lines)</div>
+                    <p><strong>Primary Function:</strong> Displays the list of virtual users in the current channel. Shows user status, profile pictures, and provides user interaction options.</p>
+                </div>
+
+                <div class="module-card">
+                    <h4>
+                        <span class="file-icon" style="background: #61dafb;">TSX</span>
+                        Message.tsx
+                    </h4>
+                    <div class="file-path">Individual message display component (369 lines)</div>
+                    <p><strong>Primary Function:</strong> Renders individual chat messages with proper formatting, timestamps, user information, and special message types (actions, system messages, etc.).</p>
+                    
+                    <div class="function-list">
+                        <div class="function-item">
+                            <span class="function-name">renderContent()</span>
+                            <span class="function-desc">Formats message content with links and media</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">ProfilePicture</span>
+                            <span class="function-desc">Displays user profile pictures or initials</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">Message formatting</span>
+                            <span class="function-desc">Handles different message types and styles</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="module-card">
+                    <h4>
+                        <span class="file-icon" style="background: #61dafb;">TSX</span>
+                        AddUserModal.tsx
+                    </h4>
+                    <div class="file-path">User creation and editing modal (767 lines)</div>
+                    <p><strong>Primary Function:</strong> Provides a comprehensive interface for creating and editing virtual users. Includes all personality attributes, language skills, and user preferences.</p>
+                    
+                    <div class="function-list">
+                        <div class="function-item">
+                            <span class="function-name">Personality attributes</span>
+                            <span class="function-desc">7 formality, verbosity, humor, emoji, punctuation levels</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">Language skills</span>
+                            <span class="function-desc">Multi-language fluency configuration</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">Profile picture</span>
+                            <span class="function-desc">Image upload and management</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">PM probability</span>
+                            <span class="function-desc">Autonomous private message frequency</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="module-card">
+                    <h4>
+                        <span class="file-icon" style="background: #61dafb;">TSX</span>
+                        SettingsModal.tsx
+                    </h4>
+                    <div class="file-path">Application settings modal (749 lines)</div>
+                    <p><strong>Primary Function:</strong> Manages application-wide settings including AI model selection, simulation parameters, debug options, and export configurations.</p>
+                    
+                    <div class="function-list">
+                        <div class="function-item">
+                            <span class="function-name">AI Model selection</span>
+                            <span class="function-desc">Choose between Gemini models</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">Simulation settings</span>
+                            <span class="function-desc">Configure AI activity intervals</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">Debug controls</span>
+                            <span class="function-desc">Enable/disable debug logging</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">Export settings</span>
+                            <span class="function-desc">Configure data export options</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="module-card">
+                    <h4>
+                        <span class="file-icon" style="background: #61dafb;">TSX</span>
+                        ProfilePicture.tsx
+                    </h4>
+                    <div class="file-path">User profile picture component (94 lines)</div>
+                    <p><strong>Primary Function:</strong> Displays user profile pictures with fallback to colored initials. Handles image loading, error states, and different size variants.</p>
+                </div>
+
+                <div class="module-card">
+                    <h4>
+                        <span class="file-icon" style="background: #61dafb;">TSX</span>
+                        BatchUserModal.tsx
+                    </h4>
+                    <div class="file-path">Bulk user creation modal (614 lines)</div>
+                    <p><strong>Primary Function:</strong> Allows creation of multiple users at once using templates or AI generation. Provides batch operations for user management.</p>
+                </div>
+
+                <div class="module-card">
+                    <h4>
+                        <span class="file-icon" style="background: #61dafb;">TSX</span>
+                        ChatLogManager.tsx
+                    </h4>
+                    <div class="file-path">Chat log management component (984 lines)</div>
+                    <p><strong>Primary Function:</strong> Manages chat log viewing, export, and management. Provides interface for browsing message history and exporting conversations.</p>
+                </div>
+
+                <div class="module-card">
+                    <h4>
+                        <span class="file-icon" style="background: #61dafb;">TSX</span>
+                        NetworkConnection.tsx
+                    </h4>
+                    <div class="file-path">Network connection component (varies)</div>
+                    <p><strong>Primary Function:</strong> Handles connection to external IRC networks and displays connection status and controls.</p>
+                </div>
+
+                <div class="module-card">
+                    <h4>
+                        <span class="file-icon" style="background: #61dafb;">TSX</span>
+                        NetworkUsers.tsx
+                    </h4>
+                    <div class="file-path">Network users display component (varies)</div>
+                    <p><strong>Primary Function:</strong> Shows users connected from external IRC networks and manages network user interactions.</p>
+                </div>
+            </section>
+
+            <section id="services" class="section">
+                <h2>🔧 Services Layer</h2>
+                
+                <div class="module-card">
+                    <h4>
+                        <span class="file-icon" style="background: #e74c3c;">TS</span>
+                        geminiService.ts
+                    </h4>
+                    <div class="file-path">AI service integration (2,464 lines)</div>
+                    <p><strong>Primary Function:</strong> Core AI integration service that handles all interactions with Google's Gemini AI. Manages conversation generation, personality simulation, and multilingual responses.</p>
+                    
+                    <div class="function-list">
+                        <div class="function-item">
+                            <span class="function-name">generateChannelActivity()</span>
+                            <span class="function-desc">Creates autonomous channel conversations</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">generatePrivateMessageResponse()</span>
+                            <span class="function-desc">Generates AI responses to private messages</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">generateOperatorResponse()</span>
+                            <span class="function-desc">Handles AI operator responses to /op requests</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">generateReactionToMessage()</span>
+                            <span class="function-desc">Creates AI reactions to user messages</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">generateRandomWorld()</span>
+                            <span class="function-desc">Creates random world configurations</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">generateUserPersonality()</span>
+                            <span class="function-desc">AI-generated user personalities</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="module-card">
+                    <h4>
+                        <span class="file-icon" style="background: #e74c3c;">TS</span>
+                        botService.ts
+                    </h4>
+                    <div class="file-path">Bot command handling service (varies)</div>
+                    <p><strong>Primary Function:</strong> Manages bot commands and automated responses. Handles special bot interactions and command processing.</p>
+                    
+                    <div class="function-list">
+                        <div class="function-item">
+                            <span class="function-name">handleBotCommand()</span>
+                            <span class="function-desc">Processes bot-specific commands</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">isBotCommand()</span>
+                            <span class="function-desc">Identifies bot command messages</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="module-card">
+                    <h4>
+                        <span class="file-icon" style="background: #e74c3c;">TS</span>
+                        chatLogService.ts
+                    </h4>
+                    <div class="file-path">Chat log management service (341 lines)</div>
+                    <p><strong>Primary Function:</strong> Manages chat log storage, retrieval, and export functionality. Handles message persistence and log management.</p>
+                    
+                    <div class="function-list">
+                        <div class="function-item">
+                            <span class="function-name">saveMessage()</span>
+                            <span class="function-desc">Saves messages to chat logs</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">loadMessages()</span>
+                            <span class="function-desc">Loads messages from storage</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">exportLogs()</span>
+                            <span class="function-desc">Exports chat logs in various formats</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="module-card">
+                    <h4>
+                        <span class="file-icon" style="background: #e74c3c;">TS</span>
+                        networkService.ts
+                    </h4>
+                    <div class="file-path">Network connection service (varies)</div>
+                    <p><strong>Primary Function:</strong> Manages connections to external IRC networks. Handles network protocols and user synchronization.</p>
+                </div>
+
+                <div class="module-card">
+                    <h4>
+                        <span class="file-icon" style="background: #e74c3c;">TS</span>
+                        ircExportService.ts
+                    </h4>
+                    <div class="file-path">IRC export functionality (208 lines)</div>
+                    <p><strong>Primary Function:</strong> Provides IRC-compatible export functionality for channels and messages. Handles IRC protocol formatting and export options.</p>
+                </div>
+
+                <div class="module-card">
+                    <h4>
+                        <span class="file-icon" style="background: #e74c3c;">TS</span>
+                        dataExportService.ts
+                    </h4>
+                    <div class="file-path">Data export service (varies)</div>
+                    <p><strong>Primary Function:</strong> Handles general data export functionality for users, channels, and application state.</p>
+                </div>
+
+                <div class="module-card">
+                    <h4>
+                        <span class="file-icon" style="background: #e74c3c;">TS</span>
+                        imageGenerationService.ts
+                    </h4>
+                    <div class="file-path">Image generation service (varies)</div>
+                    <p><strong>Primary Function:</strong> Handles AI-powered image generation for user avatars and content. Integrates with image generation APIs.</p>
+                </div>
+
+                <div class="module-card">
+                    <h4>
+                        <span class="file-icon" style="background: #e74c3c;">TS</span>
+                        usernameGeneration.ts
+                    </h4>
+                    <div class="file-path">Username generation service (varies)</div>
+                    <p><strong>Primary Function:</strong> Generates unique and appropriate usernames for virtual users. Handles username validation and uniqueness.</p>
+                </div>
+            </section>
+
+            <section id="utils" class="section">
+                <h2>🛠️ Utility Modules</h2>
+                
+                <div class="module-card">
+                    <h4>
+                        <span class="file-icon" style="background: #f39c12;">TS</span>
+                        config.ts
+                    </h4>
+                    <div class="file-path">Configuration management (542 lines)</div>
+                    <p><strong>Primary Function:</strong> Manages application configuration, state persistence, and data loading/saving. Handles localStorage operations and configuration validation.</p>
+                    
+                    <div class="function-list">
+                        <div class="function-item">
+                            <span class="function-name">loadConfig()</span>
+                            <span class="function-desc">Loads application configuration from storage</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">saveConfig()</span>
+                            <span class="function-desc">Saves application configuration to storage</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">simulateTypingDelay()</span>
+                            <span class="function-desc">Simulates realistic typing delays</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">withRateLimitAndRetries()</span>
+                            <span class="function-desc">Implements rate limiting for API calls</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="module-card">
+                    <h4>
+                        <span class="file-icon" style="background: #f39c12;">TS</span>
+                        debugLogger.ts
+                    </h4>
+                    <div class="file-path">Debug logging system (279 lines)</div>
+                    <p><strong>Primary Function:</strong> Comprehensive debug logging system with categorized loggers for different parts of the application. Provides detailed debugging capabilities.</p>
+                    
+                    <div class="function-list">
+                        <div class="function-item">
+                            <span class="function-name">aiDebug</span>
+                            <span class="function-desc">AI service debugging</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">simulationDebug</span>
+                            <span class="function-desc">Simulation system debugging</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">networkDebug</span>
+                            <span class="function-desc">Network operations debugging</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">enableAllDebugLogging()</span>
+                            <span class="function-desc">Enables all debug categories</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="module-card">
+                    <h4>
+                        <span class="file-icon" style="background: #f39c12;">TS</span>
+                        importExport.ts
+                    </h4>
+                    <div class="file-path">Data import/export utilities (1,065 lines)</div>
+                    <p><strong>Primary Function:</strong> Handles data import and export functionality for users, channels, and application state. Supports multiple formats including CSV, JSON, and HTML.</p>
+                    
+                    <div class="function-list">
+                        <div class="function-item">
+                            <span class="function-name">exportUsersToCSV()</span>
+                            <span class="function-desc">Exports user data to CSV format</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">exportChannelToHTML()</span>
+                            <span class="function-desc">Exports channel data to HTML format</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">importUsersFromCSV()</span>
+                            <span class="function-desc">Imports users from CSV files</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">exportAllChannelsToHTML()</span>
+                            <span class="function-desc">Exports all channels to HTML</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="module-card">
+                    <h4>
+                        <span class="file-icon" style="background: #f39c12;">TS</span>
+                        personalityTemplates.ts
+                    </h4>
+                    <div class="file-path">Personality templates (409 lines)</div>
+                    <p><strong>Primary Function:</strong> Provides predefined personality templates and personality generation utilities. Includes various personality archetypes and generation functions.</p>
+                    
+                    <div class="function-list">
+                        <div class="function-item">
+                            <span class="function-name">PERSONALITY_TEMPLATES</span>
+                            <span class="function-desc">Predefined personality archetypes</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">generateRandomPersonality()</span>
+                            <span class="function-desc">Generates random personality traits</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">getPersonalityDescription()</span>
+                            <span class="function-desc">Gets personality descriptions</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="module-card">
+                    <h4>
+                        <span class="file-icon" style="background: #f39c12;">TS</span>
+                        channelImportExport.ts
+                    </h4>
+                    <div class="file-path">Channel import/export utilities (121 lines)</div>
+                    <p><strong>Primary Function:</strong> Specialized utilities for importing and exporting channel data, including channel configurations and message history.</p>
+                </div>
+
+                <div class="module-card">
+                    <h4>
+                        <span class="file-icon" style="background: #f39c12;">TS</span>
+                        emojiConverter.ts
+                    </h4>
+                    <div class="file-path">Emoji conversion utilities (varies)</div>
+                    <p><strong>Primary Function:</strong> Handles emoji conversion and processing for different platforms and formats.</p>
+                </div>
+            </section>
+
+            <section id="types" class="section">
+                <h2>📝 Type Definitions</h2>
+                
+                <div class="module-card">
+                    <h4>
+                        <span class="file-icon" style="background: #9b59b6;">TS</span>
+                        types.ts
+                    </h4>
+                    <div class="file-path">Core type definitions (312 lines)</div>
+                    <p><strong>Primary Function:</strong> Defines all TypeScript interfaces, types, and utility functions used throughout the application. Includes comprehensive type definitions for the enhanced personality system.</p>
+                    
+                    <div class="function-list">
+                        <div class="function-item">
+                            <span class="function-name">User interface</span>
+                            <span class="function-desc">Complete user structure with personality attributes</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">Channel interface</span>
+                            <span class="function-desc">Channel structure with operators and messages</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">Message interface</span>
+                            <span class="function-desc">Message structure with types and metadata</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">Personality enums</span>
+                            <span class="function-desc">Enhanced personality attribute enums</span>
+                        </div>
+                        <div class="function-item">
+                            <span class="function-name">Migration functions</span>
+                            <span class="function-desc">Backward compatibility functions</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="config" class="section">
+                <h2>⚙️ Configuration Files</h2>
+                
+                <div class="module-card">
+                    <h4>
+                        <span class="file-icon" style="background: #e67e22;">TS</span>
+                        vite.config.ts
+                    </h4>
+                    <div class="file-path">Vite build configuration (60 lines)</div>
+                    <p><strong>Primary Function:</strong> Configures the Vite build system, including development server settings, build options, and plugin configurations.</p>
+                </div>
+
+                <div class="module-card">
+                    <h4>
+                        <span class="file-icon" style="background: #e67e22;">JSON</span>
+                        package.json
+                    </h4>
+                    <div class="file-path">Project configuration (33 lines)</div>
+                    <p><strong>Primary Function:</strong> Defines project metadata, dependencies, and npm scripts. Contains all project configuration and dependency information.</p>
+                </div>
+
+                <div class="module-card">
+                    <h4>
+                        <span class="file-icon" style="background: #e67e22;">JSON</span>
+                        tsconfig.json
+                    </h4>
+                    <div class="file-path">TypeScript configuration (29 lines)</div>
+                    <p><strong>Primary Function:</strong> Configures TypeScript compiler options, module resolution, and build settings for the project.</p>
+                </div>
+            </section>
+        </div>
+
+        <div class="footer">
+            <p>📚 Generated on October 26, 2025 | Station V - Virtual IRC Simulator v1.18.0</p>
+            <p>Complete module documentation covering all TypeScript and TSX files</p>
+            <p>✨ Enhanced with AI Operator System, Multilingual Support, and Advanced Personality Attributes</p>
+        </div>
+    </div>
+
+    <script>
+        // Smooth scrolling for navigation links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+
+        // Add hover effects to module cards
+        document.querySelectorAll('.module-card').forEach(card => {
+            card.addEventListener('mouseenter', function() {
+                this.style.transform = 'translateX(10px)';
+                this.style.boxShadow = '0 10px 25px rgba(0, 0, 0, 0.15)';
+            });
+            
+            card.addEventListener('mouseleave', function() {
+                this.style.transform = 'translateX(0)';
+                this.style.boxShadow = '0 5px 20px rgba(0, 0, 0, 0.1)';
+            });
+        });
+
+        // Add animation to function items
+        document.querySelectorAll('.function-item').forEach((item, index) => {
+            item.style.opacity = '0';
+            item.style.transform = 'translateY(20px)';
+            
+            setTimeout(() => {
+                item.style.transition = 'all 0.3s ease';
+                item.style.opacity = '1';
+                item.style.transform = 'translateY(0)';
+            }, index * 50);
+        });
+    </script>
+</body>
+</html>

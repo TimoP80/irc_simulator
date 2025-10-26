@@ -15,13 +15,6 @@ export const ProfilePicture: React.FC<ProfilePictureProps> = ({
   size = 'md', 
   className = '' 
 }) => {
-  // Debug logging for profile picture data
-  console.log(`ProfilePicture for ${user.nickname}:`, {
-    nickname: user.nickname,
-    profilePicture: user.profilePicture,
-    hasProfilePicture: !!user.profilePicture,
-    userType: user.userType
-  });
   const sizeClasses = {
     sm: 'w-6 h-6',
     md: 'w-8 h-8',

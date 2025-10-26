@@ -8,7 +8,7 @@ import { convertEmoticonsToEmojis, convertEmojisToEmoticons } from '../utils/emo
 interface ChatWindowProps {
   title: string;
   messages: Message[];
-  onSendMessage: (content: string) => void;
+  onSendMessage: (content: string, quotedMessage?: Message) => void;
   isLoading: boolean;
   currentUserNickname: string;
   typingUsers: string[];
@@ -16,9 +16,26 @@ interface ChatWindowProps {
   users?: User[]; // Optional users array for profile pictures
   onClose?: () => void;
   showCloseButton?: boolean;
+  typingIndicatorMode?: 'all' | 'private_only' | 'none'; // Typing indicator display mode
+  isPrivateMessage?: boolean; // Whether this is a private message window
+  onQuoteMessage?: (message: Message) => void; // Callback for quoting a message
 }
 
-export const ChatWindow: React.FC<ChatWindowProps> = ({ title, messages, onSendMessage, isLoading, currentUserNickname, typingUsers, channel, users, onClose, showCloseButton = false }) => {
+export const ChatWindow: React.FC<ChatWindowProps> = ({ 
+  title, 
+  messages, 
+  onSendMessage, 
+  isLoading, 
+  currentUserNickname, 
+  typingUsers, 
+  channel, 
+  users, 
+  onClose, 
+  showCloseButton = false,
+  typingIndicatorMode = 'all',
+  isPrivateMessage = false,
+  onQuoteMessage
+}) => {
   const [input, setInput] = useState('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [isResizing, setIsResizing] = useState(false);
@@ -27,6 +44,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ title, messages, onSendM
   const [chatWidth, setChatWidth] = useState<number | null>(null);
   const [chatLeft, setChatLeft] = useState<number | null>(null);
   const [showFormattingHelp, setShowFormattingHelp] = useState(false);
+  const [quotedMessage, setQuotedMessage] = useState<Message | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatWindowRef = useRef<HTMLDivElement>(null);
   const resizeHandleRef = useRef<HTMLDivElement>(null);
@@ -39,7 +57,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ title, messages, onSendM
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, typingUsers]); // Also scroll when typing users change
 
   // Close formatting help when clicking outside
   useEffect(() => {
@@ -164,14 +182,33 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ title, messages, onSendM
     }, 0);
   }, []);
 
+  // Handle quoting a message
+  const handleQuoteMessage = useCallback((message: Message) => {
+    setQuotedMessage(message);
+    // Focus the input field
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+    // Call the parent callback if provided
+    if (onQuoteMessage) {
+      onQuoteMessage(message);
+    }
+  }, [onQuoteMessage]);
+
+  // Handle removing quoted message
+  const handleRemoveQuote = useCallback(() => {
+    setQuotedMessage(null);
+  }, []);
+
   // Handle form submission
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (input.trim() && !isLoading) {
       // Convert emoticons to emojis before sending
       const convertedInput = convertEmoticonsToEmojis(input.trim());
-      onSendMessage(convertedInput);
+      onSendMessage(convertedInput, quotedMessage || undefined);
       setInput('');
+      setQuotedMessage(null); // Clear quoted message after sending
       
       // Reset textarea height
       if (inputRef.current) {
@@ -324,47 +361,88 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ title, messages, onSendM
             // Find user for profile picture
             const user = users?.find(u => u.nickname === msg.nickname);
             
-            // Debug logging for user lookup
-            if (msg.nickname && !user) {
-              console.log(`ChatWindow: User not found for message from ${msg.nickname}`);
-              console.log(`Available users:`, users?.map(u => u.nickname));
-            } else if (user) {
-              console.log(`ChatWindow: Found user for ${msg.nickname}:`, {
-                nickname: user.nickname,
-                profilePicture: user.profilePicture,
-                hasProfilePicture: !!user.profilePicture
-              });
-            }
-            
             return (
-              <MessageEntry 
-                key={msg.id} 
-                message={msg} 
-                currentUserNickname={currentUserNickname} 
-                user={user}
-              />
+              <div key={msg.id} className="group relative">
+                <MessageEntry 
+                  message={msg} 
+                  currentUserNickname={currentUserNickname} 
+                  user={user}
+                />
+                {/* Reply button - only show for non-system messages */}
+                {msg.type !== 'system' && onQuoteMessage && (
+                  <button
+                    onClick={() => handleQuoteMessage(msg)}
+                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white px-2 py-1 rounded text-xs flex items-center gap-1"
+                    title="Reply to this message"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                    </svg>
+                    Reply
+                  </button>
+                )}
+              </div>
             );
           })}
-          {typingUsers.length > 0 && (
-            <div className="text-gray-400 italic text-sm px-2 flex items-center gap-2">
-              <div className="flex space-x-1">
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+          {/* Show typing indicator based on configuration */}
+          {typingUsers.length > 0 && (() => {
+            // Determine if we should show the typing indicator based on mode
+            const shouldShow = 
+              typingIndicatorMode === 'all' || 
+              (typingIndicatorMode === 'private_only' && isPrivateMessage);
+            
+            if (!shouldShow) return null;
+            
+            return (
+              <div className="text-gray-400 italic text-sm px-3 py-2 flex items-center gap-2 bg-gray-800/50 rounded-lg mx-2 my-1 border border-gray-600/30">
+                <div className="flex space-x-1">
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                </div>
+                <span className="text-gray-300">
+                  {typingUsers.length === 1 
+                    ? `${typingUsers[0]} is typing...`
+                    : `${typingUsers.join(', ')} are typing...`
+                  }
+                </span>
               </div>
-              <span>
-                {typingUsers.length === 1 
-                  ? `${typingUsers[0]} is typing...`
-                  : `${typingUsers.join(', ')} are typing...`
-                }
-              </span>
-            </div>
-          )}
+            );
+          })()}
         </div>
         <div ref={messagesEndRef} />
       </div>
 
       <footer className="p-3 lg:p-4 border-t border-gray-700 bg-gray-900">
+        {/* Quoted message preview */}
+        {quotedMessage && (
+          <div className="mb-3 p-3 bg-gray-800 border border-gray-600 rounded-lg">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2 text-sm text-gray-400">
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                </svg>
+                <span className="font-semibold text-gray-300">Replying to {quotedMessage.nickname}</span>
+              </div>
+              <button
+                onClick={handleRemoveQuote}
+                className="text-gray-400 hover:text-white transition-colors"
+                title="Remove quote"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="text-sm text-gray-300 break-words">
+              {quotedMessage.content.length > 150 
+                ? `${quotedMessage.content.substring(0, 150)}...` 
+                : quotedMessage.content
+              }
+            </div>
+          </div>
+        )}
+        
         <form onSubmit={handleSubmit} className="flex items-end gap-3">
           <div className="flex-1 relative">
             <textarea

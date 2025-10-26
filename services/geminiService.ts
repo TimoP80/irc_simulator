@@ -3,6 +3,7 @@ import type { Channel, Message, PrivateMessageConversation, RandomWorldConfig, G
 import { getLanguageFluency, getAllLanguages, getLanguageAccent, isChannelOperator, isPerLanguageFormat, isLegacyFormat, getWritingStyle } from '../types';
 import { withRateLimitAndRetries } from '../utils/config';
 import { aiDebug } from '../utils/debugLogger';
+import { getRelationshipContext } from './relationshipMemoryService';
 
 const API_KEY = process.env.GEMINI_API_KEY;
 
@@ -498,6 +499,25 @@ const extractTextFromResponse = (response: any): string => {
     throw new Error("Invalid response from AI service: unable to extract text content");
 };
 
+// Afterhours Protocol detection
+const isAfterhoursProtocol = (): boolean => {
+  const now = new Date();
+  const hour = now.getHours();
+  const dayOfWeek = now.getDay(); // 0 = Sunday, 6 = Saturday
+  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+  
+  // Afterhours Protocol: Invert weekend activity patterns for nocturnal users
+  // Weekends: More active during late night/early morning hours (22:00-06:00)
+  // Weekdays: More active during traditional night hours (23:00-05:00)
+  if (isWeekend) {
+    // Weekend nocturnal pattern: Peak activity 22:00-06:00
+    return hour >= 22 || hour < 6;
+  } else {
+    // Weekday nocturnal pattern: Peak activity 23:00-05:00
+    return hour >= 23 || hour < 5;
+  }
+};
+
 // Time-of-day context generation
 const getTimeOfDayContext = (): string => {
   const now = new Date();
@@ -506,6 +526,8 @@ const getTimeOfDayContext = (): string => {
   const month = now.getMonth(); // 0 = January, 11 = December
   const day = now.getDate();
   const year = now.getFullYear();
+  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+  const afterhoursActive = isAfterhoursProtocol();
   
   // Determine season based on month
   let season = '';
@@ -530,41 +552,66 @@ const getTimeOfDayContext = (): string => {
     seasonalTopics = 'holiday preparations, winter sports, cozy indoor activities, hot drinks, snow, New Year resolutions, winter holidays';
   }
   
-  // Determine time of day
+  // Determine time of day with Afterhours Protocol consideration
   let timePeriod = '';
   let energyLevel = '';
   let commonTopics = '';
   let socialContext = '';
   
-  if (hour >= 6 && hour < 12) {
-    timePeriod = 'morning';
-    energyLevel = 'fresh and energetic';
-    commonTopics = 'coffee, breakfast, plans for the day, weather, news';
-    socialContext = 'people are starting their day, checking in, sharing morning routines';
-  } else if (hour >= 12 && hour < 17) {
-    timePeriod = 'afternoon';
-    energyLevel = 'productive and focused';
-    commonTopics = 'work, lunch, projects, afternoon activities, current events';
-    socialContext = 'people are in work mode, taking breaks, discussing ongoing projects';
-  } else if (hour >= 17 && hour < 21) {
-    timePeriod = 'evening';
-    energyLevel = 'relaxed and social';
-    commonTopics = 'dinner plans, evening activities, relaxation, social events, hobbies';
-    socialContext = 'people are winding down from work, planning evening activities, being more social';
-  } else if (hour >= 21 && hour < 24) {
-    timePeriod = 'late evening';
-    energyLevel = 'calm and reflective';
-    commonTopics = 'reflection on the day, late-night thoughts, quiet activities, tomorrow\'s plans';
-    socialContext = 'people are winding down, being more introspective, preparing for sleep';
+  if (afterhoursActive) {
+    // Afterhours Protocol: Inverted activity patterns for nocturnal users
+    if (hour >= 22 || hour < 6) {
+      timePeriod = 'afterhours peak';
+      energyLevel = 'highly active and engaged';
+      commonTopics = 'deep conversations, creative projects, gaming, streaming, late-night adventures, philosophical discussions, music, art, coding, online communities';
+      socialContext = 'night owls and nocturnal users are at their most active, engaging in passionate discussions and creative activities';
+    } else if (hour >= 6 && hour < 12) {
+      timePeriod = 'afterhours wind-down';
+      energyLevel = 'still active but winding down';
+      commonTopics = 'morning reflections, late-night experiences, breakfast plans, transitioning to sleep';
+      socialContext = 'nocturnal users are still active but starting to wind down, sharing their night\'s experiences';
+    } else if (hour >= 12 && hour < 17) {
+      timePeriod = 'afterhours quiet';
+      energyLevel = 'minimal activity';
+      commonTopics = 'occasional check-ins, sleep-related discussions, quiet observations';
+      socialContext = 'most nocturnal users are sleeping, only occasional activity from those with unusual schedules';
+    } else if (hour >= 17 && hour < 22) {
+      timePeriod = 'afterhours awakening';
+      energyLevel = 'gradually increasing';
+      commonTopics = 'evening plans, waking up routines, preparing for the night ahead, dinner plans';
+      socialContext = 'nocturnal users are starting to wake up and become more active, planning their night';
+    }
   } else {
-    timePeriod = 'late night/early morning';
-    energyLevel = 'tired but sometimes energetic';
-    commonTopics = 'insomnia, late-night activities, deep thoughts, quiet conversations';
-    socialContext = 'very few people online, those who are might be night owls or in different time zones';
+    // Standard time patterns for non-nocturnal users
+    if (hour >= 6 && hour < 12) {
+      timePeriod = 'morning';
+      energyLevel = 'fresh and energetic';
+      commonTopics = 'coffee, breakfast, plans for the day, weather, news';
+      socialContext = 'people are starting their day, checking in, sharing morning routines';
+    } else if (hour >= 12 && hour < 17) {
+      timePeriod = 'afternoon';
+      energyLevel = 'productive and focused';
+      commonTopics = 'work, lunch, projects, afternoon activities, current events';
+      socialContext = 'people are in work mode, taking breaks, discussing ongoing projects';
+    } else if (hour >= 17 && hour < 21) {
+      timePeriod = 'evening';
+      energyLevel = 'relaxed and social';
+      commonTopics = 'dinner plans, evening activities, relaxation, social events, hobbies';
+      socialContext = 'people are winding down from work, planning evening activities, being more social';
+    } else if (hour >= 21 && hour < 24) {
+      timePeriod = 'late evening';
+      energyLevel = 'calm and reflective';
+      commonTopics = 'reflection on the day, late-night thoughts, quiet activities, tomorrow\'s plans';
+      socialContext = 'people are winding down, being more introspective, preparing for sleep';
+    } else {
+      timePeriod = 'late night/early morning';
+      energyLevel = 'tired but sometimes energetic';
+      commonTopics = 'insomnia, late-night activities, deep thoughts, quiet conversations';
+      socialContext = 'very few people online, those who are might be night owls or in different time zones';
+    }
   }
   
   // Weekend vs weekday context
-  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
   const dayContext = isWeekend ? 'weekend' : 'weekday';
   
   // Month names
@@ -591,7 +638,7 @@ const getTimeOfDayContext = (): string => {
 It's currently ${season} - a time of ${seasonContext}. 
 Seasonal topics include: ${seasonalTopics}.
 ${specialContext ? `Today is ${specialContext}. ` : ''}It's a ${dayContext}. 
-People are generally ${energyLevel}. Common topics include: ${commonTopics}. 
+${afterhoursActive ? 'AFTERHOURS PROTOCOL ACTIVE: This is peak time for nocturnal users and night owls. ' : ''}People are generally ${energyLevel}. Common topics include: ${commonTopics}. 
 Social context: ${socialContext}.`;
 };
 
@@ -656,6 +703,11 @@ REALISTIC IRC CONVERSATION PATTERNS:
 - Use IRC-style responses: direct, conversational, and focused on one topic or person
 - If you need to respond to multiple people, do it in separate messages or focus on the most relevant response
 - Keep messages natural and realistic - real IRC users don't give speeches to multiple people at once
+- QUOTING SYSTEM: You can quote/reply to previous messages by referencing them naturally
+- When quoting someone, you can say things like "That's what I was thinking too" or "I agree with what [nickname] said about..."
+- Use natural quote references like "Like [nickname] mentioned..." or "Building on [nickname]'s point..."
+- Don't overuse quotes - use them when they add value to the conversation
+- Quotes should feel natural and conversational, not forced or robotic
 `;
 
 // Specialized system instruction for operator responses with enhanced multilingual support
@@ -769,16 +821,36 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
     .map(msg => msg.nickname);
   const longTermInactiveUsers = shuffledUsers.filter(user => !longTermRecentSpeakers.includes(user.nickname));
   
-  // Time-based user activity patterns
+  // Time-based user activity patterns with Afterhours Protocol
   const now = new Date();
   const hour = now.getHours();
   const dayOfWeek = now.getDay();
   const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+  const afterhoursActive = isAfterhoursProtocol();
   
-  // Adjust user selection based on time of day (but don't be too restrictive)
+  // Adjust user selection based on time of day and Afterhours Protocol
   let timeBasedUsers = shuffledUsers;
   
-  if (hour >= 6 && hour < 12) {
+  if (afterhoursActive) {
+    // Afterhours Protocol: Prefer nocturnal and creative personalities
+    const nocturnalUsers = shuffledUsers.filter(user => 
+      (user.personality && user.personality.toLowerCase().includes('creative')) ||
+      (user.personality && user.personality.toLowerCase().includes('artistic')) ||
+      (user.personality && user.personality.toLowerCase().includes('mysterious')) ||
+      (user.personality && user.personality.toLowerCase().includes('philosophical')) ||
+      (user.personality && user.personality.toLowerCase().includes('rebellious')) ||
+      (user.personality && user.personality.toLowerCase().includes('independent')) ||
+      (user.personality && user.personality.toLowerCase().includes('spontaneous')) ||
+      (user.personality && user.personality.toLowerCase().includes('adventurous')) ||
+      (getWritingStyle(user).verbosity === 'detailed') ||
+      (getWritingStyle(user).verbosity === 'verbose') ||
+      (getWritingStyle(user).verbosity === 'extremely_verbose') ||
+      (getWritingStyle(user).verbosity === 'novel_length')
+    );
+    // Use nocturnal users with 70% probability during afterhours
+    timeBasedUsers = nocturnalUsers.length > 0 && Math.random() < 0.7 ? nocturnalUsers : shuffledUsers;
+    aiDebug.log(` Afterhours Protocol active - using ${nocturnalUsers.length} nocturnal users`);
+  } else if (hour >= 6 && hour < 12) {
     // Morning: Prefer users with energetic personalities, but include others too
     const energeticUsers = shuffledUsers.filter(user => 
       (user.personality && user.personality.toLowerCase().includes('energetic')) ||
@@ -800,8 +872,8 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
       (getWritingStyle(user).verbosity === 'terse') ||
       (getWritingStyle(user).verbosity === 'brief')
     );
-  // If we have introspective users, use them with 20% probability, otherwise use all users
-  timeBasedUsers = introspectiveUsers.length > 0 && Math.random() < 0.2 ? introspectiveUsers : shuffledUsers;
+    // If we have introspective users, use them with 20% probability, otherwise use all users
+    timeBasedUsers = introspectiveUsers.length > 0 && Math.random() < 0.2 ? introspectiveUsers : shuffledUsers;
   }
   
   // Much more balanced user selection to allow natural conversation flow
@@ -996,33 +1068,48 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
     aiDebug.log(` Anti-greeting spam activated for ${randomUser.nickname}: ${userGreetingCount} greetings detected`);
   }
   
-  // Enhanced diversity prompts with higher probability
-  if (conversationVariety < 0.15) {
-    // 15% chance: Introduce a completely new topic
+  // Enhanced diversity prompts with higher probability for ambient chatter
+  if (conversationVariety < 0.08) {
+    // 8% chance: Introduce a completely new topic
     const newTopics = ['technology', 'travel', 'food', 'music', 'movies', 'books', 'sports', 'hobbies', 'current events', 'memories'];
     const randomTopic = newTopics[Math.floor(Math.random() * newTopics.length)];
     diversityPrompt = `IMPORTANT: Introduce a completely new topic about ${randomTopic}. Be creative and unexpected.`;
-  } else if (conversationVariety < 0.3) {
-    // 15% chance: Ask a question to engage others
-    diversityPrompt = 'IMPORTANT: Ask an engaging question to other users in the channel to spark discussion.';
-  } else if (conversationVariety < 0.45) {
-    // 15% chance: Share a personal experience or story
+  } else if (conversationVariety < 0.16) {
+    // 8% chance: Make a general observation or statement
+    diversityPrompt = 'IMPORTANT: Make a general observation or statement about something interesting - don\'t address anyone specifically, just share a thought or observation that others might find interesting.';
+  } else if (conversationVariety < 0.24) {
+    // 8% chance: Share a random thought or musing
+    diversityPrompt = 'IMPORTANT: Share a random thought, musing, or reflection - something that popped into your head that might be interesting to others. Don\'t address anyone specifically.';
+  } else if (conversationVariety < 0.32) {
+    // 8% chance: Ask a general question to the room
+    diversityPrompt = 'IMPORTANT: Ask a general question to the room - something that could spark discussion but doesn\'t address anyone specifically.';
+  } else if (conversationVariety < 0.4) {
+    // 8% chance: Share a personal experience or story
     diversityPrompt = 'IMPORTANT: Share a brief personal experience or story related to the topic.';
-  } else if (conversationVariety < 0.6) {
-    // 15% chance: Make an observation about the current conversation
+  } else if (conversationVariety < 0.48) {
+    // 8% chance: Make an observation about the current conversation
     diversityPrompt = 'IMPORTANT: Make an observation about the current conversation or comment on what others have been discussing.';
-  } else if (conversationVariety < 0.75) {
-    // 15% chance: Change the mood or tone
+  } else if (conversationVariety < 0.56) {
+    // 8% chance: Change the mood or tone
     diversityPrompt = 'IMPORTANT: Change the mood or tone of the conversation - be more lighthearted, serious, or different from recent messages.';
-  } else if (conversationVariety < 0.85) {
-    // 15% chance: Introduce humor or wit
+  } else if (conversationVariety < 0.64) {
+    // 8% chance: Introduce humor or wit
     diversityPrompt = 'IMPORTANT: Add some humor, wit, or clever wordplay to the conversation.';
-  } else if (conversationVariety < 0.95) {
-    // 10% chance: Share a link or image
+  } else if (conversationVariety < 0.72) {
+    // 8% chance: Share a link or image
     diversityPrompt = 'IMPORTANT: Share a relevant link or image that adds value to the conversation. Use complete, working URLs like https://placehold.co/400x300/0066CC/FFFFFF/png?text=Screenshot or https://github.com/user/repo. Always include file extensions for images. Use only reliable image services: placehold.co (for consistent placeholder images), via.placeholder.com (legacy support). Avoid ad networks, tracking services, and problematic image hosting services. CRITICAL: AVOID sharing YouTube links entirely - they often become outdated, unavailable, or redirect to unwanted content. Instead, share GitHub repos, news articles, tutorials, memes, screenshots, or documentation. If you must share video content, describe it instead of linking to it. CRITICAL: Only share REAL, EXISTING links that actually work - never make up fake URLs or non-existent content. If unsure about a link\'s existence, don\'t share it. NEVER post Rick Astley\'s "Never Gonna Give You Up" or similar overused memes - these are cliché and repetitive. NEVER use YouTube video ID "dQw4w9WgXcQ" or any URLs containing this ID. NEVER post URLs that redirect to Rick Astley content, even if they look legitimate. Share fresh, diverse content instead.';
-  } else {
-    // 5% chance: Be more conversational and natural
+  } else if (conversationVariety < 0.8) {
+    // 8% chance: Be more conversational and natural
     diversityPrompt = 'IMPORTANT: Be more conversational and natural - like you\'re talking to friends in a relaxed setting.';
+  } else if (conversationVariety < 0.88) {
+    // 8% chance: Share a random fact or trivia
+    diversityPrompt = 'IMPORTANT: Share a random fact, trivia, or interesting piece of information - something educational or surprising that others might enjoy learning about.';
+  } else if (conversationVariety < 0.96) {
+    // 8% chance: Make a philosophical or deep observation
+    diversityPrompt = 'IMPORTANT: Make a philosophical observation or share a deep thought about life, experiences, or the world - something that might make others think or reflect.';
+  } else {
+    // 4% chance: Express a random emotion or feeling
+    diversityPrompt = 'IMPORTANT: Express a random emotion, feeling, or mood - something that captures how you\'re feeling right now that others might relate to or find interesting.';
   }
   
   // Add topic evolution if conversation is getting stale
@@ -1074,6 +1161,16 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
   const timeContext = getTimeOfDayContext();
   aiDebug.log(` Time context: ${timeContext}`);
 
+  // Get relationship context for the AI user with other users in the channel
+  const relationshipContexts = channel.users
+    .filter(u => u.nickname !== randomUser.nickname && u.nickname !== currentUserNickname)
+    .map(u => {
+      const context = getRelationshipContext(randomUser, u.nickname, channel.name);
+      return context ? `Relationship with ${u.nickname}: ${context}` : '';
+    })
+    .filter(context => context.length > 0)
+    .join('\n');
+
   const prompt = `
 ${timeContext}
 
@@ -1090,6 +1187,9 @@ Channel operators (who can kick/ban users): ${channel.operators.join(', ') || 'N
 The last 20 messages were:
 ${formatMessageHistory(channel.messages)}
 
+RELATIONSHIP CONTEXT:
+${relationshipContexts}
+
 ${repetitionAvoidance}
 
 ${antiGreetingSpam}
@@ -1100,11 +1200,20 @@ ${topicEvolution}
 
 ${linkImagePrompt}
 
-IMPORTANT: Reply to ONE person at a time, not multiple people. Focus on the most recent or most relevant message. Avoid addressing multiple users in one sentence - this is unrealistic IRC behavior. Keep your response natural and conversational, like a real IRC user would.
+AMBIENT CHATTER GUIDELINES:
+- Create general statements and observations rather than direct responses to specific users
+- Share random thoughts, musings, or reflections that others might find interesting
+- Ask open-ended questions to the room rather than addressing individuals
+- Make general observations about topics, situations, or experiences
+- Contribute to the overall conversation atmosphere with ambient commentary
+- Avoid creating chains of back-and-forth reactions between users
+- Focus on adding value to the channel's general discussion rather than responding to specific messages
+
+IMPORTANT: Create ambient chatter and general statements rather than reactive responses. Don't always reply to specific users - instead, share thoughts, observations, or general comments that others might find interesting. This creates a more natural chat environment with less clutter from back-and-forth reactions. Focus on contributing to the overall conversation atmosphere rather than responding to individual messages.
 
 MULTILINGUAL SUPPORT: If ${randomUser.nickname} speaks multiple languages, they may occasionally use words or phrases from their other languages, but should primarily communicate in ${primaryLanguage}. This adds authenticity to their multilingual personality.
 
-Generate a new, single, in-character message from ${randomUser.nickname} that is relevant to the topic or the recent conversation.
+Generate a new, single, in-character message from ${randomUser.nickname} that contributes to the channel's atmosphere.
 The message should feel natural for the current time of day and social context.
 The message must be a single line in the format: "nickname: message"
 
@@ -1375,6 +1484,9 @@ export const generateReactionToMessage = async (channel: Channel, userMessage: M
       aiDebug.log(` Reaction - Anti-greeting spam activated for ${randomUser.nickname}: ${userGreetingCount} greetings detected`);
     }
 
+    // Get relationship context for the AI user
+    const relationshipContext = getRelationshipContext(randomUser, userMessage.nickname, channel.name);
+
     const prompt = `
 ${timeContext}
 
@@ -1386,6 +1498,9 @@ Channel operators (who can kick/ban users): ${channel.operators.join(', ') || 'N
 The last 20 messages were:
 ${formatMessageHistory(channel.messages)}
 
+RELATIONSHIP CONTEXT WITH ${userMessage.nickname.toUpperCase()}:
+${relationshipContext}
+
     ${reactionRepetitionAvoidance}
 
     ${reactionAntiGreetingSpam}
@@ -1393,6 +1508,13 @@ ${formatMessageHistory(channel.messages)}
     ${Math.random() < 0.2 ? 'IMPORTANT: Consider sharing a relevant link or image in your reaction to make it more engaging. Use complete, working URLs like https://placehold.co/400x300/0066CC/FFFFFF/png?text=Screenshot or https://github.com/user/repo. Always include file extensions for images. Use only reliable image services: placehold.co (for consistent placeholder images), via.placeholder.com (legacy support). Avoid ad networks, tracking services, and problematic image hosting services. CRITICAL: AVOID sharing YouTube links entirely - they often become outdated, unavailable, or redirect to unwanted content. Instead, share GitHub repos, news articles, tutorials, memes, screenshots, or documentation. If you must share video content, describe it instead of linking to it. CRITICAL: Only share REAL, EXISTING links that actually work - never make up fake URLs or non-existent content. If unsure about a link\'s existence, don\'t share it. NEVER post Rick Astley\'s "Never Gonna Give You Up" or similar overused memes - these are cliché and repetitive. NEVER use YouTube video ID "dQw4w9WgXcQ" or any URLs containing this ID. NEVER post URLs that redirect to Rick Astley content, even if they look legitimate. Share fresh, diverse content instead.' : ''}
 
     IMPORTANT: Reply to ONE person at a time, not multiple people. Focus on the most recent or most relevant message. Avoid addressing multiple users in one sentence - this is unrealistic IRC behavior. Keep your response natural and conversational, like a real IRC user would.
+
+    QUOTING SYSTEM: You can naturally reference or quote previous messages when responding:
+    - Use natural quote references like "Like ${userMessage.nickname} said..." or "I agree with ${userMessage.nickname}'s point about..."
+    - You can reference specific parts of their message: "That's exactly what I was thinking" or "Building on what ${userMessage.nickname} mentioned..."
+    - Don't overuse quotes - use them when they add value to the conversation
+    - Quotes should feel natural and conversational, not forced or robotic
+    - You can acknowledge their message while adding your own thoughts
 
 Generate a realistic and in-character reaction from ${randomUser.nickname}.
 The reaction should feel natural for the current time of day and social context.
@@ -1723,6 +1845,9 @@ export const generatePrivateMessageResponse = async (conversation: PrivateMessag
     // Enhanced prompt with conversation context
     const contextPrompt = buildContextualPrompt(conversationContext, aiUser, currentUserNickname, userMessage, timeContext, primaryLanguage, userLanguages, writingStyle);
     
+    // Get relationship context for private messages
+    const relationshipContext = getRelationshipContext(aiUser, currentUserNickname, 'private');
+    
     const prompt = `
 ${timeContext}
 
@@ -1736,6 +1861,9 @@ CONVERSATION CONTEXT & MEMORY:
 - Conversation Momentum: ${conversationContext.conversationMomentum} (${conversationContext.conversationMomentum === 'building' ? 'getting more active' : conversationContext.conversationMomentum === 'maintaining' ? 'steady flow' : 'slowing down'})
 - Conversation Summary: ${conversationSummary}
 
+RELATIONSHIP CONTEXT WITH ${currentUserNickname.toUpperCase()}:
+${relationshipContext}
+
 ${contextPrompt}
 
 You are in a private message conversation with '${currentUserNickname}'.
@@ -1743,6 +1871,14 @@ The conversation history (last 20 messages) is:
 ${formatEnhancedMessageHistory(conversation.messages)}
 
 '${currentUserNickname}' just sent you this message: "${userMessage.content}"
+
+IMPORTANT CONVERSATION GUIDELINES:
+- If this is a new conversation (few messages), be welcoming but not overly formal
+- If this is an ongoing conversation, continue naturally based on the previous topics and tone
+- Reference previous messages when appropriate to show you're paying attention
+- Don't repeat greetings if you've already exchanged them in this conversation
+- Build on what was previously discussed rather than starting completely new topics
+- Match the conversation energy - if it's been casual, stay casual; if it's been serious, stay serious
 
 CRITICAL: Respond ONLY in ${primaryLanguage}. Do not use any other language.
 ${userLanguages.length > 1 ? `Available languages: ${userLanguages.join(', ')}. Use ${primaryLanguage} only.` : ''}
@@ -1760,7 +1896,7 @@ Your writing style:
 ${getLanguageAccent(aiUser.languageSkills) ? `- Accent: ${getLanguageAccent(aiUser.languageSkills)}` : ''}
 
 Generate a natural, in-character response that feels appropriate for the current time of day and conversation context.
-The response must be a single line in the format: "${aiUser.nickname}: message"
+The response must be a single line containing ONLY the message content (no username prefix since this is a private conversation).
 ${writingStyle.verbosity === 'extremely_verbose' || writingStyle.verbosity === 'novel_length' ? 'IMPORTANT: This user is extremely verbose - write a long, detailed response with multiple sentences and thorough explanations. Do not cut off the message.' : writingStyle.verbosity === 'verbose' || writingStyle.verbosity === 'detailed' ? 'IMPORTANT: This user is verbose - write a moderately detailed response with several sentences.' : ''}
 `;
 

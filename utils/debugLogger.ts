@@ -19,7 +19,6 @@ interface DebugConfig {
     join: boolean;
     config: boolean;
     chatLog: boolean;
-    ircExport: boolean;
     bot: boolean;
     image: boolean;
     dataExport: boolean;
@@ -32,7 +31,6 @@ interface DebugConfig {
     unread: boolean;
     content: boolean;
     media: boolean;
-    irc: boolean;
     all: boolean; // Master switch for all categories
   };
 }
@@ -53,7 +51,6 @@ const defaultDebugConfig: DebugConfig = {
     join: true,
     config: true,
     chatLog: true,
-    ircExport: true,
     bot: true,
     image: true,
     dataExport: true,
@@ -66,7 +63,6 @@ const defaultDebugConfig: DebugConfig = {
     unread: true,
     content: true,
     media: true,
-    irc: true,
     all: true
   }
 };

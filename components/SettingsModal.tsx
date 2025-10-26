@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import type { AppConfig, User, GeminiModel, Channel } from '../types';
 import { loadConfig } from '../utils/config';
-import { DEFAULT_NICKNAME, FALLBACK_AI_MODELS, DEFAULT_AI_MODEL, DEFAULT_TYPING_DELAY } from '../constants';
+import { DEFAULT_NICKNAME, FALLBACK_AI_MODELS, DEFAULT_AI_MODEL, DEFAULT_TYPING_DELAY, DEFAULT_TYPING_INDICATOR } from '../constants';
 import { generateRandomWorldConfiguration, listAvailableModels } from '../services/geminiService';
 import { UserManagement } from './UserManagement';
 import { BotManagement } from './BotManagement';
 import { ChannelManagement } from './ChannelManagement';
-import { IRCExportSettings } from './IRCExportSettings';
 import { getDebugConfig, updateDebugConfig, setDebugEnabled, setLogLevel, toggleCategory } from '../utils/debugLogger';
 import { DataExportModal } from './DataExportModal';
 import { DebugLogWindow } from './DebugLogWindow';
@@ -18,12 +17,6 @@ interface SettingsModalProps {
   onChannelsChange?: (channels: Channel[]) => void;
   currentUsers?: User[];
   onUsersChange?: (users: User[]) => void;
-  // IRC Export props
-  ircExportConfig?: any;
-  ircExportStatus?: any;
-  onIrcExportConfigChange?: (config: any) => void;
-  onIrcExportConnect?: () => Promise<void>;
-  onIrcExportDisconnect?: () => Promise<void>;
 }
 
 const DEFAULT_USERS_TEXT = `nova, A curious tech-savvy individual who loves gadgets.
@@ -56,10 +49,10 @@ const parseUsersFromText = (text: string): User[] => {
           }]
         },
         writingStyle: {
-          formality: 'informal' as const,
-          verbosity: 'neutral' as const,
+          formality: 'casual' as const,
+          verbosity: 'moderate' as const,
           humor: 'witty' as const,
-          emojiUsage: 'low' as const,
+          emojiUsage: 'rare' as const,
           punctuation: 'standard' as const
         }
       };
@@ -109,18 +102,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   currentChannels, 
   onChannelsChange, 
   currentUsers,
-  onUsersChange,
-  // IRC Export props
-  ircExportConfig = null,
-  ircExportStatus = null,
-  onIrcExportConfigChange = null,
-  onIrcExportConnect = null,
-  onIrcExportDisconnect = null
+  onUsersChange
 }) => {
   const [config, setConfig] = useState<AppConfig>(() => {
     const savedConfig = loadConfig();
     const aiModel = savedConfig?.aiModel || DEFAULT_AI_MODEL;
-    console.log('Initial AI model from config:', aiModel);
     return {
       currentUserNickname: savedConfig?.currentUserNickname || DEFAULT_NICKNAME,
       virtualUsers: savedConfig?.virtualUsers || DEFAULT_USERS_TEXT,
@@ -128,6 +114,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       simulationSpeed: savedConfig?.simulationSpeed || 'normal',
       aiModel: aiModel || DEFAULT_AI_MODEL, // Ensure it's never undefined
       typingDelay: savedConfig?.typingDelay || DEFAULT_TYPING_DELAY,
+      typingIndicator: savedConfig?.typingIndicator || DEFAULT_TYPING_INDICATOR,
       userObjects: savedConfig?.userObjects,
       imageGeneration: savedConfig?.imageGeneration || {
         provider: 'placeholder',
@@ -202,7 +189,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           topP: 0.95,
           topK: 40
         }));
-        console.log('Using fallback models:', fallbackModels);
         setAvailableModels(fallbackModels);
       } finally {
         setIsLoadingModels(false);
@@ -220,16 +206,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         // If current model is not found, reset to the first available model
         const firstModel = availableModels[0];
         const newModelId = firstModel?.baseModelId || DEFAULT_AI_MODEL;
-        console.log('Resetting AI model from', config.aiModel, 'to', newModelId);
         setConfig(prev => ({ ...prev, aiModel: newModelId }));
       }
     }
   }, [availableModels]);
 
-  // Debug logging for config.aiModel changes
-  useEffect(() => {
-    console.log('[Settings Debug] config.aiModel changed to:', config.aiModel);
-  }, [config.aiModel]);
 
   const handleSave = () => {
     const configToSave = {
@@ -253,14 +234,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     
     // Special handling for AI model selection to ensure we use the model ID
     if (name === 'aiModel') {
-      console.log('[Settings Debug] AI Model changed to:', value);
-      console.log('[Settings Debug] Current config.aiModel before update:', config.aiModel);
-      console.log('[Settings Debug] Available models:', availableModels.map(m => ({ name: m.name, baseModelId: m.baseModelId, displayName: m.displayName })));
-      setConfig(prev => {
-        const newConfig = { ...prev, [name]: value };
-        console.log('[Settings Debug] New config after update:', newConfig);
-        return newConfig;
-      });
+      setConfig(prev => ({ ...prev, [name]: value }));
     } else {
       setConfig(prev => ({ ...prev, [name]: value }));
     }
@@ -357,15 +331,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             allUsers={users} 
           />
           
-          {ircExportConfig && ircExportStatus && onIrcExportConfigChange && onIrcExportConnect && onIrcExportDisconnect ? (
-            <IRCExportSettings
-              config={ircExportConfig}
-              onConfigChange={onIrcExportConfigChange}
-              status={ircExportStatus}
-              onConnect={onIrcExportConnect}
-              onDisconnect={onIrcExportDisconnect}
-            />
-          ) : null}
           
           
           <div>
@@ -429,8 +394,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
 
           <div className="border-t border-gray-600 pt-6">
-            <h3 className="text-lg font-semibold text-gray-200 mb-4">Typing Delay Settings</h3>
-            <p className="text-sm text-gray-400 mb-4">Configure how long AI users take to "type" their messages, making conversations feel more realistic.</p>
+            <h3 className="text-lg font-semibold text-gray-200 mb-4">Typing Settings</h3>
+            <p className="text-sm text-gray-400 mb-4">Configure typing delays and indicator display preferences for a more realistic chat experience.</p>
             
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -472,12 +437,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Maximum Delay: {config.typingDelay.maxDelay}ms
+                      Maximum Delay: {config.typingDelay.maxDelay}ms ({Math.round(config.typingDelay.maxDelay / 1000)}s)
                     </label>
                     <input
                       type="range"
                       min="1000"
-                      max="10000"
+                      max="30000"
                       step="500"
                       value={config.typingDelay.maxDelay}
                       onChange={(e) => setConfig(prev => ({
@@ -488,7 +453,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     />
                     <div className="flex justify-between text-xs text-gray-500 mt-1">
                       <span>1000ms (1s)</span>
-                      <span>10000ms (10s)</span>
+                      <span>30000ms (30s)</span>
                     </div>
                   </div>
                   
@@ -497,10 +462,75 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <strong>How it works:</strong> AI users will wait a random amount of time before sending messages. 
                       Longer messages take more time to "type". The delay is calculated as: 
                       base delay + (message length factor × random factor), capped at the maximum delay.
+                      <br /><br />
+                      <strong>Realistic typing:</strong> For very long messages (like detailed explanations or stories), 
+                      the maximum delay can now be set up to 30 seconds to simulate realistic human typing patterns.
                     </p>
                   </div>
                 </>
               )}
+            </div>
+            
+            {/* Typing Indicator Configuration */}
+            <div className="mt-6">
+              <h4 className="text-md font-semibold text-gray-200 mb-3">Typing Indicator Display</h4>
+              <p className="text-sm text-gray-400 mb-4">Choose when to show typing indicators to indicate when AI users are composing messages.</p>
+              
+              <div className="space-y-3">
+                <label className="flex items-center space-x-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="typingIndicatorMode"
+                    value="all"
+                    checked={config.typingIndicator?.mode === 'all'}
+                    onChange={(e) => setConfig(prev => ({
+                      ...prev,
+                      typingIndicator: { ...prev.typingIndicator, mode: e.target.value as 'all' | 'private_only' | 'none' }
+                    }))}
+                    className="h-4 w-4 bg-gray-700 border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <div>
+                    <div className="text-sm font-medium text-gray-300">Show in all windows</div>
+                    <div className="text-xs text-gray-400">Display typing indicators in both channels and private messages</div>
+                  </div>
+                </label>
+                
+                <label className="flex items-center space-x-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="typingIndicatorMode"
+                    value="private_only"
+                    checked={config.typingIndicator?.mode === 'private_only'}
+                    onChange={(e) => setConfig(prev => ({
+                      ...prev,
+                      typingIndicator: { ...prev.typingIndicator, mode: e.target.value as 'all' | 'private_only' | 'none' }
+                    }))}
+                    className="h-4 w-4 bg-gray-700 border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <div>
+                    <div className="text-sm font-medium text-gray-300">Show only in private messages</div>
+                    <div className="text-xs text-gray-400">Display typing indicators only in private message windows (recommended)</div>
+                  </div>
+                </label>
+                
+                <label className="flex items-center space-x-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="typingIndicatorMode"
+                    value="none"
+                    checked={config.typingIndicator?.mode === 'none'}
+                    onChange={(e) => setConfig(prev => ({
+                      ...prev,
+                      typingIndicator: { ...prev.typingIndicator, mode: e.target.value as 'all' | 'private_only' | 'none' }
+                    }))}
+                    className="h-4 w-4 bg-gray-700 border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <div>
+                    <div className="text-sm font-medium text-gray-300">Don't show at all</div>
+                    <div className="text-xs text-gray-400">Never display typing indicators</div>
+                  </div>
+                </label>
+              </div>
             </div>
           </div>
 

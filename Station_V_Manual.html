@@ -274,7 +274,7 @@
         <div class="header">
             <h1>🚀 Station V - Virtual IRC Simulator</h1>
             <div class="subtitle">Complete User Manual & Guide</div>
-            <div class="version">Version 1.17.0</div>
+            <div class="version">Version 1.19.0</div>
         </div>
 
         <div class="toc">
@@ -285,13 +285,17 @@
                 <li><a href="#getting-started">3. Getting Started</a></li>
                 <li><a href="#interface">4. User Interface Guide</a></li>
                 <li><a href="#chat-features">5. Chat Features & Commands</a></li>
+                <li><a href="#discord-quoting">5.1. Discord-Style Quoting System</a></li>
+                <li><a href="#ai-memory">5.2. AI Memory & Relationship System</a></li>
+                <li><a href="#ai-operator-system">5.3. AI Operator System</a></li>
                 <li><a href="#user-management">6. User Management</a></li>
                 <li><a href="#channel-management">7. Channel Management</a></li>
                 <li><a href="#ai-simulation">8. AI Simulation & Personalities</a></li>
                 <li><a href="#network-mode">9. Network Mode & Multi-User</a></li>
                 <li><a href="#settings">10. Settings & Configuration</a></li>
-                <li><a href="#troubleshooting">11. Troubleshooting</a></li>
-                <li><a href="#advanced">12. Advanced Features</a></li>
+                <li><a href="#development-improvements">11. Development Improvements (v1.18.0)</a></li>
+                <li><a href="#troubleshooting">12. Troubleshooting</a></li>
+                <li><a href="#advanced">13. Advanced Features</a></li>
             </ul>
         </div>
 
@@ -312,11 +316,11 @@
                 </div>
                 <div class="feature-card">
                     <h4>💬 Classic IRC Interface</h4>
-                    <p>Three-panel layout with channels, chat window, and user list - just like traditional IRC clients.</p>
+                    <p>Three-panel layout with channels, chat window, and user list - just like classic chat applications.</p>
                 </div>
                 <div class="feature-card">
-                    <h4>🎭 Advanced Personalities</h4>
-                    <p>Create detailed AI personalities with custom language skills, writing styles, and cultural backgrounds.</p>
+                    <h4>🎭 Enhanced Personalities</h4>
+                    <p>Revolutionary 7-level personality system with 37 total combinations for unique AI characters.</p>
                 </div>
                 <div class="feature-card">
                     <h4>🌐 Network Mode</h4>
@@ -329,6 +333,10 @@
                 <div class="feature-card">
                     <h4>🔧 Customization</h4>
                     <p>Full control over channels, users, simulation speed, and AI behavior settings.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>👑 AI Operator System</h4>
+                    <p>Intelligent AI operators with multilingual support and realistic decision-making for privilege requests.</p>
                 </div>
             </div>
         </div>
@@ -395,7 +403,7 @@ npm run dev:full:win
             <div class="step">
                 <span class="step-number">6</span>
                 <strong>Open in Browser</strong>
-                <p>Open <code class="command">http://localhost:5173/</code> (or the port shown in your terminal) in your web browser.</p>
+                <p>Open <code class="command">http://localhost:3000/</code> (or the port shown in your terminal) in your web browser.</p>
             </div>
 
             <div class="success">
@@ -444,7 +452,7 @@ npm run dev:full:win
             <h2>4. 🖥️ User Interface Guide</h2>
 
             <h3>Main Interface Layout</h3>
-            <p>Station V uses a classic three-panel IRC layout that's familiar to anyone who has used traditional IRC clients:</p>
+            <p>Station V uses a classic three-panel chat layout that's familiar to anyone who has used traditional chat applications:</p>
 
             <h4>Left Panel - Channel & PM List</h4>
             <ul>
@@ -550,6 +558,11 @@ npm run dev:full:win
                     <td>Show available commands</td>
                     <td><code>/help</code></td>
                 </tr>
+                <tr>
+                    <td><code>/op</code></td>
+                    <td>Request operator status from AI operators</td>
+                    <td><code>/op</code></td>
+                </tr>
             </table>
 
             <h4>Moderation Commands</h4>
@@ -603,6 +616,108 @@ npm run dev:full:win
 
             <div class="info">
                 <strong>💡 Note:</strong> Bot commands are used naturally by AI users in context. You can also use them in your messages!
+            </div>
+
+            <h3 id="discord-quoting">💬 Discord-Style Quoting System</h3>
+            <p>Station V features a modern Discord-style quoting system for enhanced conversation flow:</p>
+            
+            <h4>How to Quote Messages</h4>
+            <ol>
+                <li><strong>Hover over any message</strong> to reveal the "Reply" button</li>
+                <li><strong>Click "Reply"</strong> to quote that message</li>
+                <li><strong>See the quote preview</strong> above your input field</li>
+                <li><strong>Type your response</strong> and send as normal</li>
+                <li><strong>Remove quotes</strong> by clicking the X button if needed</li>
+            </ol>
+
+            <h4>Quote Features</h4>
+            <ul>
+                <li><strong>Visual Design:</strong> Beautiful Discord-style quote rendering with left border and user information</li>
+                <li><strong>Cross-User Support:</strong> Both virtual users and human users can quote messages</li>
+                <li><strong>Network Compatibility:</strong> Quote functionality works in both local and network modes</li>
+                <li><strong>Quote Preview:</strong> See exactly what you're quoting before sending</li>
+                <li><strong>Easy Removal:</strong> Remove quotes with a single click</li>
+            </ul>
+
+            <h3 id="ai-memory">🧠 AI Memory & Relationship System</h3>
+            <p>Virtual users now have enhanced memory capabilities that make interactions more realistic and contextual:</p>
+
+            <h4>Relationship Progression</h4>
+            <p>AI users build relationships with you over time through interactions:</p>
+            <ul>
+                <li><strong>Stranger:</strong> First-time interactions - AI users are polite but distant</li>
+                <li><strong>Acquaintance:</strong> After 5+ interactions - AI users recognize you and are more friendly</li>
+                <li><strong>Friendly:</strong> After 20+ interactions over multiple days - AI users are warm and engaging</li>
+                <li><strong>Close:</strong> After 50+ interactions with shared topics - AI users treat you like a close friend</li>
+                <li><strong>Enemy:</strong> Rare, based on negative sentiment patterns - AI users may be hostile</li>
+            </ul>
+
+            <h4>Memory Features</h4>
+            <ul>
+                <li><strong>Channel Memory:</strong> AI remembers which channels you've interacted in together</li>
+                <li><strong>Topic Tracking:</strong> AI tracks shared interests like programming, gaming, music, movies, etc.</li>
+                <li><strong>Sentiment Analysis:</strong> AI analyzes whether interactions are positive, neutral, or negative</li>
+                <li><strong>Memory Decay:</strong> Relationships cool down after 7+ days of inactivity</li>
+                <li><strong>Contextual Responses:</strong> AI users reference past conversations and shared experiences</li>
+            </ul>
+
+            <div class="info">
+                <strong>💡 Example:</strong> After chatting about React in #dev, an AI user might later say "Hey, remember when we talked about React hooks yesterday? I found this cool tutorial..."
+            </div>
+
+            <h3 id="ai-operator-system">👑 AI Operator System</h3>
+            <p>Station V features an intelligent AI operator system that responds to operator privilege requests with realistic decision-making and multilingual support.</p>
+            
+            <h4>How the /op Command Works</h4>
+            <p>When you type <code>/op</code> in a channel:</p>
+            <ol>
+                <li><strong>AI Assessment:</strong> AI operators evaluate your request based on your recent behavior</li>
+                <li><strong>Intelligent Decision:</strong> They consider factors like trustworthiness, helpfulness, and channel needs</li>
+                <li><strong>Multilingual Response:</strong> Operators respond in their configured languages with appropriate IRC terminology</li>
+                <li><strong>Status Granting:</strong> If approved, you automatically receive operator privileges</li>
+            </ol>
+
+            <h4>Operator Response Features</h4>
+            <ul>
+                <li><strong>70% Response Rate:</strong> AI operators respond to most requests (30% chance of no response)</li>
+                <li><strong>Multilingual Support:</strong> Responses in 30+ languages with proper IRC terminology</li>
+                <li><strong>Personality-Driven:</strong> Each operator's response reflects their unique personality and values</li>
+                <li><strong>Context-Aware:</strong> Decisions based on recent channel activity and user behavior</li>
+                <li><strong>Automatic Status Updates:</strong> Successful requests immediately grant operator privileges</li>
+            </ul>
+
+            <h4>Supported Languages for Operator Responses</h4>
+            <p>AI operators can respond in their configured languages using appropriate IRC terminology:</p>
+            <div class="feature-grid">
+                <div class="feature-item">
+                    <h5>European Languages</h5>
+                    <ul>
+                        <li>English, Spanish, French, German, Italian</li>
+                        <li>Portuguese, Dutch, Swedish, Norwegian</li>
+                        <li>Finnish, Polish, Czech, Hungarian</li>
+                        <li>Romanian, Bulgarian, Croatian, Serbian</li>
+                        <li>Slovak, Slovenian, Ukrainian</li>
+                    </ul>
+                </div>
+                <div class="feature-item">
+                    <h5>Asian Languages</h5>
+                    <ul>
+                        <li>Japanese, Chinese, Korean</li>
+                        <li>Thai, Vietnamese, Indonesian</li>
+                        <li>Malay, Tagalog, Hindi</li>
+                    </ul>
+                </div>
+                <div class="feature-item">
+                    <h5>Other Languages</h5>
+                    <ul>
+                        <li>Arabic, Hebrew, Turkish</li>
+                        <li>Russian, and more...</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="tip-box">
+                <strong>💡 Pro Tip:</strong> AI operators make realistic decisions based on your behavior. Be helpful, follow channel etiquette, and show you understand the community to increase your chances of getting operator status!
             </div>
         </div>
 
@@ -854,7 +969,6 @@ npm run dev:full
                 <li>The server will start on:
                     <ul>
                         <li>WebSocket: <code>ws://localhost:8080/station-v</code></li>
-                        <li>IRC: <code>irc://localhost:6667</code></li>
                     </ul>
                 </li>
             </ol>
@@ -863,7 +977,6 @@ npm run dev:full
             <p>Other users can connect via:</p>
             <ul>
                 <li><strong>Web Browser:</strong> Open Station V and use the Network panel</li>
-                <li><strong>IRC Client:</strong> Connect any IRC client to localhost:6667</li>
             </ul>
 
             <h3>Web Client Connection</h3>
@@ -881,14 +994,6 @@ npm run dev:full
                 <li>Click "Connect"</li>
             </ol>
 
-            <h3>IRC Client Connection</h3>
-            <p>Connect any IRC client (mIRC, HexChat, etc.) to:</p>
-            <ul>
-                <li>Server: <code>localhost</code></li>
-                <li>Port: <code>6667</code></li>
-                <li>Nickname: Your desired nickname</li>
-                <li>Channels: <code>#general</code>, <code>#random</code>, etc.</li>
-            </ul>
 
             <h3>Network Features</h3>
             <ul>
@@ -1013,8 +1118,89 @@ npm run dev:full
             </div>
         </div>
 
+        <div class="section" id="development-improvements">
+            <h2>11. 🛠️ Development Improvements (v1.18.0)</h2>
+
+            <h3>Enhanced Development Experience</h3>
+            <p>Version 1.19.0 includes significant improvements to conversation flow and AI memory capabilities:</p>
+
+            <h4>Improved npm Scripts</h4>
+            <ul>
+                <li><strong>Enhanced dev:full:</strong> Better process management with <code>--kill-others-on-fail</code></li>
+                <li><strong>Windows Alternatives:</strong> <code>dev:full:win</code> (batch) and <code>dev:full:ps</code> (PowerShell)</li>
+                <li><strong>Individual Services:</strong> <code>dev:server</code> and <code>dev:client</code> for separate development</li>
+                <li><strong>Utility Commands:</strong> <code>install:all</code> for complete project setup</li>
+            </ul>
+
+            <h4>Port Configuration</h4>
+            <div class="info">
+                <strong>📝 Note:</strong> Station V is configured to use port 3000 for the Vite development server (instead of the default 5173). This is set in <code>vite.config.ts</code> and all documentation reflects this configuration.
+            </div>
+
+            <h4>Enhanced Personality System</h4>
+            <p>The personality attribute system has been completely overhauled with unprecedented granularity:</p>
+            <ul>
+                <li><strong>7 Formality Levels:</strong> From Ultra-casual to Ultra-formal</li>
+                <li><strong>7 Verbosity Levels:</strong> From Terse to Novel-length responses</li>
+                <li><strong>9 Humor Styles:</strong> From None to Unhinged humor</li>
+                <li><strong>7 Emoji Usage Patterns:</strong> From None to Emoji-only responses</li>
+                <li><strong>7 Punctuation Styles:</strong> From Minimal to Experimental punctuation</li>
+            </ul>
+
+            <h4>Backward Compatibility</h4>
+            <p>All existing user data is automatically migrated to the new system:</p>
+            <ul>
+                <li><strong>Seamless Migration:</strong> Old attribute values are mapped to closest new equivalents</li>
+                <li><strong>Data Preservation:</strong> No loss of existing user configurations</li>
+                <li><strong>Smart Detection:</strong> Automatic detection and conversion of legacy data</li>
+            </ul>
+
+            <h4>AI Operator System</h4>
+            <p>New intelligent operator system with realistic decision-making:</p>
+            <ul>
+                <li><strong>/op Command:</strong> Request operator status from AI operators</li>
+                <li><strong>Multilingual Support:</strong> 30+ languages with proper IRC terminology</li>
+                <li><strong>Intelligent Responses:</strong> Context-aware decisions based on user behavior</li>
+                <li><strong>Automatic Status Updates:</strong> Successful requests immediately grant privileges</li>
+            </ul>
+
+            <h4>Development Workflow</h4>
+            <p>Choose the right development command for your needs:</p>
+            <table class="table">
+                <tr>
+                    <th>Command</th>
+                    <th>Use Case</th>
+                    <th>Description</th>
+                </tr>
+                <tr>
+                    <td><code>npm run dev</code></td>
+                    <td>Client-only development</td>
+                    <td>Start Vite client only (http://localhost:3000)</td>
+                </tr>
+                <tr>
+                    <td><code>npm run dev:full</code></td>
+                    <td>Full development</td>
+                    <td>Start both server and client with concurrently</td>
+                </tr>
+                <tr>
+                    <td><code>npm run dev:full:win</code></td>
+                    <td>Windows alternative</td>
+                    <td>Launch in separate windows using batch file</td>
+                </tr>
+                <tr>
+                    <td><code>npm run dev:full:ps</code></td>
+                    <td>PowerShell alternative</td>
+                    <td>Launch in separate windows using PowerShell</td>
+                </tr>
+            </table>
+
+            <div class="tip-box">
+                <strong>💡 Pro Tip:</strong> If you encounter "concurrently not recognized" errors on Windows, use <code>npm run dev:full:win</code> or <code>npm run dev:full:ps</code> as alternatives that work reliably on all Windows systems.
+            </div>
+        </div>
+
         <div class="section" id="troubleshooting">
-            <h2>11. 🔧 Troubleshooting</h2>
+            <h2>12. 🔧 Troubleshooting</h2>
 
             <h3>Common Issues</h3>
             
@@ -1117,7 +1303,7 @@ npm run dev:full
         </div>
 
         <div class="section" id="advanced">
-            <h2>12. 🚀 Advanced Features</h2>
+            <h2>13. 🚀 Advanced Features</h2>
 
             <h3>Custom AI Personalities</h3>
             <p>Create sophisticated AI personalities with detailed traits:</p>
@@ -1295,7 +1481,7 @@ npm run dev:full
         <div class="footer">
             <h3>🎉 Congratulations!</h3>
             <p>You now have everything you need to create and manage your own virtual IRC community with Station V!</p>
-            <p><strong>Version 1.17.0</strong> | Created by Timo Pitkänen | <a href="mailto:timbor@saunagames.fi" style="color: #ecf0f1;">timbor@saunagames.fi</a></p>
+            <p><strong>Version 1.19.0</strong> | Created by Timo Pitkänen | <a href="mailto:timbor@saunagames.fi" style="color: #ecf0f1;">timbor@saunagames.fi</a></p>
             <p><a href="https://www.saunagames.fi/timbor" target="_blank" style="color: #ecf0f1;">www.saunagames.fi/timbor</a></p>
         </div>
     </div>

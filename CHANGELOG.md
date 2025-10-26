@@ -4,6 +4,94 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 
 *Note: This project was previously known as "Gemini IRC Simulator" and was renamed to "Station V - Virtual IRC Simulator" as of v1.5.1.*
 
+## 1.19.0 - 2025-10-26
+
+### 🎨 Discord-Style Quoting System
+- **Message Quoting**: Implemented Discord-style quote/reply functionality for enhanced conversation flow
+  - **Quote Rendering**: Beautiful Discord-style quote display with left border styling and user information
+  - **Reply Controls**: Hover-to-show "Reply" button on all non-system messages
+  - **Quote Preview**: Interactive quote preview above input field with remove functionality
+  - **Cross-User Support**: Quote functionality works for both virtual users and human users
+  - **Network Compatibility**: Full support for quotes in both local and network modes
+
+### 🧠 Enhanced AI Memory System
+- **Relationship Tracking**: Virtual users now remember their relationships with human users across channels
+  - **Relationship Levels**: 5-level progression system (stranger → acquaintance → friendly → close → enemy)
+  - **Channel Memory**: AI users remember which channels they've interacted in with specific users
+  - **Topic Memory**: Tracks shared interests and conversation topics between users
+  - **Interaction History**: Stores last 20 interactions for contextual responses
+  - **Sentiment Analysis**: Analyzes interaction sentiment (positive/neutral/negative)
+  - **Memory Decay**: Relationships cool down after 7+ days of inactivity
+
+### 🔧 Technical Improvements
+- **TypeScript Enhancements**: Added comprehensive relationship memory interfaces
+  - **UserRelationshipMemory**: Main memory container for each user
+  - **UserRelationship**: Detailed relationship data between users
+  - **InteractionRecord**: Individual interaction tracking with context
+- **Service Architecture**: New relationship memory service for efficient memory management
+- **AI Prompt Enhancement**: Updated all AI prompts to include relationship context
+- **Performance Optimization**: Efficient memory management with automatic cleanup
+
+### 🚀 User Experience
+- **Realistic AI Behavior**: Virtual users now exhibit more contextual and realistic interactions
+  - **Recognize Familiar Users**: "Hey, we talked about programming in #dev yesterday!"
+  - **Reference Past Conversations**: "Like you mentioned before about React..."
+  - **Build Relationships**: Gradually become more friendly with frequent interactions
+  - **Remember Shared Interests**: Reference topics they've discussed together
+- **Enhanced Conversations**: More natural and engaging chat experiences across all channels
+
+## 1.18.1 - 2025-10-26
+
+### Code Cleanup & Improvements
+- **IRC Functionality Removal**: Cleaned up codebase by removing unnecessary real-life IRC functionality
+  - **Removed IRC Export System**: Eliminated IRC export features and related components
+  - **Simplified Settings Interface**: Removed IRC export configuration from settings modal
+  - **Code Reduction**: Removed unused IRC export service, components, and state management
+  - **Bundle Size Optimization**: Reduced application bundle size by removing unused dependencies
+
+### Documentation Updates
+- **Updated Manual**: Removed references to real IRC functionality from Station V Manual
+  - **Removed Port 6667 References**: Eliminated mentions of IRC server port 6667
+  - **Updated Network Mode**: Simplified network mode documentation to focus on WebSocket connections
+  - **Terminology Updates**: Changed "IRC clients" to "chat applications" for broader appeal
+  - **Code Statistics**: Updated file statistics to reflect current codebase structure
+
+### UI/UX Enhancements
+- **Configurable Typing Indicators**: Added flexible typing indicator display options
+  - **Three Display Modes**: Show in all windows, private messages only, or never
+  - **Smart Context Detection**: Automatic detection of private message vs channel windows
+  - **User Preference**: Default to showing typing indicators only in private messages
+  - **Settings Integration**: Added typing indicator configuration to settings modal
+
+### Bug Fixes & Improvements
+- **Autonomous PM Context Awareness**: Fixed AI private messages to be context-aware
+  - **Natural Conversation Flow**: AI now continues conversations instead of always sending greetings
+  - **Contextual Responses**: AI generates appropriate follow-ups based on conversation history
+  - **Improved User Experience**: More realistic and engaging private message interactions
+
+- **Profile Picture Consistency**: Enhanced profile picture display across all UI components
+  - **Consistent Rendering**: Profile pictures now display correctly in PM windows, channels, and user lists
+  - **Browser Cache Handling**: Added proper cache-busting for profile picture updates
+  - **Debug Logging**: Added comprehensive logging for profile picture troubleshooting
+
+- **Message Parsing Improvements**: Fixed spontaneous PM message formatting
+  - **Removed Username Prefixes**: AI PM responses no longer incorrectly include username prefixes
+  - **Clean Message Content**: PM responses now contain only the message content as intended
+  - **Improved Parsing**: Enhanced message parsing logic for better AI response handling
+
+### Development Experience
+- **Windows Compatibility**: Improved Windows development experience
+  - **Fixed Batch Files**: Corrected Windows batch file execution issues
+  - **PowerShell Scripts**: Added PowerShell alternatives for Windows users
+  - **Port Documentation**: Updated all documentation to reflect Vite using port 3000
+  - **Cross-Platform Scripts**: Enhanced npm scripts for better Windows compatibility
+
+### Code Quality
+- **Type Safety**: Enhanced TypeScript type definitions and interfaces
+- **Error Handling**: Improved error handling and user feedback
+- **Performance**: Optimized component rendering and state management
+- **Maintainability**: Cleaned up unused code and improved code organization
+
 ## 1.18.0 - 2025-10-25
 
 ### Major Features
@@ -59,7 +147,7 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
   - **Cross-Platform Compatibility**: Works reliably on Windows, macOS, and Linux
 - **Troubleshooting Documentation**: Comprehensive troubleshooting guide for development issues
   - **Concurrently Issues**: Clear solutions for "concurrently not recognized" errors
-  - **Port Conflicts**: Detailed guidance for port 8080 and 5173 conflicts
+  - **Port Conflicts**: Detailed guidance for port 8080 and 3000 conflicts
   - **Windows-Specific Solutions**: Native batch and PowerShell alternatives
   - **Batch File Fix**: Fixed Windows batch file pause command for better compatibility
 

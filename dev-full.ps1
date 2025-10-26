@@ -16,7 +16,7 @@ Start-Process powershell -ArgumentList "-NoExit", "-Command", "npm run dev" -Win
 Write-Host ""
 Write-Host "Both servers are starting in separate windows." -ForegroundColor Green
 Write-Host "WebSocket server: http://localhost:8080" -ForegroundColor Cyan
-Write-Host "Web client: http://localhost:5173" -ForegroundColor Cyan
+Write-Host "Web client: http://localhost:3000" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Press any key to exit this launcher..." -ForegroundColor Gray
 $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
