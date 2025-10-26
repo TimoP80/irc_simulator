@@ -44,20 +44,23 @@
       "to": "server"
     }
   ],
-  "win": {
-    "target": [
-      {
-        "target": "nsis",
-        "arch": ["x64", "ia32"]
-      },
-      {
-        "target": "portable",
-        "arch": ["x64"]
-      }
-    ],
-    "icon": "favicon.ico",
-    "requestedExecutionLevel": "asInvoker"
-  },
+        "win": {
+          "target": [
+            {
+              "target": "nsis",
+              "arch": ["x64", "ia32"]
+            },
+            {
+              "target": "portable",
+              "arch": ["x64"]
+            }
+          ],
+          "icon": "favicon.ico",
+          "requestedExecutionLevel": "asInvoker",
+          "sign": false,
+          "certificateFile": null,
+          "certificatePassword": null
+        },
   "mac": {
     "target": [
       {
@@ -96,7 +99,13 @@
     "createDesktopShortcut": true,
     "createStartMenuShortcut": true,
     "installerIcon": "favicon.ico",
-    "uninstallerIcon": "favicon.ico"
+    "uninstallerIcon": "favicon.ico",
+    "license": "LICENSE.txt",
+    "warningsAsErrors": false,
+    "runAfterFinish": true,
+    "menuCategory": "Social Networking",
+    "shortcutName": "Station V IRC Simulator",
+    "artifactName": "${productName}-${version}-${arch}-Setup.${ext}"
   },
   "dmg": {
     "title": "Station V - Virtual IRC Simulator",

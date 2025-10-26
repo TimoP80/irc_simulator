@@ -25,6 +25,14 @@ import { NetworkConnection } from './components/NetworkConnection';
 import { NetworkUsers } from './components/NetworkUsers';
 import { getNetworkService, type NetworkUser } from './services/networkService';
 
+// Electron detection utility
+const isElectron = (): boolean => {
+  return typeof window !== 'undefined' && 
+         window.process && 
+         window.process.type === 'renderer' ||
+         (typeof process !== 'undefined' && process.env.ELECTRON === 'true');
+};
+
 // Helper function to deduplicate users in a channel
 const deduplicateChannelUsers = (users: User[]): User[] => {
   const seen = new Set<string>();
@@ -272,6 +280,13 @@ const App: React.FC = () => {
   // Mobile navigation state
   const [mobileActivePanel, setMobileActivePanel] = useState<'chat' | 'channels' | 'users' | 'network'>('chat');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  
+  // Electron-specific state
+  const [isElectronApp, setIsElectronApp] = useState<boolean>(false);
+  const [electronWindowState, setElectronWindowState] = useState<'maximized' | 'normal' | 'minimized'>('normal');
+  const [showElectronTitleBar, setShowElectronTitleBar] = useState<boolean>(true);
+  const [electronMenuVisible, setElectronMenuVisible] = useState<boolean>(false);
+  
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
   const [lastSpeakersReset, setLastSpeakersReset] = useState(0); // Force user selection reset
   const [typingDelayConfig, setTypingDelayConfig] = useState(() => {
@@ -751,6 +766,67 @@ const App: React.FC = () => {
     );
   }, [currentUserNickname]);
 
+  // Electron-specific setup function
+  const setupElectronFeatures = useCallback(() => {
+    try {
+      // Add Electron-specific keyboard shortcuts
+      const handleElectronKeyboard = (event: KeyboardEvent) => {
+        // Ctrl/Cmd + Shift + D: Toggle developer tools
+        if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key === 'D') {
+          event.preventDefault();
+          if (window.electronAPI?.toggleDevTools) {
+            window.electronAPI.toggleDevTools();
+          }
+        }
+        
+        // Ctrl/Cmd + R: Reload (prevent default browser reload)
+        if ((event.ctrlKey || event.metaKey) && event.key === 'r') {
+          event.preventDefault();
+          if (window.electronAPI?.reload) {
+            window.electronAPI.reload();
+          }
+        }
+        
+        // F11: Toggle fullscreen
+        if (event.key === 'F11') {
+          event.preventDefault();
+          if (window.electronAPI?.toggleFullscreen) {
+            window.electronAPI.toggleFullscreen();
+          }
+        }
+        
+        // Alt + F4: Close window (Windows)
+        if (event.altKey && event.key === 'F4') {
+          event.preventDefault();
+          if (window.electronAPI?.closeWindow) {
+            window.electronAPI.closeWindow();
+          }
+        }
+      };
+
+      // Add keyboard event listener
+      document.addEventListener('keydown', handleElectronKeyboard);
+      
+      // Set up window state tracking
+      const handleWindowStateChange = (state: 'maximized' | 'normal' | 'minimized') => {
+        setElectronWindowState(state);
+      };
+
+      // Listen for window state changes if Electron API is available
+      if (window.electronAPI?.onWindowStateChange) {
+        window.electronAPI.onWindowStateChange(handleWindowStateChange);
+      }
+
+      appDebug.log('Electron features initialized successfully');
+      
+      return () => {
+        document.removeEventListener('keydown', handleElectronKeyboard);
+      };
+    } catch (error) {
+      appDebug.error('Failed to setup Electron features:', error);
+    }
+  }, []);
+
   // Load channel logs from localStorage on initial render
   useEffect(() => {
     const initializeApp = async () => {
@@ -787,6 +863,32 @@ const App: React.FC = () => {
 
     initializeApp();
   }, []); // Run only once on mount
+
+  // Electron detection and setup
+  useEffect(() => {
+    const detectElectron = () => {
+      const electronDetected = isElectron();
+      setIsElectronApp(electronDetected);
+      
+      if (electronDetected) {
+        appDebug.log('Electron environment detected - enabling desktop optimizations');
+        
+        // Set up Electron-specific features
+        setupElectronFeatures();
+        
+        // Hide mobile navigation in Electron
+        setMobileActivePanel('chat');
+        
+        // Set desktop-optimized defaults
+        setShowElectronTitleBar(true);
+        setElectronMenuVisible(false);
+      } else {
+        appDebug.log('Web environment detected - using responsive layout');
+      }
+    };
+
+    detectElectron();
+  }, []);
 
   // Initialize chat log service
   useEffect(() => {
@@ -5018,7 +5120,92 @@ The response must be a single line in the format: "nickname: greeting message"
   }
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-gray-800 font-mono">
+    <div className={`flex flex-col h-screen w-screen bg-gray-800 font-mono ${
+      isElectronApp ? 'electron-app' : ''
+    }`}>
+      {/* Electron Title Bar */}
+      {isElectronApp && showElectronTitleBar && (
+        <div className="electron-title-bar bg-gray-900 border-b border-gray-700 px-4 py-2 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 bg-red-500 rounded-full cursor-pointer hover:bg-red-400" 
+                 onClick={() => window.electronAPI?.closeWindow?.()} 
+                 title="Close"></div>
+            <div className="w-3 h-3 bg-yellow-500 rounded-full cursor-pointer hover:bg-yellow-400" 
+                 onClick={() => window.electronAPI?.minimizeWindow?.()} 
+                 title="Minimize"></div>
+            <div className="w-3 h-3 bg-green-500 rounded-full cursor-pointer hover:bg-green-400" 
+                 onClick={() => window.electronAPI?.maximizeWindow?.()} 
+                 title="Maximize"></div>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-gray-300">
+            <span className="font-semibold">Station V - Virtual IRC Simulator</span>
+            {window.electronAPI?.getVersion && (
+              <span className="text-xs text-gray-500">v{window.electronAPI.getVersion()}</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setElectronMenuVisible(!electronMenuVisible)}
+              className="text-gray-400 hover:text-white p-1"
+              title="Menu"
+            >
+              ☰
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Electron Menu */}
+      {isElectronApp && electronMenuVisible && (
+        <div className="electron-menu bg-gray-900 border-b border-gray-700 px-4 py-2 flex items-center gap-4 text-sm">
+          <button
+            onClick={() => {
+              handleOpenSettings();
+              setElectronMenuVisible(false);
+            }}
+            className="text-gray-300 hover:text-white"
+          >
+            Settings
+          </button>
+          <button
+            onClick={() => {
+              handleOpenChatLogs();
+              setElectronMenuVisible(false);
+            }}
+            className="text-gray-300 hover:text-white"
+          >
+            Chat Logs
+          </button>
+          <button
+            onClick={() => {
+              window.electronAPI?.toggleDevTools?.();
+              setElectronMenuVisible(false);
+            }}
+            className="text-gray-300 hover:text-white"
+          >
+            Developer Tools
+          </button>
+          <button
+            onClick={() => {
+              window.electronAPI?.reload?.();
+              setElectronMenuVisible(false);
+            }}
+            className="text-gray-300 hover:text-white"
+          >
+            Reload
+          </button>
+          <button
+            onClick={() => {
+              window.electronAPI?.setAlwaysOnTop?.(true);
+              setElectronMenuVisible(false);
+            }}
+            className="text-gray-300 hover:text-white"
+          >
+            Always On Top
+          </button>
+        </div>
+      )}
+
       {isSettingsOpen && (
         <SettingsModal 
           onSave={handleSaveSettings} 
@@ -5050,20 +5237,22 @@ The response must be a single line in the format: "nickname: greeting message"
         activeContext={activeContext}
       />
 
-      {/* Mobile Navigation */}
-      <MobileNavigation
-        activePanel={mobileActivePanel}
-        onPanelChange={setMobileActivePanel}
-        isMenuOpen={isMobileMenuOpen}
-        onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-        unreadChannels={unreadChannels}
-        unreadPMUsers={unreadPMUsers}
-        isNetworkConnected={isNetworkConnected}
-      />
+      {/* Mobile Navigation - Hidden in Electron */}
+      {!isElectronApp && (
+        <MobileNavigation
+          activePanel={mobileActivePanel}
+          onPanelChange={setMobileActivePanel}
+          isMenuOpen={isMobileMenuOpen}
+          onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          unreadChannels={unreadChannels}
+          unreadPMUsers={unreadPMUsers}
+          isNetworkConnected={isNetworkConnected}
+        />
+      )}
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Desktop Layout - Sidebar */}
-        <div className="hidden lg:flex lg:flex-col">
+        {/* Desktop Layout - Sidebar - Always visible in Electron */}
+        <div className={`${isElectronApp ? 'flex' : 'hidden lg:flex'} lg:flex-col`}>
           <ChannelList 
             channels={channels}
             privateMessageUsers={allPMUsers}
@@ -5155,9 +5344,9 @@ The response must be a single line in the format: "nickname: greeting message"
           </div>
         )}
 
-        {/* Chat Area - Always visible on desktop, conditional on mobile */}
+        {/* Chat Area - Always visible in Electron, conditional on mobile */}
         <main className={`flex flex-1 flex-col border-l border-r border-gray-700 min-h-0 ${
-          mobileActivePanel === 'chat' ? 'block' : 'hidden lg:flex'
+          isElectronApp ? 'flex' : (mobileActivePanel === 'chat' ? 'block' : 'hidden lg:flex')
         }`}>
             {/* AI Reaction Notification */}
             {aiReactionNotification.isVisible && (
@@ -5186,8 +5375,8 @@ The response must be a single line in the format: "nickname: greeting message"
             />
           </main>
 
-        {/* Desktop Layout - User List */}
-        <div className="hidden lg:block w-80 bg-gray-900 border-l border-gray-700">
+        {/* Desktop Layout - User List - Always visible in Electron */}
+        <div className={`${isElectronApp ? 'block' : 'hidden lg:block'} w-80 bg-gray-900 border-l border-gray-700`}>
           <UserList 
             users={usersInContext} 
             onUserClick={handlePMUserClick} 
@@ -5199,8 +5388,8 @@ The response must be a single line in the format: "nickname: greeting message"
             isNetworkConnected={isNetworkConnected}
           />
         </div>
-        {/* Desktop Layout - Network Panel */}
-        <div className="hidden lg:block w-80 bg-gray-900 border-l border-gray-700 flex flex-col">
+        {/* Desktop Layout - Network Panel - Always visible in Electron */}
+        <div className={`${isElectronApp ? 'block' : 'hidden lg:block'} w-80 bg-gray-900 border-l border-gray-700 flex flex-col`}>
           <div className="p-4 border-b border-gray-700">
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-lg font-semibold text-white">Network</h2>

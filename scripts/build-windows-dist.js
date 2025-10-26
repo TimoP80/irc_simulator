@@ -133,6 +133,52 @@ async function buildWindowsDistribution() {
     // Step 6: Copy ICU files manually (Electron Builder sometimes misses them)
     console.log('📋 Copying ICU files manually...');
     await runCommand('node', ['scripts/copy-icu-files.js']);
+    
+    // Step 7: Copy application files manually (Electron Builder is not including them)
+    console.log('📋 Copying application files manually...');
+    try {
+      const releaseDir = 'release/win-unpacked';
+      
+      // Copy dist directory
+      if (fs.existsSync('dist')) {
+        const distDest = path.join(releaseDir, 'dist');
+        if (fs.existsSync(distDest)) {
+          fs.rmSync(distDest, { recursive: true, force: true });
+        }
+        fs.cpSync('dist', distDest, { recursive: true });
+        console.log('✅ Copied dist directory');
+      }
+      
+      // Copy dist-electron directory
+      if (fs.existsSync('dist-electron')) {
+        const electronDest = path.join(releaseDir, 'dist-electron');
+        if (fs.existsSync(electronDest)) {
+          fs.rmSync(electronDest, { recursive: true, force: true });
+        }
+        fs.cpSync('dist-electron', electronDest, { recursive: true });
+        console.log('✅ Copied dist-electron directory');
+      }
+      
+      // Copy server directory
+      if (fs.existsSync('server')) {
+        const serverDest = path.join(releaseDir, 'server');
+        if (fs.existsSync(serverDest)) {
+          fs.rmSync(serverDest, { recursive: true, force: true });
+        }
+        fs.cpSync('server', serverDest, { recursive: true });
+        console.log('✅ Copied server directory');
+      }
+      
+      // Copy default-config.json
+      if (fs.existsSync('default-config.json')) {
+        const configDest = path.join(releaseDir, 'default-config.json');
+        fs.copyFileSync('default-config.json', configDest);
+        console.log('✅ Copied default-config.json');
+      }
+      
+    } catch (error) {
+      console.error('❌ Failed to copy application files:', error.message);
+    }
 
     console.log('🎉 Windows distribution build complete!');
     console.log('📁 Check the release directory for the installer');

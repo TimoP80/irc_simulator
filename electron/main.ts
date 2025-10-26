@@ -61,8 +61,15 @@ process.on('unhandledRejection', (reason, promise) => {
 // Get the correct path for resources
 function getResourcePath(relativePath: string): string {
   if (isProd) {
-    // In production, resources are in the app.asar.unpacked directory
-    return join(process.resourcesPath, relativePath);
+    // In production, files are directly in the executable directory
+    // Check if we're in the resources/app structure first
+    const resourcesPath = join(process.resourcesPath, 'app', relativePath);
+    if (existsSync(resourcesPath)) {
+      return resourcesPath;
+    }
+    // Fallback to executable directory
+    const executableDir = process.resourcesPath.replace('resources', '');
+    return join(executableDir, relativePath);
   } else {
     // In development, use the project root
     return join(__dirname, '..', relativePath);
@@ -138,14 +145,28 @@ function createWindow(): void {
       // In production, load the built HTML file
       logInfo('Loading production HTML file');
       try {
-        const htmlPath = join(__dirname, '..', 'dist', 'index-electron.html');
-        logInfo(`HTML file path: ${htmlPath}`);
+        // Try multiple possible paths for the HTML file
+        const possiblePaths = [
+          join(__dirname, '..', 'dist', 'index-electron.html'),
+          join(process.cwd(), 'dist', 'index-electron.html'),
+          join(process.resourcesPath.replace('resources', ''), 'dist', 'index-electron.html')
+        ];
         
-        if (existsSync(htmlPath)) {
+        let htmlPath = '';
+        for (const path of possiblePaths) {
+          logInfo(`Checking HTML path: ${path}`);
+          if (existsSync(path)) {
+            htmlPath = path;
+            break;
+          }
+        }
+        
+        if (htmlPath) {
+          logInfo(`HTML file path: ${htmlPath}`);
           mainWindow.loadFile(htmlPath);
           logInfo('Production HTML file loaded successfully');
         } else {
-          logError(`HTML file not found: ${htmlPath}`);
+          logError(`HTML file not found in any of the expected locations`);
           // Fallback to test page
           mainWindow.loadURL('data:text/html,<h1>Station V - Virtual IRC Simulator</h1><p>HTML file not found. Please rebuild the application.</p>');
         }
@@ -255,27 +276,63 @@ function startServer(): void {
     return;
   }
   
-  serverProcess = spawn('node', [serverPath], {
-    stdio: 'pipe',
-    cwd: serverDir,
-    env: {
-      ...process.env,
-      NODE_ENV: isProd ? 'production' : 'development'
+  // Try different ports if 8080 is busy
+  const ports = [8080, 8081, 8082, 8083];
+  let serverStarted = false;
+  
+  for (const port of ports) {
+    try {
+      serverProcess = spawn('node', [serverPath, port.toString()], {
+        stdio: 'pipe',
+        cwd: serverDir,
+        env: {
+          ...process.env,
+          NODE_ENV: isProd ? 'production' : 'development',
+          PORT: port.toString()
+        }
+      });
+      
+      serverProcess.stdout?.on('data', (data: Buffer) => {
+        const output = data.toString().trim();
+        logInfo(`Server stdout: ${output}`);
+        // Check if server started successfully
+        if (output.includes('Station V Server started')) {
+          serverStarted = true;
+        }
+      });
+
+      serverProcess.stderr?.on('data', (data: Buffer) => {
+        const error = data.toString().trim();
+        logError(`Server stderr: ${error}`);
+        // If port is in use, try next port
+        if (error.includes('EADDRINUSE')) {
+          logInfo(`Port ${port} is busy, trying next port...`);
+          serverProcess = null;
+        }
+      });
+
+      serverProcess.on('close', (code: number) => {
+        logInfo(`Server process exited with code ${code}`);
+        serverProcess = null;
+      });
+
+      // Give the server a moment to start
+      setTimeout(() => {
+        if (serverStarted) {
+          logInfo(`Server started successfully on port ${port}`);
+        } else if (serverProcess && !serverStarted) {
+          logInfo(`Server failed to start on port ${port}, trying next port...`);
+          serverProcess.kill();
+          serverProcess = null;
+        }
+      }, 1000);
+      
+      break; // Exit the loop after starting the server
+    } catch (error) {
+      logError(`Failed to start server on port ${port}:`, error);
+      continue;
     }
-  });
-
-  serverProcess.stdout?.on('data', (data: Buffer) => {
-    logInfo(`Server stdout: ${data.toString().trim()}`);
-  });
-
-  serverProcess.stderr?.on('data', (data: Buffer) => {
-    logError(`Server stderr: ${data.toString().trim()}`);
-  });
-
-  serverProcess.on('close', (code: number) => {
-    logInfo(`Server process exited with code ${code}`);
-    serverProcess = null;
-  });
+  }
 
   serverProcess.on('error', (error: Error) => {
     logError('Failed to start server:', error);

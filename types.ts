@@ -382,3 +382,28 @@ export interface RandomWorldConfig {
   users: User[];
   channels: { name: string; topic: string; }[];
 }
+
+// Electron API types
+export interface ElectronAPI {
+  toggleDevTools: () => void;
+  reload: () => void;
+  toggleFullscreen: () => void;
+  closeWindow: () => void;
+  onWindowStateChange: (callback: (state: 'maximized' | 'normal' | 'minimized') => void) => void;
+  minimizeWindow: () => void;
+  maximizeWindow: () => void;
+  restoreWindow: () => void;
+  setAlwaysOnTop: (alwaysOnTop: boolean) => void;
+  getVersion: () => string;
+  getPlatform: () => string;
+}
+
+// Extend Window interface to include Electron API
+declare global {
+  interface Window {
+    electronAPI?: ElectronAPI;
+    process?: {
+      type: 'renderer' | 'main';
+    };
+  }
+}
