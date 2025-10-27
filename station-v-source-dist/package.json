@@ -28,11 +28,14 @@
     "dev:full": "concurrently --kill-others-on-fail \"npm run server\" \"npm run dev\"",
     "dev:server": "npm run server",
     "dev:client": "npm run dev",
+    "clear-cache": "node scripts/clear-dev-cache.cjs",
+    "dev:clean": "npm run clear-cache && npm run dev",
     "start": "npm run dev:full",
     "server": "node server/station-v-server-simple.js",
     "build": "npm run build:vite && npm run build:electron && npm run copy:config",
     "build:vite": "cross-env ELECTRON=true vite build",
     "build:electron": "tsc --project tsconfig.electron.json",
+    "build:electron-main": "tsc --project tsconfig.electron.json",
     "build:all": "npm run build && npm run dist",
     "preview": "vite preview",
     "electron": "electron .",
@@ -52,8 +55,8 @@
   "dependencies": {
     "@google/genai": "^1.27.0",
     "irc-framework": "^4.14.0",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {

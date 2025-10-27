@@ -17,7 +17,9 @@ class StationVServer extends EventEmitter {
     // Create WebSocket server for web clients
     this.wss = new WebSocketServer({ 
       port,
-      path: '/station-v'
+      path: '/station-v',
+      clientTracking: true,
+      perMessageDeflate: false // Disable compression for simpler debugging
     });
 
     console.log('🚀 Station V Server started');
@@ -60,6 +62,9 @@ class StationVServer extends EventEmitter {
     console.log('📨 Handling WebSocket message type:', message.type);
     
     switch (message.type) {
+      case 'register':
+        this.handleWebSocketRegister(ws, message);
+        break;
       case 'join':
         this.handleWebSocketJoin(ws, message);
         break;
@@ -89,7 +94,7 @@ class StationVServer extends EventEmitter {
     const client = {
       nickname,
       channels: new Set(),
-      type: 'websocket'
+      type: 'human'
     };
     this.connectedClients.set(ws, client);
 
@@ -101,9 +106,12 @@ class StationVServer extends EventEmitter {
     
     // Send confirmation with channel data
     const channelData = this.channels.get(channel);
-    const channelUsers = Array.from(this.users.values()).filter(user => 
-      user.channels && user.channels.has(channel)
-    );
+    const channelUsers = Array.from(this.users.values()).map(user => ({
+      nickname: user.nickname,
+      type: user.type || 'human',
+      status: user.status || 'online',
+      channels: Array.from(user.channels)
+    })).filter(user => user.channels.includes(channel));
     
     ws.send(JSON.stringify({
       type: 'joined',
@@ -325,6 +333,39 @@ class StationVServer extends EventEmitter {
         }
       }
     });
+  }
+
+  handleWebSocketRegister(ws, message) {
+    const { nickname } = message;
+    
+    console.log(`[Server] Registering user ${nickname}`);
+    
+    // Store client info without joining any channels
+    const client = {
+      nickname,
+      channels: new Set(),
+      type: 'human'
+    };
+    this.connectedClients.set(ws, client);
+    
+    // Add to users list
+    if (!this.users.has(nickname)) {
+      this.users.set(nickname, {
+        nickname,
+        channels: new Set(),
+        type: 'human'
+      });
+      console.log(`[Server] Created new user: ${nickname}`);
+    }
+    
+    // Send confirmation
+    ws.send(JSON.stringify({
+      type: 'registered',
+      nickname,
+      success: true
+    }));
+    
+    console.log(`[Server] User ${nickname} registered. Total users: ${this.users.size}`);
   }
 
   broadcastToAll(message) {

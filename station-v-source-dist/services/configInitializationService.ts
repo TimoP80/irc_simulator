@@ -101,6 +101,16 @@ luna, An artist who is dreamy, creative, and talks about music.`,
   }
 
   /**
+   * Clean model path by removing any 'models/' prefix
+   * @param modelPath The raw model path to clean
+   * @returns Cleaned model path string
+   */
+  private cleanModelPath(modelPath: string): string {
+    // Remove 'models/' prefix if it exists
+    return modelPath.replace(/^models\//, '');
+  }
+
+  /**
    * Normalizes and validates a configuration object
    * @param config Raw configuration object
    * @returns Normalized AppConfig
@@ -111,14 +121,16 @@ luna, An artist who is dreamy, creative, and talks about music.`,
       virtualUsers: config.virtualUsers || '',
       channels: config.channels || '',
       simulationSpeed: config.simulationSpeed || 'normal',
-      aiModel: config.aiModel || 'gemini-1.5-flash',
+      // Clean model path when storing in config
+      aiModel: this.cleanModelPath(config.aiModel || 'gemini-1.5-flash'),
       typingDelay: config.typingDelay || DEFAULT_TYPING_DELAY,
       typingIndicator: config.typingIndicator || DEFAULT_TYPING_INDICATOR,
-      imageGeneration: config.imageGeneration || {
-        provider: 'placeholder',
-        apiKey: '',
-        model: 'stable-diffusion-xl',
-        baseUrl: 'https://api.nanobanana.ai'
+      imageGeneration: {
+        provider: config.imageGeneration?.provider || 'placeholder',
+        apiKey: config.imageGeneration?.apiKey || '',
+        // Clean model path for image generation model as well
+        model: this.cleanModelPath(config.imageGeneration?.model || 'stable-diffusion-xl'),
+        baseUrl: config.imageGeneration?.baseUrl || 'https://api.nanobanana.ai'
       }
     };
 

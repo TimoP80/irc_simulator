@@ -115,31 +115,85 @@ class NetworkService {
 
   async connect(config: NetworkConfig): Promise<boolean> {
     try {
+      networkDebug.log('Starting connection with config:', JSON.stringify(config));
       this.config = config;
       const wsUrl = `ws://${config.serverHost}:${config.serverPort}/station-v`;
+      
+      // Clear existing state
+      this.users.clear();
+      this.channels.clear();
+      networkDebug.log('Cleared existing users and channels');
+      
+      // Close existing connection if any
+      if (this.ws) {
+        try {
+          this.ws.close();
+        } catch (e) {
+          networkDebug.warn('Error closing existing connection:', e);
+        }
+      }
       
       networkDebug.log(`Connecting to ${wsUrl}`);
       
       this.ws = new WebSocket(wsUrl);
+      this.ws.binaryType = 'blob'; // Ensure text-based communication
       
       return new Promise((resolve, reject) => {
         if (!this.ws) {
+          networkDebug.error('Failed to create WebSocket instance');
           reject(new Error('Failed to create WebSocket'));
           return;
         }
 
         this.ws.onopen = () => {
-          networkDebug.log('Connected to Station V server');
+          networkDebug.log('WebSocket connection established');
           this.connected = true;
-          this.notifyConnectionHandlers(true);
           
-          // Join channels
-          config.autoJoinChannels.forEach(channel => {
-            this.joinChannel(channel);
-          });
+          // Initialize the user list with the current user
+          const currentUser: NetworkUser = {
+            nickname: config.nickname,
+            type: 'human',
+            status: 'online',
+            channels: []
+          };
+          this.users.set(config.nickname, currentUser);
+          networkDebug.log('Added current user to users list:', currentUser);
+          
+          // Send initial registration message without joining a channel
+          networkDebug.log('Sending initial registration with nickname:', config.nickname);
+          this.ws.send(JSON.stringify({
+            type: 'register',
+            nickname: config.nickname
+          }));
+          
+          this.notifyConnectionHandlers(true);
+          this.notifyUserHandlers([currentUser]);
+          
+          // Join configured channels if any are specified
+          if (config.autoJoinChannels && config.autoJoinChannels.length > 0) {
+            networkDebug.log('Joining configured channels:', config.autoJoinChannels);
+            config.autoJoinChannels.forEach(channel => {
+              this.joinChannel(channel);
+            });
+          } else {
+            networkDebug.log('No channels configured for auto-join');
+          }
           
           resolve(true);
         };
+
+        // Connection timeout in case the socket never opens
+        const connectionTimeout = setTimeout(() => {
+          if (!this.connected) {
+            networkDebug.error('WebSocket connection timed out after 15000ms');
+            try {
+              this.ws?.close();
+            } catch (e) {
+              networkDebug.warn('Error closing timed-out WebSocket:', e);
+            }
+            reject(new Error('WebSocket connection timed out'));
+          }
+        }, 15000);
 
         this.ws.onmessage = (event) => {
           try {
@@ -150,8 +204,9 @@ class NetworkService {
           }
         };
 
-        this.ws.onclose = () => {
-          networkDebug.log('Disconnected from server');
+        this.ws.onclose = (event: any) => {
+          networkDebug.log('WebSocket closed:', { code: event?.code, reason: event?.reason });
+          clearTimeout(connectionTimeout);
           this.connected = false;
           // Clear all users and channels when disconnected
           this.users.clear();
@@ -160,9 +215,16 @@ class NetworkService {
           this.notifyUserHandlers([]);
         };
 
-        this.ws.onerror = (error) => {
-          networkDebug.error('WebSocket error:', error);
-          reject(error);
+        this.ws.onerror = (event: any) => {
+          networkDebug.error('WebSocket error event:', event);
+          clearTimeout(connectionTimeout);
+          // Provide a clearer error for the caller
+          const err = new Error('WebSocket connection error');
+          try {
+            reject(err);
+          } catch (e) {
+            networkDebug.warn('Error rejecting connection promise:', e);
+          }
         };
       });
     } catch (error) {
@@ -194,7 +256,12 @@ class NetworkService {
   }
 
   private handleServerMessage(message: any): void {
-    networkDebug.log('Received server message:', message);
+    networkDebug.log('Received server message:', JSON.stringify(message));
+    networkDebug.log('Current connection state:', {
+      connected: this.connected,
+      usersCount: this.users.size,
+      channelsCount: this.channels.size
+    });
 
     switch (message.type) {
       case 'joined':
@@ -239,12 +306,15 @@ class NetworkService {
         // Update users
         if (message.channelData.users) {
           message.channelData.users.forEach((user: any) => {
-            // Ensure channels is an array, not a Set
+            // Ensure channels is an array and type is properly set
             const normalizedUser: NetworkUser = {
-              ...user,
+              nickname: user.nickname,
+              type: user.type || 'human', // Ensure type is set
+              status: user.status || 'online',
               channels: Array.isArray(user.channels) ? user.channels : Array.from(user.channels || [])
             };
             this.users.set(user.nickname, normalizedUser);
+            networkDebug.log(`Updated user ${normalizedUser.nickname} with type ${normalizedUser.type}`);
           });
         }
         
@@ -341,12 +411,15 @@ class NetworkService {
         // Update users
         if (message.channelData.users) {
           message.channelData.users.forEach((user: any) => {
-            // Ensure channels is an array, not a Set
+            // Ensure channels is an array and type is properly set
             const normalizedUser: NetworkUser = {
-              ...user,
-              channels: Array.isArray(user.channels) ? user.channels : Array.from(user.channels || [])
+              nickname: user.nickname,
+              type: user.type || 'human',
+              status: user.status || 'online',
+              channels: Array.isArray(user.channels) ? user.channels : [message.channel]
             };
             this.users.set(user.nickname, normalizedUser);
+            networkDebug.log(`Updated user ${normalizedUser.nickname} with type ${normalizedUser.type} in channels:`, normalizedUser.channels);
           });
         }
         
@@ -460,26 +533,36 @@ class NetworkService {
   // Public methods
   joinChannel(channelName: string): void {
     if (!this.connected || !this.ws) {
-      networkDebug.error('Not connected to server');
+      networkDebug.error('Not connected to server - cannot join channel');
       return;
     }
 
-    networkDebug.log(`Joining channel: ${channelName}`);
+    networkDebug.log(`Attempting to join channel: ${channelName}`);
+    
+    // Update current user's channels
+    const currentUser = this.users.get(this.config?.nickname || '');
+    if (currentUser && !currentUser.channels.includes(channelName)) {
+      currentUser.channels.push(channelName);
+      networkDebug.log(`Added ${channelName} to current user's channels:`, currentUser.channels);
+    }
     
     this.ws.send(JSON.stringify({
       type: 'join',
       nickname: this.config?.nickname,
       channel: channelName
     }));
+    networkDebug.log('Sent join message to server');
 
     // Create channel if it doesn't exist
     if (!this.channels.has(channelName)) {
-      this.channels.set(channelName, {
+      const newChannel: NetworkChannel = {
         name: channelName,
-        users: [],
+        users: currentUser ? [currentUser] : [],
         messages: []
-      });
-    }
+      };
+      this.channels.set(channelName, newChannel);
+      networkDebug.log(`Created new channel ${channelName} with users:`, newChannel.users);
+  }
   }
 
   partChannel(channelName: string): void {
@@ -651,6 +734,7 @@ class NetworkService {
   }
 
   private notifyUserHandlers(users: NetworkUser[]): void {
+    networkDebug.log('Notifying user handlers with users:', users.map(u => ({ nickname: u.nickname, type: u.type, channels: u.channels })));
     this.userHandlers.forEach(handler => handler(users));
     
     // Broadcast to other tabs

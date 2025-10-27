@@ -24,6 +24,11 @@ export const handleBotCommand = async (
     baseUrl?: string;
   }
 ): Promise<Message | null> => {
+  // Safety check: Ensure command is actually a command
+  if (!command.trim().startsWith('!')) {
+    return null;
+  }
+
   const commandParts = command.trim().split(' ');
   const botCommand = commandParts[0].toLowerCase();
   const args = commandParts.slice(1);
@@ -227,16 +232,15 @@ const generateInfoCommand = async (
   
   try {
     const response = await withRateLimitAndRetries(async () => {
-      return await ai.getGenerativeModel({ model }).generateContent([
-        {
-          text: `Provide a brief, informative response about "${query}". 
-          Keep it concise (2-3 sentences) and factual.
-          Format it like a helpful bot response.`
-        }
-      ]);
+      return await ai.models.generateContent({
+        model,
+        contents: `Provide a brief, informative response about "${query}". 
+        Keep it concise (2-3 sentences) and factual.
+        Format it like a helpful bot response.`
+      });
     });
 
-    const info = response.response.text();
+    const info = response.candidates[0].content.parts[0].text;
     
     return {
       id: Date.now(),

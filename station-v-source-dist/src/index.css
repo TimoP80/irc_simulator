@@ -2,6 +2,41 @@
 @tailwind components;
 @tailwind utilities;
 
+/* CSS variables for layout sizing and spacing */
+:root {
+  --sidebar-width: 16rem; /* 256px - Channel list */
+  --user-panel-width: 20rem; /* 320px - User list */
+  --network-panel-width: 20rem; /* 320px - Network panel */
+  --main-gap: 0.5rem;
+}
+
+/* Responsive roots for panel widths - default to 100% on small screens */
+.channel-list-root,
+.user-list-root,
+.network-panel-root {
+  width: 100%;
+}
+
+@media (min-width: 1024px) {
+  .channel-list-root {
+    width: var(--sidebar-width);
+    flex: 0 0 var(--sidebar-width);
+  }
+  .user-list-root {
+    width: var(--user-panel-width);
+    flex: 0 0 var(--user-panel-width);
+  }
+  .network-panel-root {
+    width: var(--network-panel-width);
+    flex: 0 0 var(--network-panel-width);
+  }
+  /* Slightly larger padding on desktop for consistency */
+  .channel-list-root.p-3, .user-list-root.p-3, .network-panel-root.p-4 {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+
 /* Custom IRC Simulator Styles */
 @layer base {
   html, body {

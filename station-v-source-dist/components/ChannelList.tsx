@@ -36,7 +36,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({ channels, privateMessa
   );
 
   return (
-    <aside className="w-full lg:w-64 bg-gray-900 p-3 lg:p-4 flex flex-col border-r border-gray-700 lg:border-b-0 border-b h-full lg:h-auto lg:flex-1">
+    <aside className="channel-list-root bg-gray-900 p-3 lg:p-4 flex flex-col border-r border-gray-700 lg:border-b-0 border-b h-full lg:h-auto lg:flex-1">
       <div className="flex justify-between items-center mb-3 lg:mb-4 flex-shrink-0">
         <h2 className="text-base lg:text-lg font-bold text-gray-100">IRC Simulator</h2>
       </div>

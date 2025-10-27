@@ -33,7 +33,7 @@ export interface ImageGenerationResponse {
 // Default configuration
 const DEFAULT_CONFIG: ImageGenerationConfig = {
   provider: 'nano-banana', // Default to Gemini for real image generation
-  model: 'gemini-2.0-flash-exp', // Use the working model
+  model: 'gemini-2.5-flash', // Use the stable model
   baseUrl: undefined // Gemini uses Google GenAI SDK directly
 };
 

@@ -11,9 +11,13 @@
     ],
     "skipLibCheck": true,
     "types": [
-      "node"
+      "node",
+      "vite/client"
     ],
     "moduleResolution": "bundler",
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
     "isolatedModules": true,
     "moduleDetection": "force",
     "allowJs": true,
@@ -23,7 +27,8 @@
         "./*"
       ]
     },
-    "allowImportingTsExtensions": true,
+    "baseUrl": ".",
+    "allowImportingTsExtensions": false,
     "noEmit": true
   },
   "include": [

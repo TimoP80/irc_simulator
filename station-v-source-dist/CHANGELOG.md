@@ -4,6 +4,32 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 
 *Note: This project was previously known as "Gemini IRC Simulator" and was renamed to "Station V - Virtual IRC Simulator" as of v1.5.1.*
 
+## 1.19.1 - 2025-10-27
+
+### 🎨 UI Theme Customization
+- **Theme System**: Added comprehensive UI theme customization
+  - **5 Predefined Themes**: Modern Dark, Classic IRC, Discord Inspired, Light Minimal, Matrix Green
+  - **Customizable Colors**: Primary, secondary, accent, and text colors
+  - **Layout Options**: Sidebar position, message spacing, and font settings
+  - **Message Styling**: Bubbles, avatars, timestamps, and rounded corners
+  - **Live Preview**: Real-time theme preview in the settings panel
+  - **Theme Persistence**: Themes are saved and restored between sessions
+
+### 🔧 Network Mode Improvements
+- **Optional Channel Joining**: Made channel joining optional when connecting as a network user
+  - **Initial Registration**: Added new 'register' message type for connection without channel join
+  - **Connection Stability**: Increased WebSocket timeout and improved error handling
+  - **User Type Consistency**: Fixed user type handling between client and server
+  - **Channel Management**: Users can now connect without auto-joining any channels
+  - **Connection Reliability**: Enhanced WebSocket server configuration and client reconnection logic
+  - **Data Serialization**: Improved handling of user data and channel membership
+
+### Technical Improvements
+- **WebSocket Protocol**: Enhanced connection handling with proper registration flow
+- **Error Handling**: Added better timeout and connection error management
+- **Server Configuration**: Optimized WebSocket server settings for better stability
+- **Client Resilience**: Improved cleanup of existing connections and better state management
+
 ## 1.19.0 - 2025-10-26
 
 ### 🎨 Discord-Style Quoting System

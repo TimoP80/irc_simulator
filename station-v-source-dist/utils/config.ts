@@ -34,6 +34,32 @@ const checkLocalStorageQuota = (): { available: number; used: number; total: num
 };
 
 /**
+ * Clean a model path by removing the 'models/' prefix
+ * @param modelPath Model path string to clean
+ * @returns Cleaned model path
+ */
+const cleanModelPath = (modelPath: string): string => {
+  if (!modelPath) return modelPath;
+  return modelPath.replace(/^models\//, '');
+};
+
+/**
+ * Clean model paths in a config object
+ * @param config The config object to clean
+ * @returns Config with cleaned model paths
+ */
+const cleanConfigModelPaths = (config: AppConfig): AppConfig => {
+  return {
+    ...config,
+    aiModel: cleanModelPath(config.aiModel),
+    imageGeneration: config.imageGeneration ? {
+      ...config.imageGeneration,
+      model: cleanModelPath(config.imageGeneration.model)
+    } : undefined
+  };
+};
+
+/**
  * Loads the application configuration from localStorage.
  * @returns The saved AppConfig or null if none is found.
  */
@@ -51,10 +77,11 @@ export const loadConfig = (): AppConfig | null => {
     console.log('[Config Debug] Loaded config aiModel:', parsed.aiModel);
     console.log('[Config Debug] Loaded config simulationSpeed:', parsed.simulationSpeed);
     
-    const result = {
+    // Clean model paths and merge with defaults
+    const result = cleanConfigModelPaths({
       ...parsed,
       typingDelay: parsed.typingDelay || DEFAULT_TYPING_DELAY
-    };
+    });
     
     console.log('[Config Debug] Returning processed config:', result);
     return result;
@@ -102,7 +129,10 @@ export const saveConfig = (config: AppConfig) => {
     console.log('[Config Debug] Config aiModel:', config.aiModel);
     console.log('[Config Debug] Config simulationSpeed:', config.simulationSpeed);
     
-    const configString = JSON.stringify(config);
+    // Clean model paths before saving
+    const cleanedConfig = cleanConfigModelPaths(config);
+    
+    const configString = JSON.stringify(cleanedConfig);
     console.log('[Config Debug] Serialized config length:', configString.length);
     
     localStorage.setItem(CONFIG_STORAGE_KEY, configString);
@@ -112,6 +142,10 @@ export const saveConfig = (config: AppConfig) => {
     const savedConfig = localStorage.getItem(CONFIG_STORAGE_KEY);
     if (savedConfig) {
       console.log('[Config Debug] Config verification successful, saved config exists');
+      // Log cleaned model paths
+      const parsedSaved = JSON.parse(savedConfig);
+      console.log('[Config Debug] Saved aiModel path:', parsedSaved.aiModel);
+      console.log('[Config Debug] Saved image generation model path:', parsedSaved.imageGeneration?.model);
     } else {
       console.error('[Config Debug] Config verification failed, no saved config found');
     }

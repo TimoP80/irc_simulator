@@ -9,6 +9,8 @@ import { ChannelManagement } from './ChannelManagement';
 import { getDebugConfig, updateDebugConfig, setDebugEnabled, setLogLevel, toggleCategory } from '../utils/debugLogger';
 import { DataExportModal } from './DataExportModal';
 import { DebugLogWindow } from './DebugLogWindow';
+import { ThemeSelector } from './ThemeSelector';
+import { getUIThemeService } from '../services/uiThemeService';
 
 interface SettingsModalProps {
   onSave: (config: AppConfig) => void;
@@ -213,6 +215,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
 
   const handleSave = () => {
+    const themeService = getUIThemeService();
     const configToSave = {
       ...config,
       virtualUsers: formatUsersToText(users),
@@ -220,7 +223,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       // Store the full user objects for proper persistence
       userObjects: users,
       // Store the full channel objects to preserve user assignments
-      channelObjects: currentChannels || channels
+      channelObjects: currentChannels || channels,
+      // Store the current theme settings
+      theme: {
+        id: themeService.getCurrentTheme().id
+      }
     };
     
     // Notify parent component about channel changes
@@ -286,6 +293,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         <p className="text-gray-400 mb-6 text-sm lg:text-base">Customize the channels, virtual users, and your nickname. Changes are saved locally.</p>
         
         <div className="space-y-6">
+          <ThemeSelector />
+
           <div>
             <label htmlFor="currentUserNickname" className="block text-sm font-medium text-gray-300 mb-2">Your Nickname</label>
             <input

@@ -198,6 +198,44 @@ function createWindow(): void {
     mainWindow = null;
   });
 
+  // Monitor renderer process status
+  let lastPing = Date.now();
+  const pingInterval = setInterval(() => {
+    if (!mainWindow) {
+      clearInterval(pingInterval);
+      return;
+    }
+
+    mainWindow.webContents.send('ping');
+    // If no ping response for 10 seconds, consider UI frozen
+    if (Date.now() - lastPing > 10000) {
+      logError('UI appears to be frozen, attempting recovery...');
+      try {
+        mainWindow.webContents.reload();
+      } catch (error) {
+        logError('Failed to reload frozen UI:', error);
+      }
+    }
+  }, 5000);
+
+  // Handle ping response from renderer
+  ipcMain.on('pong', () => {
+    lastPing = Date.now();
+  });
+
+  // Handle renderer process errors
+  ipcMain.on('renderer-error', (event, error) => {
+    logError('Renderer process error:', error);
+    // If critical error, try to reload
+    if (error.message.includes('blank') || error.message.includes('frozen')) {
+      try {
+        mainWindow?.webContents.reload();
+      } catch (reloadError) {
+        logError('Failed to reload after renderer error:', reloadError);
+      }
+    }
+  });
+
   // Handle loading errors
   mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
     logError(`Failed to load: ${validatedURL}`);

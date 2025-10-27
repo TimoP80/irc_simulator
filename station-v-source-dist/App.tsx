@@ -4,6 +4,7 @@ import { UserList } from './components/UserList';
 import { ChatWindow } from './components/ChatWindow';
 import { SettingsModal } from './components/SettingsModal';
 import { ChannelListModal } from './components/ChannelListModal';
+import { getUIThemeService } from './services/uiThemeService';
 import { MobileNavigation } from './components/MobileNavigation';
 import { DEFAULT_CHANNELS, DEFAULT_VIRTUAL_USERS, DEFAULT_NICKNAME, SIMULATION_INTERVALS, DEFAULT_AI_MODEL, DEFAULT_TYPING_DELAY, DEFAULT_TYPING_INDICATOR } from './constants';
 import type { Channel, Message, User, ActiveContext, PrivateMessageConversation, AppConfig } from './types';
@@ -185,6 +186,7 @@ const App: React.FC = () => {
   const [isConfigInitialized, setIsConfigInitialized] = useState<boolean>(false);
   const [configError, setConfigError] = useState<string | null>(null);
 
+
   // Initialize with saved config or defaults
   const [currentUserNickname, setCurrentUserNickname] = useState<string>(() => {
     const savedConfig = loadConfig();
@@ -312,6 +314,22 @@ const App: React.FC = () => {
   const [isNetworkConnected, setIsNetworkConnected] = useState(false);
   const [showNetworkPanel, setShowNetworkPanel] = useState(false);
   const [networkNickname, setNetworkNickname] = useState<string | null>(null);
+  // Ensure local user appears in network user list while connected
+  const displayedNetworkUsers = useMemo(() => {
+    if (!isNetworkConnected) return networkUsers;
+    const nickname = networkNickname || currentUserNickname;
+    if (!nickname) return networkUsers;
+    const exists = networkUsers.some(u => u.nickname === nickname);
+    if (exists) return networkUsers;
+    // Create a synthetic local network user entry
+    const localNetworkUser: NetworkUser = {
+      nickname,
+      type: 'human',
+      status: 'online',
+      channels: []
+    };
+    return [localNetworkUser, ...networkUsers];
+  }, [isNetworkConnected, networkUsers, networkNickname, currentUserNickname]);
   
   // Cross-tab communication for virtual user messages
   const [broadcastChannel, setBroadcastChannel] = useState<BroadcastChannel | null>(null);
@@ -827,12 +845,89 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // Initialize UI theme early
+  useEffect(() => {
+    try {
+      const themeService = getUIThemeService();
+      const config = loadConfig();
+      
+      // Always set a theme, defaulting to modern-dark if none specified
+      const themeId = config?.theme?.id || 'modern-dark';
+      appDebug.log('Initializing theme:', themeId);
+      themeService.setTheme(themeId);
+      
+      // Force a reflow to ensure theme is applied
+      document.body.style.display = 'none';
+      document.body.offsetHeight; // Force reflow
+      document.body.style.display = '';
+      
+      appDebug.log('Theme initialized successfully');
+    } catch (error) {
+      appDebug.error('Failed to initialize theme:', error);
+    }
+  }, []);
+
+  // Monitor UI health and handle recovery
+  useEffect(() => {
+    if (!isElectron()) return;
+
+    // Respond to pings from main process
+    const handlePing = () => {
+      if (window.electronAPI) {
+        window.electronAPI.send('pong');
+      }
+    };
+
+    // Handle errors that might cause UI to go blank
+    const handleError = (event: ErrorEvent) => {
+      appDebug.error('UI Error:', event.error);
+      // Report error to main process
+      if (window.electronAPI) {
+        window.electronAPI.send('renderer-error', {
+          message: event.error.message,
+          stack: event.error.stack,
+        });
+      }
+    };
+
+    // Monitor React rendering errors
+    const handleRenderError = (error: Error) => {
+      appDebug.error('React Render Error:', error);
+      if (window.electronAPI) {
+        window.electronAPI.send('renderer-error', {
+          message: 'React render error: ' + error.message,
+          stack: error.stack,
+        });
+      }
+    };
+
+    // Set up event listeners
+    if (window.electronAPI) {
+      window.electronAPI.on('ping', handlePing);
+    }
+    window.addEventListener('error', handleError);
+
+    // Create error boundary effect
+    const errorBoundary = (error: Error) => {
+      handleRenderError(error);
+      return null;
+    };
+
+    React.Component.prototype.componentDidCatch = errorBoundary;
+
+    return () => {
+      if (window.electronAPI) {
+        window.electronAPI.removeListener('ping', handlePing);
+      }
+      window.removeEventListener('error', handleError);
+    };
+  }, [isElectron]);
+
   // Load channel logs from localStorage on initial render
   useEffect(() => {
     const initializeApp = async () => {
       try {
         appDebug.log('Initializing application configuration...');
-        
         // Try to initialize config with fallback support
         const config = await initializeConfigWithFallback('./default-config.json');
         
@@ -936,6 +1031,12 @@ const App: React.FC = () => {
     
     saveConfig(config);
     settingsDebug.log('saveConfig called successfully');
+    
+    // Update theme if it changed
+    if (config.theme?.id) {
+      const themeService = getUIThemeService();
+      themeService.setTheme(config.theme.id);
+    }
     
     // Initialize state from the new config
     const { nickname, virtualUsers, channels: newChannels, simulationSpeed, aiModel: savedAiModel, typingDelay, typingIndicator } = initializeStateFromConfig(config);
@@ -4813,6 +4914,7 @@ The response must be a single line in the format: "nickname: greeting message"
 
   // Network users update handler
   const handleNetworkUsersUpdate = useCallback((users: NetworkUser[]) => {
+    networkDebug.log('handleNetworkUsersUpdate called with users:', users.map(u => ({ nickname: u.nickname, type: u.type, channels: u.channels })));
     setNetworkUsers(users);
     
     // Update network nickname when connected
@@ -5337,7 +5439,7 @@ The response must be a single line in the format: "nickname: greeting message"
                 onUsersUpdate={handleNetworkUsersUpdate}
               />
               <NetworkUsers 
-                users={networkUsers} 
+                users={displayedNetworkUsers} 
                 currentChannel={activeContext?.type === 'channel' ? activeContext.name : undefined}
               />
             </div>
@@ -5375,8 +5477,8 @@ The response must be a single line in the format: "nickname: greeting message"
             />
           </main>
 
-        {/* Desktop Layout - User List - Always visible in Electron */}
-        <div className={`${isElectronApp ? 'block' : 'hidden lg:block'} w-80 bg-gray-900 border-l border-gray-700`}>
+  {/* Desktop Layout - User List - Always visible in Electron */}
+  <div className={`${isElectronApp ? 'block' : 'hidden lg:block'} user-panel-root bg-gray-900 border-l border-gray-700`}>
           <UserList 
             users={usersInContext} 
             onUserClick={handlePMUserClick} 
@@ -5388,8 +5490,8 @@ The response must be a single line in the format: "nickname: greeting message"
             isNetworkConnected={isNetworkConnected}
           />
         </div>
-        {/* Desktop Layout - Network Panel - Always visible in Electron */}
-        <div className={`${isElectronApp ? 'block' : 'hidden lg:block'} w-80 bg-gray-900 border-l border-gray-700 flex flex-col`}>
+  {/* Desktop Layout - Network Panel - Always visible in Electron */}
+  <div className={`${isElectronApp ? 'block' : 'hidden lg:block'} network-panel-root bg-gray-900 border-l border-gray-700 flex flex-col`}>
           <div className="p-4 border-b border-gray-700">
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-lg font-semibold text-white">Network</h2>
@@ -5447,7 +5549,7 @@ The response must be a single line in the format: "nickname: greeting message"
               
               {isNetworkConnected && (
                 <NetworkUsers
-                  users={networkUsers}
+                  users={displayedNetworkUsers}
                   currentChannel={activeContext?.type === 'channel' ? activeContext.name : undefined}
                 />
               )}

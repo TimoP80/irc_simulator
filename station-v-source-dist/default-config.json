@@ -13,6 +13,10 @@
     "enabled": true,
     "duration": 2000
   },
+  "theme": {
+    "id": "modern-dark",
+    "customColors": {}
+  },
   "imageGeneration": {
     "provider": "placeholder",
     "apiKey": "",

@@ -19,7 +19,7 @@ export const UserList: React.FC<UserListProps> = ({ users, onUserClick, currentU
   const isOperator = (nickname: string) => channel && isChannelOperator(channel, nickname);
   
   return (
-    <aside className="w-full lg:w-56 bg-gray-900 p-3 lg:p-4 border-l border-gray-700 lg:border-t-0 border-t overflow-y-auto h-full lg:h-auto lg:flex-1">
+    <aside className="user-list-root bg-gray-900 p-3 lg:p-4 border-l border-gray-700 lg:border-t-0 border-t overflow-y-auto h-full lg:h-auto lg:flex-1">
       <h3 className="text-sm font-bold uppercase text-gray-500 mb-2 lg:mb-2 px-2">Users ({users.length})</h3>
       
       {channel && (

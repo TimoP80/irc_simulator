@@ -147,6 +147,17 @@ export interface AppConfig {
     channel: string;
     ssl: boolean;
   };
+  // UI Theme configuration
+  theme?: {
+    id: string;
+    customColors?: {
+      primary?: string;
+      secondary?: string;
+      background?: string;
+      text?: string;
+      accent?: string;
+    };
+  };
 }
 
 export interface GeminiModel {
@@ -276,10 +287,10 @@ export const canUserPerformAction = (channel: Channel, nickname: string, action:
 export const migrateWritingStyle = (oldStyle: any): User['writingStyle'] => {
   if (!oldStyle || typeof oldStyle !== 'object') {
     return {
-      formality: 'neutral',
+      formality: 'semi_formal',
       verbosity: 'moderate',
       humor: 'none',
-      emojiUsage: 'low',
+      emojiUsage: 'rare',
       punctuation: 'standard'
     };
   }

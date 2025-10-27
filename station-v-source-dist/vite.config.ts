@@ -12,8 +12,22 @@ export default defineConfig(({ mode }) => {
       server: {
         port: 3000,
         host: '0.0.0.0',
+        fs: {
+          strict: true,
+          allow: ['.']
+        }
       },
       plugins: [react()],
+      optimizeDeps: {
+        include: ['react', 'react-dom'],
+        exclude: ['@google/genai'],
+        esbuildOptions: {
+          target: 'es2020'
+        }
+      },
+      esbuild: {
+        target: 'es2020'
+      },
       css: {
         postcss: './postcss.config.js',
       },
@@ -29,7 +43,7 @@ export default defineConfig(({ mode }) => {
       },
       base: isElectron ? './' : '/',
       build: {
-        // Use different HTML template for Electron
+        sourcemap: true,
         rollupOptions: {
           input: isElectron ? 'index-electron.html' : 'index.html',
           output: {
@@ -39,37 +53,34 @@ export default defineConfig(({ mode }) => {
               'google-ai': ['@google/genai'],
               // Split AI services into their own chunk
               'ai-services': [
-                './services/geminiService.ts',
-                './services/usernameGeneration.ts'
+                'services/geminiService',
+                'services/usernameGeneration'
               ],
               // Split utility functions
               'utils': [
-                './utils/importExport.ts',
-                './utils/personalityTemplates.ts',
-                './utils/config.ts',
-                './utils/debugLogger.ts'
+                'utils/importExport',
+                'utils/personalityTemplates',
+                'utils/config',
+                'utils/debugLogger'
               ],
               // Split components into smaller chunks
               'modals': [
-                './components/AddUserModal.tsx',
-                './components/BatchUserModal.tsx',
-                './components/ImportExportModal.tsx',
-                './components/SettingsModal.tsx'
+                'components/AddUserModal',
+                'components/BatchUserModal',
+                'components/ImportExportModal',
+                'components/SettingsModal'
               ],
               'chat-components': [
-                './components/ChatWindow.tsx',
-                './components/Message.tsx',
-                './components/ChannelList.tsx',
-                './components/UserList.tsx'
+                'components/ChatWindow',
+                'components/Message',
+                'components/ChannelList',
+                'components/UserList'
               ]
             }
           }
         },
-        // Increase chunk size warning limit to 600KB to reduce noise
         chunkSizeWarningLimit: 600,
-        // Ensure CSS is properly processed and included
-        cssCodeSplit: false,
-        // Optimize CSS for Electron builds
+        cssCodeSplit: true,
         minify: isElectron ? 'esbuild' : 'terser'
       }
     };
