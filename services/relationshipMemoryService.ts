@@ -17,6 +17,35 @@ export const initializeRelationshipMemory = (user: User): User => {
       }
     };
   }
+  
+  // Ensure dates in relationships are Date objects (they might be strings from storage)
+  if (user.relationshipMemory.relationships) {
+    const relationships = user.relationshipMemory.relationships;
+    Object.keys(relationships).forEach(nickname => {
+      const relationship = relationships[nickname];
+      if (relationship) {
+        if (!(relationship.firstMet instanceof Date)) {
+          relationship.firstMet = new Date(relationship.firstMet);
+        }
+        if (!(relationship.lastInteraction instanceof Date)) {
+          relationship.lastInteraction = new Date(relationship.lastInteraction);
+        }
+        // Convert timestamps in interaction history
+        if (relationship.interactionHistory) {
+          relationship.interactionHistory = relationship.interactionHistory.map(interaction => ({
+            ...interaction,
+            timestamp: interaction.timestamp instanceof Date ? interaction.timestamp : new Date(interaction.timestamp)
+          }));
+        }
+      }
+    });
+  }
+  
+  // Ensure lastUpdated is a Date object
+  if (user.relationshipMemory.lastUpdated && !(user.relationshipMemory.lastUpdated instanceof Date)) {
+    user.relationshipMemory.lastUpdated = new Date(user.relationshipMemory.lastUpdated);
+  }
+  
   return user;
 };
 
@@ -45,6 +74,14 @@ export const updateRelationshipMemory = (
       interactionHistory: []
     };
     memory.relationships[otherUserNickname] = relationship;
+  }
+
+  // Ensure dates are Date objects (they might be strings from storage)
+  if (!(relationship.firstMet instanceof Date)) {
+    relationship.firstMet = new Date(relationship.firstMet);
+  }
+  if (!(relationship.lastInteraction instanceof Date)) {
+    relationship.lastInteraction = new Date(relationship.lastInteraction);
   }
 
   // Update relationship data
@@ -104,11 +141,15 @@ export const updateRelationshipMemory = (
 const calculateRelationshipLevel = (relationship: UserRelationship): UserRelationship['relationshipLevel'] => {
   const { interactionCount, lastInteraction, firstMet } = relationship;
   
+  // Ensure dates are Date objects (they might be strings from storage)
+  const firstMetDate = firstMet instanceof Date ? firstMet : new Date(firstMet);
+  const lastInteractionDate = lastInteraction instanceof Date ? lastInteraction : new Date(lastInteraction);
+  
   // Calculate days since first meeting
-  const daysSinceFirstMet = Math.floor((Date.now() - firstMet.getTime()) / (1000 * 60 * 60 * 24));
+  const daysSinceFirstMet = Math.floor((Date.now() - firstMetDate.getTime()) / (1000 * 60 * 60 * 24));
   
   // Calculate days since last interaction
-  const daysSinceLastInteraction = Math.floor((Date.now() - lastInteraction.getTime()) / (1000 * 60 * 60 * 24));
+  const daysSinceLastInteraction = Math.floor((Date.now() - lastInteractionDate.getTime()) / (1000 * 60 * 60 * 24));
   
   // Relationship decay: if no interaction for 7+ days, relationship cools down
   if (daysSinceLastInteraction > 7) {
@@ -177,8 +218,23 @@ export const getRelationshipContext = (
   const memory = aiUser.relationshipMemory;
   if (!memory) return '';
 
-  const relationship = memory.relationships[otherUserNickname];
+  let relationship = memory.relationships[otherUserNickname];
   if (!relationship) return '';
+
+  // Ensure all date fields are Date objects (they might be strings from storage)
+  if (!(relationship.firstMet instanceof Date)) {
+    relationship.firstMet = new Date(relationship.firstMet);
+  }
+  if (!(relationship.lastInteraction instanceof Date)) {
+    relationship.lastInteraction = new Date(relationship.lastInteraction);
+  }
+  // Convert timestamps in interaction history
+  if (relationship.interactionHistory) {
+    relationship.interactionHistory = relationship.interactionHistory.map(interaction => ({
+      ...interaction,
+      timestamp: interaction.timestamp instanceof Date ? interaction.timestamp : new Date(interaction.timestamp)
+    }));
+  }
 
   const context = [];
   
@@ -205,7 +261,12 @@ export const getRelationshipContext = (
   }
   
   // Time context
-  const daysSinceLastInteraction = Math.floor((Date.now() - relationship.lastInteraction.getTime()) / (1000 * 60 * 60 * 24));
+  // Ensure lastInteraction is a Date object before calling getTime()
+  const lastInteractionDate = relationship.lastInteraction instanceof Date 
+    ? relationship.lastInteraction 
+    : new Date(relationship.lastInteraction);
+  
+  const daysSinceLastInteraction = Math.floor((Date.now() - lastInteractionDate.getTime()) / (1000 * 60 * 60 * 24));
   if (daysSinceLastInteraction > 0) {
     context.push(`Last interaction: ${daysSinceLastInteraction} day${daysSinceLastInteraction > 1 ? 's' : ''} ago`);
   } else {

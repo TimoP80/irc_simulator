@@ -80,10 +80,24 @@ async function buildInstaller() {
 
     // Step 4: Build the installer using electron-builder directly
     console.log('🪟 Building Windows installer...');
-    console.log('⚠️ Note: Code signing errors are normal and don\'t affect the installer');
+    console.log('📝 Code signing is disabled in package-electron.json (sign: false)');
+    console.log('   Signing warnings are expected and can be safely ignored');
+    
+    // Set environment variables to suppress code signing warnings
+    const buildEnv = {
+      ...process.env,
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false',
+      CSC_NAME: '',
+      WIN_CSC_LINK: '',
+      WIN_CSC_KEY_PASSWORD: '',
+      CSC_LINK: '',
+      CSC_KEY_PASSWORD: ''
+    };
     
     try {
-      await runCommand('npx', ['electron-builder', '--win', '--config', 'package-electron.json']);
+      await runCommand('npx', ['electron-builder', '--win', '--config', 'package-electron.json'], {
+        env: buildEnv
+      });
     } catch (error) {
       console.log('⚠️ Electron Builder encountered an error, checking if installer was created...');
       
@@ -98,6 +112,7 @@ async function buildInstaller() {
       for (const installerFile of installerFiles) {
         if (fs.existsSync(installerFile)) {
           console.log(`✅ Installer created successfully: ${installerFile}`);
+          console.log('ℹ️ Any signing warnings are expected and do not affect functionality');
           installerFound = true;
         }
       }

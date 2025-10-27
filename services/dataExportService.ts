@@ -202,10 +202,15 @@ export class DataExportService {
       // Save chat logs to IndexedDB
       if (data.chatLogs && data.chatLogs.length > 0) {
         const chatLogService = getChatLogService();
-        for (const log of data.chatLogs) {
-          await chatLogService.saveLog(log);
+        try {
+          for (const log of data.chatLogs) {
+            await chatLogService.saveLog(log);
+          }
+          dataExportDebug.log('Chat logs saved:', data.chatLogs.length, 'logs');
+        } catch (error) {
+          dataExportDebug.error('Failed to save some chat logs:', error);
+          // Continue import even if some logs fail to save
         }
-        dataExportDebug.log('Chat logs saved:', data.chatLogs.length, 'logs');
       }
       
       // Save debug configuration

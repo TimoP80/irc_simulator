@@ -10,8 +10,5 @@ if (!rootElement) {
 }
 
 const root = ReactDOM.createRoot(rootElement);
-root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+// Disable StrictMode for Electron to prevent double rendering issues
+root.render(<App />);

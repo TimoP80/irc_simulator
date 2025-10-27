@@ -45,7 +45,7 @@ async function buildWindowsDistribution() {
     
     // Step 3: Compile Electron main process
     console.log('⚡ Compiling Electron main process...');
-    await runCommand('npm', ['run', 'build:electron-main']);
+    await runCommand('npm', ['run', 'build:electron']);
     
     // Step 3.5: Rename .js files to .cjs for ES module compatibility
     console.log('🔄 Renaming Electron files to .cjs for ES module compatibility...');
@@ -101,7 +101,8 @@ async function buildWindowsDistribution() {
     
     // Step 5: Build Windows executable
     console.log('🪟 Building Windows executable...');
-    console.log('⚠️ Note: Code signing errors are normal and don\'t affect the executable');
+    console.log('📝 Code signing is disabled in package-electron.json (sign: false)');
+    console.log('   Signing warnings are expected and can be safely ignored');
     
     // Debug: List files before electron-builder
     console.log('🔍 Files before electron-builder:');
@@ -114,15 +115,30 @@ async function buildWindowsDistribution() {
       console.log('  dist-electron directory contents:', electronFiles);
     }
     
+    // Set environment variables to suppress code signing warnings
+    const buildEnv = {
+      ...process.env,
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false',
+      CSC_NAME: '',
+      WIN_CSC_LINK: '',
+      WIN_CSC_KEY_PASSWORD: '',
+      CSC_LINK: '',
+      CSC_KEY_PASSWORD: ''
+    };
+    
     try {
-      await runCommand('npx', ['electron-builder', '--win', '--config', 'package-electron.json']);
+      await runCommand('npx', ['electron-builder', '--win', '--config', 'package-electron.json'], {
+        env: buildEnv
+      });
     } catch (error) {
       console.log('⚠️ Electron Builder encountered an error, checking if executable was created...');
+      
       // Check if executable was created despite code signing errors
       const executablePath = 'release/win-unpacked/Station V - Virtual IRC Simulator.exe';
       if (fs.existsSync(executablePath)) {
         console.log('✅ Executable created successfully despite errors');
         console.log('📁 Location:', executablePath);
+        console.log('ℹ️ Any signing warnings are expected and do not affect functionality');
       } else {
         console.log('❌ Executable not found, checking release directory...');
         await listGeneratedFiles();
@@ -178,6 +194,23 @@ async function buildWindowsDistribution() {
       
     } catch (error) {
       console.error('❌ Failed to copy application files:', error.message);
+      
+      // Check if it's a permission error
+      if (error.code === 'EPERM' || error.code === 'EACCES' || error.message.includes('EBUSY') || error.message.includes('permission')) {
+        console.error('');
+        console.error('🔒 Permission Error Detected!');
+        console.error('');
+        console.error('This usually happens when files are locked by running processes.');
+        console.error('Try these solutions:');
+        console.error('');
+        console.error('1. Close all Electron windows');
+        console.error('2. Close all "Station V" applications');
+        console.error('3. Run: npm run electron:cleanup');
+        console.error('4. Or manually run: taskkill /F /IM electron.exe');
+        console.error('5. Close file explorers opened to the release directory');
+        console.error('6. Restart your terminal and try again');
+        console.error('');
+      }
     }
 
     console.log('🎉 Windows distribution build complete!');

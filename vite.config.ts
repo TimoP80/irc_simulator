@@ -33,35 +33,18 @@ export default defineConfig(({ mode }) => {
         rollupOptions: {
           input: isElectron ? 'index-electron.html' : 'index.html',
           output: {
-            manualChunks: {
-              // Split vendor libraries into separate chunks
-              'react-vendor': ['react', 'react-dom'],
-              'google-ai': ['@google/genai'],
-              // Split AI services into their own chunk
-              'ai-services': [
-                './services/geminiService.ts',
-                './services/usernameGeneration.ts'
-              ],
-              // Split utility functions
-              'utils': [
-                './utils/importExport.ts',
-                './utils/personalityTemplates.ts',
-                './utils/config.ts',
-                './utils/debugLogger.ts'
-              ],
-              // Split components into smaller chunks
-              'modals': [
-                './components/AddUserModal.tsx',
-                './components/BatchUserModal.tsx',
-                './components/ImportExportModal.tsx',
-                './components/SettingsModal.tsx'
-              ],
-              'chat-components': [
-                './components/ChatWindow.tsx',
-                './components/Message.tsx',
-                './components/ChannelList.tsx',
-                './components/UserList.tsx'
-              ]
+            // Simplified chunking for better Electron compatibility
+            manualChunks: (id) => {
+              // Only chunk node_modules for Electron
+              if (id.includes('node_modules')) {
+                if (id.includes('react') || id.includes('react-dom')) {
+                  return 'react-vendor';
+                }
+                if (id.includes('@google')) {
+                  return 'google-ai';
+                }
+                return 'vendor';
+              }
             }
           }
         },

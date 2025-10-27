@@ -34,148 +34,197 @@ async function runCommand(command, args = [], options = {}) {
   });
 }
 
-// Helper function to check if a tool is available
-async function checkToolAvailable(tool) {
-  try {
-    await runCommand(tool, ['--version'], { stdio: 'pipe' });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 async function createPortableExe() {
   console.log('🚀 Creating Single Portable Executable...');
+  console.log('');
+  console.log('📝 This will create a single .exe file that contains all application files');
+  console.log('   The file can be distributed as a single executable\n');
 
   try {
     // Check if the unpacked build exists
     const unpackedPath = 'release/win-unpacked';
     if (!fs.existsSync(unpackedPath)) {
-      throw new Error('Unpacked build not found. Please run "npm run electron:build:win" first.');
+      console.log('❌ Unpacked build not found');
+      console.log('📦 Building application first...');
+      await runCommand('npm', ['run', 'electron:build:win']);
     }
 
-    console.log('✅ Found unpacked build');
+    if (!fs.existsSync(unpackedPath)) {
+      throw new Error('Build failed. Please check the error messages above.');
+    }
 
-    // Method 1: Try using 7-Zip to create a self-extracting archive
-    console.log('📦 Method 1: Creating self-extracting archive with 7-Zip...');
+    console.log('✅ Found unpacked build at:', unpackedPath);
+
+    // Try multiple methods to create a single exe
+    let success = false;
+
+    // Method 1: Use PowerShell to create a ZIP file
+    console.log('\n📦 Creating portable ZIP distribution...');
     
     try {
-      // Check if 7-Zip is available
-      const sevenZipAvailable = await checkToolAvailable('7z');
+      const zipPath = path.resolve('release/Station-V-Portable.zip');
       
-      if (sevenZipAvailable) {
-        // Create a self-extracting archive
-        await runCommand('7z', [
-          'a', '-sfx7z.sfx',
-          'release/Station-V-Portable.exe',
-          `${unpackedPath}/*`
-        ]);
-        
-        console.log('✅ Self-extracting archive created: release/Station-V-Portable.exe');
-        console.log('📁 Users can run this file and it will extract to a temporary folder');
-        return;
-      }
-    } catch (error) {
-      console.log('⚠️ 7-Zip method failed:', error.message);
-    }
-
-    // Method 2: Try using WinRAR (if available)
-    console.log('📦 Method 2: Trying WinRAR...');
-    
-    try {
-      const winrarAvailable = await checkToolAvailable('winrar');
+      // Create the PowerShell command as a string to avoid template literal conflicts
+      const sourcePath = unpackedPath.replace(/\\/g, '\\\\') + '\\\\*';
+      const destPath = zipPath.replace(/\\/g, '\\\\');
+      const psCommand = 'Compress-Archive -Path "' + sourcePath + '" -DestinationPath "' + destPath + '" -Force; Write-Host "ZIP created successfully"';
       
-      if (winrarAvailable) {
-        await runCommand('winrar', [
-          'a', '-sfx',
-          'release/Station-V-Portable.exe',
-          `${unpackedPath}/*`
-        ]);
-        
-        console.log('✅ WinRAR self-extracting archive created');
-        return;
-      }
-    } catch (error) {
-      console.log('⚠️ WinRAR method failed:', error.message);
-    }
-
-    // Method 3: Create a ZIP file with instructions
-    console.log('📦 Method 3: Creating ZIP distribution...');
-    
-    try {
-      await runCommand('powershell', [
+      const psArgs = [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
         '-Command',
-        `Compress-Archive -Path "${unpackedPath}\\*" -DestinationPath "release/Station-V-Portable.zip" -Force`
-      ]);
+        psCommand
+      ];
       
-      console.log('✅ ZIP file created: release/Station-V-Portable.zip');
-      console.log('📁 Users can extract this ZIP and run the executable');
-      
-      // Create instructions file
-      const instructions = `Station V - Virtual IRC Simulator - Portable Version
+      await runCommand('powershell', psArgs);
 
-INSTRUCTIONS:
-1. Extract this ZIP file to any folder
-2. Run "Station V - Virtual IRC Simulator.exe"
+      console.log('✅ Created ZIP distribution');
+      success = true;
+
+    } catch (error) {
+      console.log('⚠️ ZIP creation failed:', error.message);
+    }
+
+    // Method 2: Create a simple batch file that uses PowerShell to extract ZIP
+    if (!success) {
+      console.log('\n📦 Method 2: Creating simple batch launcher...');
+      
+      const batchContent = `@echo off
+REM Station V - Virtual IRC Simulator Launcher
+cls
+echo.
+echo ════════════════════════════════════════════════════════════
+echo    Station V - Virtual IRC Simulator
+echo ════════════════════════════════════════════════════════════
+echo.
+
+REM Check if we're running from the extracted folder
+set "LAUNCHER_DIR=%~dp0"
+set "EXE_PATH=%LAUNCHER_DIR%Station V - Virtual IRC Simulator.exe"
+
+if exist "%EXE_PATH%" (
+    echo Starting application...
+    start "" "%EXE_PATH%"
+    echo.
+    echo Application started successfully!
+    timeout /t 2 >nul
+    exit
+)
+
+REM If running from parent directory (unpacked)
+set "LAUNCHER_DIR=%~dp0win-unpacked"
+set "EXE_PATH=%LAUNCHER_DIR%Station V - Virtual IRC Simulator.exe"
+
+if exist "%EXE_PATH%" (
+    echo Starting application...
+    cd "%LAUNCHER_DIR%"
+    start "" "%EXE_PATH%"
+    echo.
+    echo Application started successfully!
+    timeout /t 2 >nul
+    exit
+)
+
+REM If all else fails
+echo.
+echo [ERROR] Could not find Station V executable
+echo.
+echo Please ensure all application files are present in the same
+echo directory as this launcher.
+echo.
+pause
+`;
+
+      fs.writeFileSync('release/Station-V-Launcher.bat', batchContent);
+      console.log('✅ Created batch launcher: release/Station-V-Launcher.bat');
+    }
+
+    // Create comprehensive instructions
+    console.log('\n📋 Creating distribution files...');
+    
+    const instructions = `Station V - Virtual IRC Simulator - Portable Distribution
+═══════════════════════════════════════════════════════════════
+
+QUICK START:
+═══════════════════════════════════════════════════════════════
+
+If you received a ZIP file:
+1. Extract the ZIP file to any folder
+2. Navigate to the extracted folder
+3. Double-click "Station V - Virtual IRC Simulator.exe"
+4. The application will start automatically
+
+If you received a folder:
+1. Navigate to the "win-unpacked" or "Station V - Virtual IRC Simulator" folder
+2. Double-click "Station V - Virtual IRC Simulator.exe"
 3. The application will start automatically
 
 REQUIREMENTS:
+═══════════════════════════════════════════════════════════════
 - Windows 10 or later
 - No additional software required
+- All dependencies are included
 
 FEATURES:
-- Fully portable - no installation needed
-- All dependencies included
-- Can be run from USB drive
-- No registry modifications
+═══════════════════════════════════════════════════════════════
+✅ Fully portable - no installation required
+✅ Portable - can be run from USB drive
+✅ No registry modifications
+✅ No admin privileges required
+✅ All dependencies bundled
 
-For support, visit the project repository.
+PORTABLE EXECUTION:
+═══════════════════════════════════════════════════════════════
+The application stores its data in a "data" folder next to the executable.
+You can move the entire folder anywhere and it will continue to work.
+
+TROUBLESHOOTING:
+═══════════════════════════════════════════════════════════════
+
+If the application won't start:
+1. Make sure Windows Defender isn't blocking it
+2. Check if all files are present in the folder
+3. Try running as administrator
+4. Check Windows Event Viewer for errors
+
+For support, visit: https://github.com/TimoP80/station_v_executable
+
+═══════════════════════════════════════════════════════════════
 `;
-      
-      fs.writeFileSync('release/README-Portable.txt', instructions);
-      console.log('✅ Instructions created: release/README-Portable.txt');
-      
-    } catch (error) {
-      console.log('⚠️ ZIP method failed:', error.message);
-    }
 
-    // Method 4: Manual instructions
-    console.log('📋 Method 4: Manual distribution instructions...');
+    fs.writeFileSync('release/README-Portable.txt', instructions);
+    console.log('✅ Created README: release/README-Portable.txt');
+
+    // Summary
+    console.log('\n🎉 Portable distribution created successfully!\n');
+    console.log('📁 Distribution files:');
     
-    const manualInstructions = `MANUAL PORTABLE EXECUTABLE CREATION
-
-Since automated tools are not available, here are manual methods:
-
-OPTION A: Self-Extracting Archive (Recommended)
-1. Install 7-Zip from https://www.7-zip.org/
-2. Right-click on the release/win-unpacked folder
-3. Select "7-Zip" > "Add to archive..."
-4. Set "Archive format" to "7z"
-5. Check "Create SFX archive"
-6. Set "SFX module" to "7z.sfx"
-7. Click "OK"
-
-OPTION B: ZIP Distribution
-1. Right-click on release/win-unpacked folder
-2. Select "Send to" > "Compressed (zipped) folder"
-3. Rename the ZIP file to "Station-V-Portable.zip"
-4. Include instructions for users to extract and run
-
-OPTION C: Third-Party Tools
-Consider using these tools for single executable creation:
-- Enigma Virtual Box (https://enigmaprotector.com/)
-- BoxedApp Packer (https://www.boxedapp.com/)
-- VMProtect (https://vmpsoft.com/)
-
-CURRENT BUILD LOCATION: ${path.resolve(unpackedPath)}
-EXECUTABLE NAME: Station V - Virtual IRC Simulator.exe
-`;
-
-    fs.writeFileSync('release/PORTABLE-CREATION-GUIDE.txt', manualInstructions);
-    console.log('✅ Manual guide created: release/PORTABLE-CREATION-GUIDE.txt');
+    if (fs.existsSync('release/Station-V-Portable.zip')) {
+      const stats = fs.statSync('release/Station-V-Portable.zip');
+      const sizeMB = (stats.size / (1024 * 1024)).toFixed(2);
+      console.log(`   ✅ Station-V-Portable.zip (${sizeMB} MB)`);
+    }
+    
+    if (fs.existsSync('release/Station-V-Launcher.bat')) {
+      console.log('   ✅ Station-V-Launcher.bat');
+    }
+    
+    console.log('   ✅ README-Portable.txt');
+    console.log('');
+    console.log('📦 To distribute:');
+    console.log('   1. Share the ZIP file or the entire "win-unpacked" folder');
+    console.log('   2. Users extract and run the executable');
+    console.log('   3. No installation needed!');
+    console.log('');
+    console.log('💡 For a TRUE single .exe file, consider using:');
+    console.log('   - Enigma Virtual Box (https://enigmaprotector.com/)');
+    console.log('   - BoxedApp Packer (https://www.boxedapp.com/)');
+    console.log('   See CODE_SIGNING_GUIDE.md for more details');
 
   } catch (error) {
-    console.error('❌ Portable executable creation failed:', error.message);
+    console.error('\n❌ Portable executable creation failed:', error.message);
+    console.error('Stack trace:', error.stack);
     process.exit(1);
   }
 }

@@ -5,31 +5,53 @@ This guide explains how to set up and use the network functionality in Station V
 ## Overview
 
 Station V now supports network functionality that allows:
-- Multiple human users to connect via WebSocket or IRC
+- Multiple human users to connect via WebSocket
 - Real-time communication between human users and AI virtual users
 - Hybrid chat environments with both human and AI participants
+
+## 🖥️ Using Network Mode with the Windows EXE
+
+**Quick Start for Desktop Executable:**
+
+1. **Run the Station V executable** - The server starts automatically on port 8080
+2. **Open the Network panel** (right side of the application)
+3. **Connect** with these settings:
+   - Server Host: `localhost`
+   - Server Port: `8080`
+   - Your Nickname: (choose any nickname)
+   - Auto-join Channels: `#general`
+4. **Click "Connect"**
+
+That's it! You're now in network mode.
+
+📖 **For detailed EXE instructions**: See [NETWORK_MODE_EXE_GUIDE.md](NETWORK_MODE_EXE_GUIDE.md)
 
 ## Architecture
 
 ### Server Components
-- **Station V Server** (`server/station-v-server.js`): Main server handling WebSocket and IRC connections
-- **WebSocket Server**: Handles web client connections on port 8080
-- **IRC Server**: Handles IRC client connections on port 6667
+- **Station V Server** (`server/station-v-server-simple.js`): WebSocket server for real-time communication
+- **WebSocket Server**: Handles client connections on port 8080 (auto-starts in EXE)
 
 ### Client Components
 - **Network Service** (`services/networkService.ts`): Handles client-side network communication
-- **Network Connection Component**: UI for connecting to the server
-- **Network Users Component**: UI for displaying connected users
+- **Network Connection Component** (`components/NetworkConnection.tsx`): UI for connecting to the server
+- **Network Users Component** (`components/NetworkUsers.tsx`): UI for displaying connected users
 
 ## Setup Instructions
 
-### 1. Install Dependencies
+### For Windows EXE Users
+
+The server starts **automatically** when you run the executable. Just connect using the Network panel (see Quick Start above).
+
+### For Development/Manual Setup
+
+#### 1. Install Dependencies
 
 ```bash
 npm install
 ```
 
-### 2. Start the Server
+#### 2. Start the Server
 
 ```bash
 # Start the Station V server
@@ -41,7 +63,6 @@ npm run dev:full
 
 The server will start on:
 - WebSocket: `ws://localhost:8080/station-v`
-- IRC: `irc://localhost:6667`
 
 ### 3. Connect Clients
 
@@ -55,12 +76,6 @@ The server will start on:
    - Auto-join Channels: `#general` (comma-separated)
 4. Click "Connect"
 
-#### IRC Client Connection
-Connect any IRC client to:
-- Server: `localhost`
-- Port: `6667`
-- Nickname: Your desired nickname
-- Channels: `#general`, `#random`, etc.
 
 ## Usage
 
@@ -70,11 +85,6 @@ Connect any IRC client to:
 3. **Send Messages**: Type messages in the chat window as usual
 4. **See Network Users**: The Network panel shows all connected users (human, virtual, and bot)
 
-### For IRC Clients
-1. **Connect**: Use your preferred IRC client to connect to `localhost:6667`
-2. **Join Channels**: Use `/join #channelname` to join channels
-3. **Send Messages**: Type messages normally in your IRC client
-4. **See All Users**: All users (human and AI) will appear in your IRC client
 
 ### Network Features
 - **Real-time Communication**: Messages are synchronized between all clients

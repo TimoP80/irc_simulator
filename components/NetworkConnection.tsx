@@ -79,7 +79,22 @@ export const NetworkConnection: React.FC<NetworkConnectionProps> = ({ onConnecte
         setError('Failed to connect to server');
       }
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Connection failed');
+      let errorMessage = 'Connection failed';
+      
+      if (error instanceof Error) {
+        if (error.message.includes('timeout')) {
+          errorMessage = 'Connection timeout - server not responding. Please ensure the server is running on port ' + config.serverPort;
+        } else if (error.message.includes('ECONNREFUSED')) {
+          errorMessage = 'Connection refused - server is not running on ' + config.serverHost + ':' + config.serverPort;
+        } else if (error.message.includes('NetworkError') || error.message.includes('net::ERR')) {
+          errorMessage = 'Network error - cannot reach server. Please check if the server is running and accessible.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      setError(errorMessage);
+      networkDebug.error('Connection failed:', error);
     } finally {
       setIsConnecting(false);
     }

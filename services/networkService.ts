@@ -128,7 +128,17 @@ class NetworkService {
           return;
         }
 
+        // Set up timeout for connection (10 seconds)
+        const timeout = setTimeout(() => {
+          if (this.ws) {
+            networkDebug.error('Connection timeout - server not responding');
+            this.ws.close();
+            reject(new Error('Connection timeout - server not responding. Please ensure the server is running.'));
+          }
+        }, 10000);
+
         this.ws.onopen = () => {
+          clearTimeout(timeout);
           networkDebug.log('Connected to Station V server');
           this.connected = true;
           this.notifyConnectionHandlers(true);
@@ -150,24 +160,42 @@ class NetworkService {
           }
         };
 
-        this.ws.onclose = () => {
-          networkDebug.log('Disconnected from server');
+        this.ws.onclose = (event) => {
+          clearTimeout(timeout);
+          networkDebug.log('Disconnected from server', event.code, event.reason);
           this.connected = false;
           // Clear all users and channels when disconnected
           this.users.clear();
           this.channels.clear();
           this.notifyConnectionHandlers(false);
           this.notifyUserHandlers([]);
+          
+          // Only reject if this wasn't a successful connection followed by a close
+          if (!this.ws) {
+            return; // Don't reject on intentional close
+          }
+          
+          // If connection was closed with an error code
+          if (event.code !== 1000) {
+            let errorMessage = 'Connection closed unexpectedly';
+            if (event.code === 1006) {
+              errorMessage = 'Connection failed. Please check if the server is running on ' + wsUrl;
+            }
+            networkDebug.error('Connection closed with error code:', event.code);
+          }
         };
 
         this.ws.onerror = (error) => {
+          clearTimeout(timeout);
           networkDebug.error('WebSocket error:', error);
-          reject(error);
+          const errorMessage = error instanceof Error ? error.message : 'Connection failed. Please ensure the server is running.';
+          reject(new Error(errorMessage));
         };
       });
     } catch (error) {
       networkDebug.error('Connection failed:', error);
-      return false;
+      const errorMessage = error instanceof Error ? error.message : 'Unknown connection error';
+      throw new Error(errorMessage);
     }
   }
 

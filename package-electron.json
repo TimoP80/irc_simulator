@@ -56,10 +56,7 @@
             }
           ],
           "icon": "favicon.ico",
-          "requestedExecutionLevel": "asInvoker",
-          "sign": false,
-          "certificateFile": null,
-          "certificatePassword": null
+          "requestedExecutionLevel": "asInvoker"
         },
   "mac": {
     "target": [

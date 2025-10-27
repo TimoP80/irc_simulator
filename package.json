@@ -1,7 +1,7 @@
 {
   "name": "station-v-executable",
   "private": true,
-  "version": "1.19.1",
+  "version": "1.19.8",
   "description": "Station V - Virtual IRC Simulator - Desktop Executable - A cross-platform desktop application for simulating IRC chat environments with AI-powered virtual users",
   "author": "Station V Development Team",
   "repository": {
@@ -41,7 +41,10 @@
     "electron:build:win": "node scripts/build-windows-dist.js",
     "electron:build:portable": "node scripts/create-portable-exe.js",
     "electron:build:single": "node scripts/create-single-exe.js",
+    "electron:build:all": "npm run electron:build:win && npm run electron:build:portable",
     "electron:clean": "rimraf dist-electron",
+    "electron:cleanup": "node scripts/cleanup-processes.js",
+    "electron:prebuild": "npm run electron:cleanup",
     "electron:test": "node scripts/test-executable.js",
     "copy:config": "node -e \"const fs=require('fs');const path=require('path');try{fs.copyFileSync('default-config.json','dist/default-config.json');console.log('✅ Copied default-config.json');}catch(e){console.log('⚠️ Config copy skipped:',e.message);}\"",
     "clean": "rimraf dist release",
@@ -57,20 +60,20 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "@types/electron": "^1.6.10",
+    "@types/electron": "^1.6.12",
     "@types/node": "^22.18.12",
-    "@vitejs/plugin-react": "^5.0.0",
+    "@vitejs/plugin-react": "^5.1.0",
     "autoprefixer": "^10.4.21",
     "concurrently": "^8.2.2",
-    "cross-env": "^7.0.3",
+    "cross-env": "^10.1.0",
     "electron": "^38.4.0",
-    "electron-builder": "^25.0.0",
+    "electron-builder": "^25.1.8",
     "postcss": "^8.5.6",
     "rimraf": "^6.0.1",
     "tailwindcss": "^3.4.18",
-    "typescript": "~5.8.2",
-    "vite": "^6.4.0",
-    "wait-on": "^8.0.1"
+    "typescript": "~5.9.3",
+    "vite": "^6.4.1",
+    "wait-on": "^8.0.5"
   },
   "main": "dist-electron/main.cjs",
   "build": {

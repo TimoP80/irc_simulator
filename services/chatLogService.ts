@@ -117,6 +117,45 @@ class ChatLogService {
     });
   }
 
+  /**
+   * Save a complete chat log entry (used during data import)
+   */
+  async saveLog(logEntry: ChatLogEntry): Promise<void> {
+    const db = await this.ensureDB();
+    
+    // Ensure proper date conversion for timestamps
+    const processedEntry: ChatLogEntry = {
+      ...logEntry,
+      message: {
+        ...logEntry.message,
+        timestamp: logEntry.message.timestamp instanceof Date 
+          ? logEntry.message.timestamp 
+          : new Date(logEntry.message.timestamp)
+      },
+      createdAt: logEntry.createdAt instanceof Date 
+        ? logEntry.createdAt 
+        : new Date(logEntry.createdAt)
+    };
+
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['messages', 'channels'], 'readwrite');
+      const messageStore = transaction.objectStore('messages');
+      const channelStore = transaction.objectStore('channels');
+
+      // Save log entry
+      const messageRequest = messageStore.put(processedEntry);
+      messageRequest.onsuccess = () => {
+        // Update channel metadata
+        this.updateChannelMetadataStandalone(
+          processedEntry.channelName,
+          1,
+          processedEntry.message.timestamp
+        ).then(() => resolve()).catch(reject);
+      };
+      messageRequest.onerror = () => reject(messageRequest.error);
+    });
+  }
+
   private async updateChannelMetadata(channelStore: IDBObjectStore, channelName: string, messageTimestamp: Date): Promise<void> {
     return new Promise((resolve, reject) => {
       const getRequest = channelStore.get(channelName);

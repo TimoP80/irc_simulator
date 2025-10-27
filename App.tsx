@@ -419,6 +419,31 @@ const App: React.FC = () => {
             ...prev,
             [nickname]: { user, messages: [] }
           };
+        } else {
+          pmDebug.error('User not found for PM:', nickname);
+          // Create a fallback user entry to prevent UI disappearing
+          return {
+            ...prev,
+            [nickname]: { 
+              user: {
+                nickname,
+                status: 'online',
+                userType: 'network' as const,
+                personality: 'User',
+                languageSkills: {
+                  languages: [{ language: 'English', fluency: 'native' }]
+                },
+                writingStyle: {
+                  formality: 'neutral',
+                  verbosity: 'neutral',
+                  humor: 'none',
+                  emojiUsage: 'low',
+                  punctuation: 'standard'
+                }
+              }, 
+              messages: [] 
+            }
+          };
         }
       }
       return prev;
@@ -622,15 +647,8 @@ const App: React.FC = () => {
   const handleVirtualUserBotCommand = async (content: string, user: User, channelName: string) => {
     try {
       
-      // First, add the original bot command message so users can see what was executed
-      const commandMessage: Message = {
-        id: generateUniqueMessageId(),
-        nickname: user.nickname,
-        content: content,
-        timestamp: new Date(),
-        type: 'user'
-      };
-      addMessageToContext(commandMessage, { type: 'channel', name: channelName });
+      // Don't add the original bot command message - the bot response will show the prompt
+      // Users don't need to see the raw command text, just the bot's response
       
       // Find a bot user in the channel to handle the command
       const channel = channels.find(c => c.name === channelName);
@@ -1672,11 +1690,60 @@ const App: React.FC = () => {
 
     } else { // 'pm'
       setPrivateMessages(prev => {
-        const user = virtualUsers.find(u => u.nickname === context.with);
+        // First try to find user in virtualUsers
+        let user = virtualUsers.find(u => u.nickname === context.with);
+        
+        // If not found in virtualUsers, check networkUsers
         if (!user) {
-          messageDebug.error(` User ${context.with} not found in virtualUsers, skipping PM creation`);
-          return prev;
+          const networkUser = networkUsers.find(u => u.nickname === context.with);
+          if (networkUser) {
+            // Convert network user to User format
+            user = {
+              nickname: networkUser.nickname,
+              status: networkUser.status,
+              userType: 'network' as const,
+              personality: 'Network User',
+              languageSkills: {
+                languages: [{ language: 'English', fluency: 'native' }]
+              },
+              writingStyle: {
+                formality: 'neutral',
+                verbosity: 'neutral',
+                humor: 'none',
+                emojiUsage: 'low',
+                punctuation: 'standard'
+              }
+            };
+          }
         }
+        
+        // If still not found, try to get from existing conversation
+        if (!user) {
+          const existingConversation = prev[context.with];
+          if (existingConversation) {
+            user = existingConversation.user;
+          } else {
+            messageDebug.error(` User ${context.with} not found, creating fallback user`);
+            // Create fallback user to prevent UI disappearing
+            user = {
+              nickname: context.with,
+              status: 'online',
+              userType: 'network' as const,
+              personality: 'User',
+              languageSkills: {
+                languages: [{ language: 'English', fluency: 'native' }]
+              },
+              writingStyle: {
+                formality: 'neutral',
+                verbosity: 'neutral',
+                humor: 'none',
+                emojiUsage: 'low',
+                punctuation: 'standard'
+              }
+            };
+          }
+        }
+        
         const conversation = prev[context.with] || { user, messages: [] };
         
         // Check if message already exists to prevent duplicates
@@ -1836,7 +1903,7 @@ const App: React.FC = () => {
         }
       }
     }
-  }, [virtualUsers, broadcastChannel]);
+  }, [virtualUsers, networkUsers, currentUserNickname, activeContext, broadcastChannel, setPrivateMessages, setUnreadPMUsers, setChannels, setUnreadChannels, setTyping, setProcessedVirtualMessageIds, showAiReactionNotification, setRecentlyAutoOpenedPM, isNetworkConnected]);
 
   // Trigger AI operator response to op requests
   const triggerAIOperatorResponse = useCallback(async (channel: Channel, requestingUser: string, operators: User[]) => {
@@ -4249,16 +4316,8 @@ The response must be a single line in the format: "nickname: greeting message"
           if (isBotCommand(content)) {
             simulationDebug.log(` Virtual user ${nickname.trim()} used bot command: ${content}`);
             
-            // First, add the original bot command message from the virtual user
-            const aiMessage: Message = {
-              id: generateUniqueMessageId(),
-              nickname: nickname.trim(),
-              content,
-              timestamp: new Date(),
-              type: 'ai'
-            };
-            simulationDebug.debug(`Adding AI message from ${nickname.trim()}: "${content}"`);
-            addMessageToContext(aiMessage, { type: 'channel', name: targetChannel.name });
+            // Don't add the original bot command message - the bot response will show the prompt
+            // Users don't need to see the raw command text, just the bot's response
             
             // Find the user who sent the command
             const user = targetChannel.users.find(u => u.nickname === nickname.trim());
@@ -4761,8 +4820,9 @@ The response must be a single line in the format: "nickname: greeting message"
   const messagesInContext = useMemo(() => {
     if (activeContext?.type === 'channel' && activeChannel) {
       return activeChannel.messages;
-    } else if (activeContext?.type === 'pm' && activePM) {
-      return activePM.messages;
+    } else if (activeContext?.type === 'pm') {
+      // Return messages even if activePM is undefined (fallback to empty array)
+      return activePM?.messages || [];
     }
     return [];
   }, [activeContext, activeChannel, activePM]);

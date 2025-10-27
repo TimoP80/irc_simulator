@@ -98,9 +98,11 @@ Station V is a **cross-platform application** that simulates a classic IRC chat 
 
 ### 🌐 Network Mode
 - **Multi-user support** - Multiple human users can connect and chat together
-- **WebSocket server** - Built-in server for real-time communication
+- **WebSocket server** - Built-in server for real-time communication (auto-starts in EXE)
 - **Cross-tab sync** - Multiple browser tabs stay synchronized
 - **AI integration** - Virtual users interact with both human and network users
+
+📖 **Using Network Mode in the EXE**: See [NETWORK_MODE_EXE_GUIDE.md](NETWORK_MODE_EXE_GUIDE.md) for detailed instructions.
 
 ### 👑 Operator System
 - **AI operator responses** - AI operators can grant or deny operator privileges
@@ -581,6 +583,46 @@ For developers using Cursor AI to improve and enhance the codebase:
 **Network Connection**: Check that port 8080 is available for network mode
 
 ## Recent Updates
+
+### v1.19.7 - Complete Distribution Build
+- 🎉 **Complete Windows EXE build** - Successfully built and tested
+- 📦 **Distribution ready** - Station-V-Portable.zip (138.51 MB) created
+- 🔧 **Fixed** Electron builder configuration errors
+- ✅ **All fixes applied** - UI blank, network timeout, and date conversion fixes included
+
+### v1.19.6 - Dependency Updates
+- ⬆️ **Updated** @vitejs/plugin-react to 5.1.0
+- ⬆️ **Updated** TypeScript to 5.9.3
+- ⬆️ **Updated** cross-env to 10.1.0
+- ⬆️ **Updated** electron-builder to 25.1.8
+- ⬆️ **Updated** wait-on to 8.0.5
+- ⬆️ **Updated** @types/electron to 1.6.12
+- ✨ **Improved** Development experience with latest tooling
+- ✅ **Verified** All components using modern React patterns (hooks, functional components)
+- ✅ **Ready** For latest React 19.2.0 features
+- 🎉 **Distribution ready** - Complete Windows EXE build tested and verified
+
+### v1.19.5 - Network Connection Improvements
+- 🔧 **Fixed** Network connection timeout issues - connections now timeout after 10 seconds
+- ✨ **Improved** Error messages for failed network connections
+- 🐛 **Fixed** Hanging connections when server is not running
+- 📝 **Enhanced** Error handling to distinguish between timeout, refused, and network errors
+
+### v1.19.4 - Date Conversion Fix
+- 🔧 **Fixed** TypeError "firstMet.getTime is not a function" in relationship memory service
+- ✨ **Improved** Date handling in relationship memory to properly convert date strings from storage
+- 🐛 **Prevented** UI from going blank when relationship data is loaded from storage
+
+### v1.19.3 - Critical UI Blank Fix
+- 🐛 **Fixed** Critical bug where UI would go completely blank after sending messages in web mode
+- 🔧 **Enhanced** PM conversation creation to handle network users and unknown users gracefully
+- ✨ **Improved** Error handling in `addMessageToContext` to prevent UI disappearing
+- 📝 **Updated** CHANGELOG with comprehensive bug fix details
+
+### v1.19.2 - UI Disappearing Bug Fix
+- 🐛 **Fixed** UI disappearing bug when attempting to write a message to a user in private messages
+- ✨ **Improved** Private message handling with fallback user creation when user not found
+- 📝 **Updated** CHANGELOG with detailed bug fix information
 
 ### v1.19.1 - Main Codebase Documentation Update
 - 📌 **Added** `MAIN_CODEBASE.md` - Documents this as the main active codebase

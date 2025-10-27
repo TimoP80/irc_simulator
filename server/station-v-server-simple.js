@@ -341,6 +341,17 @@ class StationVServer extends EventEmitter {
 
 // Start the server
 const server = new StationVServer();
-server.start(8080);
+
+// Get port from command line argument, default to 8080
+const portArg = process.argv[2];
+const port = portArg ? parseInt(portArg, 10) : 8080;
+
+// Validate port
+if (isNaN(port) || port < 1024 || port > 65535) {
+  console.error(`Invalid port: ${portArg}. Using default port 8080.`);
+  server.start(8080);
+} else {
+  server.start(port);
+}
 
 export default StationVServer;

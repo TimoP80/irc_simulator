@@ -120,12 +120,16 @@ function createWindow(): void {
         nodeIntegration: false,
         contextIsolation: true,
         preload: preloadPath,
-        webSecurity: true
+        webSecurity: false, // Disable for local file loading in Electron
+        allowRunningInsecureContent: false,
+        experimentalFeatures: true,
+        sandbox: false
       },
       icon: getResourcePath('favicon.ico'),
       titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
       show: false, // Don't show until ready
-      autoHideMenuBar: process.platform === 'win32' // Hide menu bar on Windows for cleaner look
+      autoHideMenuBar: process.platform === 'win32', // Hide menu bar on Windows for cleaner look
+      backgroundColor: '#111827' // Prevent white flash on startup
     });
     
     logInfo('Main window created successfully');
@@ -189,8 +193,24 @@ function createWindow(): void {
   // Show window when ready to prevent visual flash
   mainWindow.once('ready-to-show', () => {
     logInfo('Window ready to show');
-    mainWindow?.show();
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
   });
+
+  // Handle page becoming visible to prevent blank screens
+  mainWindow.on('show', () => {
+    logInfo('Window showed');
+  });
+
+  // Fallback: Show window after a timeout if ready-to-show never fires
+  setTimeout(() => {
+    if (mainWindow && !mainWindow.isVisible()) {
+      logInfo('Window not shown after timeout, forcing show');
+      mainWindow.show();
+    }
+  }, 3000);
 
   // Handle window closed
   mainWindow.on('closed', () => {
@@ -218,11 +238,39 @@ function createWindow(): void {
   // Handle DOM ready
   mainWindow.webContents.once('dom-ready', () => {
     logInfo('DOM ready');
+    // Ensure window is visible after DOM is ready
+    if (!mainWindow?.isVisible()) {
+      mainWindow?.show();
+    }
   });
 
   // Handle page loaded
   mainWindow.webContents.once('did-finish-load', () => {
     logInfo('Page finished loading');
+    // Double-check visibility
+    if (mainWindow && !mainWindow.isVisible()) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+
+  // Handle renderer process crash
+  mainWindow.webContents.on('render-process-gone', (event, details) => {
+    logError('Renderer process crashed:', details);
+    // Try to reload the window
+    if (mainWindow) {
+      mainWindow.reload();
+    }
+  });
+
+  // Handle unresponsive renderer
+  mainWindow.webContents.on('unresponsive', () => {
+    logError('Renderer process unresponsive');
+  });
+
+  // Handle responsive renderer
+  mainWindow.webContents.on('responsive', () => {
+    logInfo('Renderer process responsive again');
   });
 
   // Block external resource loading
@@ -454,6 +502,9 @@ app.commandLine.appendSwitch('--disable-web-security');
 app.commandLine.appendSwitch('--ignore-certificate-errors');
 app.commandLine.appendSwitch('--ignore-ssl-errors');
 app.commandLine.appendSwitch('--allow-running-insecure-content');
+app.commandLine.appendSwitch('--disable-background-timer-throttling');
+app.commandLine.appendSwitch('--disable-backgrounding-occluded-windows');
+app.commandLine.appendSwitch('--disable-renderer-backgrounding');
 
 // App event handlers
 app.whenReady().then(() => {

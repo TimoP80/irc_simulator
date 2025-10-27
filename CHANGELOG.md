@@ -4,6 +4,166 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 
 *Note: This project was previously known as "Gemini IRC Simulator" and was renamed to "Station V - Virtual IRC Simulator" as of v1.5.1.*
 
+## 1.19.8 - 2025-01-XX
+
+### 🐛 Fixes for Desktop Build
+
+#### **Fixed Bot Command Message Display Bug**
+- **Problem**: Messages with image prompts (like `!image cyberpunk city`) were being displayed in chat
+- **Root cause**: Bot command messages from virtual users were being added to the channel before processing
+- **Fix**: Removed duplicate message addition for bot commands - only the bot's response is shown now
+- **Files updated**:
+  - `App.tsx` - Removed adding command message for virtual user bot commands
+- **Impact**: High - Cleaner chat experience without seeing raw command text
+
+#### **Fixed Date Serialization Error**
+- **Problem**: Error "s.lastInteraction.getTime is not a function" when sending messages
+- **Root cause**: Date objects were being serialized to strings in localStorage and not deserialized before use
+- **Fix**: Added proper date type checking and deserialization in `getRelationshipContext` function
+- **Files updated**:
+  - `services/relationshipMemoryService.ts` - Added date deserialization checks
+  - `station-v-source-dist/services/relationshipMemoryService.ts` - Same fix for source dist
+- **Impact**: High - Prevents crashes when AI users interact in channels
+
+### 🐛 Windows Build Blank Screen Fix
+
+#### **Critical Fixes for Electron Blank Screen Issue**
+- **Fixed external Google Fonts blocking** - Removed external CDN fonts that were blocked in Electron
+- **Updated Electron webPreferences** - Added `backgroundColor`, disabled `webSecurity` for local file loading
+- **Simplified Vite build chunking** - Reduced manual chunks to prevent module loading issues
+- **Disabled React StrictMode** - Prevents double rendering in Electron that can cause blank screens
+- **Added window visibility fallbacks** - Multiple checks to ensure window is shown after loading
+- **Improved error recovery** - Added handlers for renderer process crashes and unresponsive states
+- **Added Electron command line switches** - Disabled background throttling to prevent window issues
+
+#### **Technical Changes**
+- Updated `index-electron.html` to remove external Google Fonts import
+- Modified `electron/main.ts` with improved window management and visibility checks
+- Simplified `vite.config.ts` chunking strategy for better Electron compatibility
+- Disabled React StrictMode in `index.tsx` for Electron builds
+- Added timeout fallback for window visibility (3 seconds)
+
+#### **Testing**
+- Web client remains stable and unaffected
+- Windows build should now load without blank screen
+- Improved error logging for debugging
+
+## 1.19.7 - 2025-01-XX
+
+### 📦 Complete Distribution Build
+
+#### **Successfully Built Windows Executable**
+- **Built complete Windows distribution** for testing and deployment
+- **Created Station-V-Portable.zip** (138.51 MB) - Ready for distribution
+- **All latest fixes included**:
+  - UI blank bug fix (v1.19.3)
+  - Network timeout fix (v1.19.5)
+  - Date conversion fix (v1.19.4)
+  - Network connection improvements (v1.19.5)
+  - Dependency updates (v1.19.6)
+- **Distribution location**: `release/Station-V-Portable.zip` and `release/win-unpacked/`
+- **Executable**: `Station V - Virtual IRC Simulator.exe`
+
+#### **Build Improvements**
+- **Fixed electron-builder configuration** - Removed deprecated signing properties
+- **Clean build process** - No configuration warnings or errors
+- **Updated tooling** - Latest dependencies for improved build reliability
+- **Production ready** - All assets and server files properly included
+
+#### **Distribution Contents**
+- **Main executable**: Station V - Virtual IRC Simulator.exe
+- **Server files**: WebSocket server for network mode
+- **Configuration**: default-config.json
+- **Assets**: All React app assets, compiled and optimized
+- **Electron files**: Main process, preload, and all runtime files
+- **ICU data**: Internationalization support
+- **Total size**: 138.51 MB compressed
+
+## 1.19.6 - 2025-01-XX
+
+### 🔄 Dependency Updates
+- **Updated @vitejs/plugin-react** from 5.0.0 to 5.1.0 - Latest Vite React plugin features
+- **Updated TypeScript** from 5.8.2 to 5.9.3 - Bug fixes and performance improvements
+- **Updated cross-env** from 7.0.3 to 10.1.0 - Latest cross-platform environment variable handling
+- **Updated electron-builder** from 25.0.0 to 25.1.8 - Latest stable build tool updates
+- **Updated wait-on** from 8.0.1 to 8.0.5 - Improved startup waiting utility
+- **Updated @types/electron** from 1.6.10 to 1.6.12 - Latest type definitions
+
+### Impact
+- Improved development experience with latest tooling
+- Better TypeScript performance and type checking
+- Enhanced cross-platform compatibility
+- Latest Electron build capabilities
+
+#### **Fixed Electron Builder Configuration**
+- **Removed invalid signing properties** - Fixed "unknown property 'signingAlgorithm'" error in electron-builder
+- **Cleaned up package-electron.json** - Removed deprecated/invalid signing configuration properties
+- **Improved build reliability** - Build now completes without configuration errors
+- **Impact**: Distribution builds now work cleanly without warnings
+
+## 1.19.2 - 2025-01-XX
+
+### 🐛 Critical Bug Fixes
+
+#### **UI Going Blank After Sending Messages**
+- **Fixed critical UI disappearing bug** - Fixed issue where UI would go completely blank after writing a message, affecting both channels and PMs
+- **Root cause #1**: `activePM` could be `undefined` when the conversation wasn't created yet, causing `messagesInContext` to return an empty array
+- **Root cause #2**: `addMessageToContext` was failing to create PM conversations for network users or when user wasn't found, causing the conversation to never be created
+- **Solution #1**: Added fallback handling in `messagesInContext` to return empty array gracefully when `activePM` is undefined
+- **Solution #2**: Enhanced `addMessageToContext` to:
+  - Check both `virtualUsers` and `networkUsers` when looking for PM recipients
+  - Use existing conversation's user if available
+  - Create fallback user entry when user cannot be found, preventing UI from disappearing
+  - Properly handle all user types (virtual, network, and unknown users)
+- **Additional fix**: Added fallback user creation in `handlePMUserClick` when user is not found
+
+#### **Improved User Experience**
+- **Better error handling**: PM conversations now work even when users are not in the expected list
+- **Prevented data loss**: Messages are now properly saved even if the user lookup fails
+- **Graceful degradation**: UI remains stable even with invalid or missing user data
+
+### 🔧 Bug Fixes
+
+#### **Fixed TypeError in Relationship Memory Service**
+- **Fixed date conversion errors** - Resolved "firstMet.getTime is not a function" error
+- **Root cause**: Dates stored in relationship memory as strings were not being converted back to Date objects
+- **Solution**: Added automatic date conversion in `calculateRelationshipLevel` and `initializeRelationshipMemory` functions
+- **Impact**: Relationship memory now works correctly when loaded from storage, preventing UI from going blank
+
+#### **Fixed Network Connection Timeout Issues**
+- **Added connection timeout** - Network connection now times out after 10 seconds if server doesn't respond
+- **Improved error messages** - More helpful error messages when connection fails
+- **Better error handling** - Clear distinction between timeout, connection refused, and network errors
+- **Enhanced debugging** - Better logging for connection status and close codes
+- **Root cause**: Connection attempts would hang indefinitely when server wasn't running
+- **Impact**: Users now get clear feedback when attempting to connect, making troubleshooting easier
+
+### 🔧 Network Mode Fixes & Improvements
+
+#### **Bug Fixes**
+- **Fixed server port configuration** - Server now correctly accepts port command line arguments
+- **Improved port flexibility** - Server can use ports 8080-8083 automatically if default port is busy
+- **Enhanced port validation** - Validates port range (1024-65535) with proper error handling
+
+#### **Documentation Improvements**
+- **Created comprehensive EXE guide** - New `NETWORK_MODE_EXE_GUIDE.md` with detailed instructions for using network mode in Windows EXE builds
+- **Updated NETWORK_SETUP.md** - Added EXE-specific quick start instructions and streamlined architecture documentation
+- **Enhanced README** - Added direct link to EXE network mode guide in features section
+- **Removed outdated IRC references** - Cleaned up references to removed IRC server functionality
+
+#### **User Experience Improvements**
+- **Clearer setup instructions** - Step-by-step guide for connecting to network mode in the desktop app
+- **Troubleshooting section** - Comprehensive FAQ and troubleshooting guide for common network mode issues
+- **Better documentation structure** - Separated EXE-specific instructions from development setup
+
+### 🎯 Impact
+
+These changes make network mode significantly more accessible for EXE users by:
+- Providing clear, actionable instructions for connecting to network mode
+- Fixing the port configuration issue that prevented the server from using command line arguments
+- Offering comprehensive troubleshooting for common connection issues
+- Separating EXE usage from development setup for clarity
+
 ## 1.19.0 - 2025-10-26
 
 ### 🎨 Discord-Style Quoting System
