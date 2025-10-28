@@ -39,14 +39,13 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
     if (!images || images.length === 0) return null;
     
     return images.map((imageUrl, index) => (
-      <div key={`image-${index}`} className="my-2">
-        <img 
-          src={imageUrl} 
-          alt="Shared image" 
-          className="max-w-full h-auto rounded border border-gray-600 cursor-pointer hover:opacity-80 transition-opacity"
+      <div key={`image-${index}`} className="block w-full my-3">
+        <img
+          src={imageUrl}
+          alt="Shared image"
+          className="block w-full h-auto rounded border border-gray-600 cursor-pointer hover:opacity-80 transition-opacity mt-1 mb-1"
           onClick={() => window.open(imageUrl, '_blank')}
           onError={(e) => {
-            // Fallback to link if image fails to load
             e.currentTarget.style.display = 'none';
             const linkElement = document.createElement('a');
             linkElement.href = imageUrl;

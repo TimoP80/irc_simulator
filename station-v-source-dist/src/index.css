@@ -42,10 +42,14 @@
   html, body {
     @apply bg-irc-bg text-irc-text font-mono;
     overflow-x: hidden;
+    /* Prevent layout shifts during rendering */
+    contain: layout style paint;
   }
-  
+
   #root {
     @apply h-screen w-screen;
+    /* Ensure stable layout */
+    contain: layout style;
   }
 }
 
@@ -74,22 +78,27 @@
   /* Message Styles */
   .irc-message {
     @apply p-2 border-b border-gray-700 last:border-b-0;
+    min-height: 2rem;
+    box-sizing: border-box;
   }
-  
+
   .irc-message-header {
     @apply flex items-center gap-2 mb-1;
   }
-  
+
   .irc-message-nick {
     @apply font-semibold text-blue-400;
   }
-  
+
   .irc-message-time {
     @apply text-xs text-gray-500;
   }
-  
+
   .irc-message-content {
     @apply text-gray-200 break-words;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    hyphens: auto;
   }
   
   /* Input Styles */

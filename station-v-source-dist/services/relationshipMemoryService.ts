@@ -102,26 +102,32 @@ export const updateRelationshipMemory = (
 
 // Calculate relationship level based on interaction patterns
 const calculateRelationshipLevel = (relationship: UserRelationship): UserRelationship['relationshipLevel'] => {
-  const { interactionCount, lastInteraction, firstMet } = relationship;
-  
+  const { interactionCount, lastInteraction } = relationship;
+  let { firstMet } = relationship;
+
+  // Ensure firstMet is a Date object
+  if (!(firstMet instanceof Date)) {
+    firstMet = new Date(firstMet);
+  }
+
   // Calculate days since first meeting
   const daysSinceFirstMet = Math.floor((Date.now() - firstMet.getTime()) / (1000 * 60 * 60 * 24));
-  
+
   // Calculate days since last interaction
   const daysSinceLastInteraction = Math.floor((Date.now() - lastInteraction.getTime()) / (1000 * 60 * 60 * 24));
-  
+
   // Relationship decay: if no interaction for 7+ days, relationship cools down
   if (daysSinceLastInteraction > 7) {
     if (relationship.relationshipLevel === 'close') return 'friendly';
     if (relationship.relationshipLevel === 'friendly') return 'acquaintance';
     if (relationship.relationshipLevel === 'acquaintance') return 'stranger';
   }
-  
+
   // Relationship progression based on interaction count and frequency
   if (interactionCount >= 50 && daysSinceFirstMet >= 3) return 'close';
   if (interactionCount >= 20 && daysSinceFirstMet >= 1) return 'friendly';
   if (interactionCount >= 5) return 'acquaintance';
-  
+
   return 'stranger';
 };
 

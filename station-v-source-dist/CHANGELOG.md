@@ -30,6 +30,37 @@ All notable changes to Station V - Virtual IRC Simulator will be documented in t
 - **Server Configuration**: Optimized WebSocket server settings for better stability
 - **Client Resilience**: Improved cleanup of existing connections and better state management
 
+### 🖼️ Image Generation API
+- **Gemini Image Generation**: Added new API endpoint for AI-powered image generation
+  - **Express Router**: New `/generate-image` endpoint using Gemini 2.0 Flash Experimental model
+  - **Flexible Dimensions**: Support for custom width and height parameters (default 512x512)
+  - **Base64 Response**: Images returned as data URLs for direct browser usage
+  - **Error Handling**: Comprehensive error handling with detailed logging
+  - **API Integration**: Seamless integration with existing server architecture
+
+### 🧩 New UI Components
+- **MessageItem Component**: Enhanced message display with reply functionality
+  - **Hover-to-Reply**: Discord-style reply button that appears on hover
+  - **Optimized Rendering**: React.memo for performance optimization
+  - **Accessibility**: Proper ARIA labels and keyboard navigation support
+
+- **TypingIndicator Component**: Real-time typing status display
+  - **Animated Dots**: Three bouncing dots animation for visual feedback
+  - **Flexible Modes**: Configurable display modes (all windows, private only, none)
+  - **Context Awareness**: Smart detection of private message vs channel contexts
+  - **User List**: Shows multiple users typing with proper grammar
+
+- **VersionDisplay Component**: Application version information
+  - **Dynamic Environment**: Shows development/production mode
+  - **Package Integration**: Reads version directly from package.json
+  - **Compact Design**: Minimal footprint with clear typography
+
+- **VirtualList Component**: Performance-optimized list rendering
+  - **Virtual Scrolling**: Renders only visible items for large lists
+  - **Configurable Overscan**: Adjustable buffer for smooth scrolling
+  - **Memory Efficient**: Reduces DOM nodes and improves performance
+  - **TypeScript Generic**: Fully typed with flexible item types
+
 ## 1.19.0 - 2025-10-26
 
 ### 🎨 Discord-Style Quoting System

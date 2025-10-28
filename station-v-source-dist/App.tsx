@@ -2,10 +2,11 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { ChannelList } from './components/ChannelList';
 import { UserList } from './components/UserList';
 import { ChatWindow } from './components/ChatWindow';
-import { SettingsModal } from './components/SettingsModal';
 import { ChannelListModal } from './components/ChannelListModal';
 import { getUIThemeService } from './services/uiThemeService';
 import { MobileNavigation } from './components/MobileNavigation';
+import { VersionDisplay } from './components/VersionDisplay';
+import LoadingScreen from './components/LoadingScreen';
 import { DEFAULT_CHANNELS, DEFAULT_VIRTUAL_USERS, DEFAULT_NICKNAME, SIMULATION_INTERVALS, DEFAULT_AI_MODEL, DEFAULT_TYPING_DELAY, DEFAULT_TYPING_INDICATOR } from './constants';
 import type { Channel, Message, User, ActiveContext, PrivateMessageConversation, AppConfig } from './types';
 import { addChannelOperator, removeChannelOperator, isChannelOperator, canUserPerformAction } from './types';
@@ -21,7 +22,6 @@ import {
   unreadDebug, contentDebug, mediaDebug, ircDebug
 } from './utils/debugLogger';
 import { getChatLogService, initializeChatLogs } from './services/chatLogService';
-import { ChatLogManager } from './components/ChatLogManager';
 import { NetworkConnection } from './components/NetworkConnection';
 import { NetworkUsers } from './components/NetworkUsers';
 import { getNetworkService, type NetworkUser } from './services/networkService';
@@ -186,6 +186,11 @@ const App: React.FC = () => {
   const [isConfigInitialized, setIsConfigInitialized] = useState<boolean>(false);
   const [configError, setConfigError] = useState<string | null>(null);
 
+  // Loading screen state
+  const [loadingProgress, setLoadingProgress] = useState<number>(0);
+  const [loadingMessage, setLoadingMessage] = useState<string>('Starting Station V...');
+  const [showLoadingScreen, setShowLoadingScreen] = useState<boolean>(true);
+
 
   // Initialize with saved config or defaults
   const [currentUserNickname, setCurrentUserNickname] = useState<string>(() => {
@@ -282,7 +287,11 @@ const App: React.FC = () => {
   // Mobile navigation state
   const [mobileActivePanel, setMobileActivePanel] = useState<'chat' | 'channels' | 'users' | 'network'>('chat');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  
+
+  // Dynamic imports for heavy components
+  const [SettingsModal, setSettingsModal] = useState<React.ComponentType<any> | null>(null);
+  const [ChatLogManager, setChatLogManager] = useState<React.ComponentType<any> | null>(null);
+
   // Electron-specific state
   const [isElectronApp, setIsElectronApp] = useState<boolean>(false);
   const [electronWindowState, setElectronWindowState] = useState<'maximized' | 'normal' | 'minimized'>('normal');
@@ -789,51 +798,13 @@ const App: React.FC = () => {
     try {
       // Add Electron-specific keyboard shortcuts
       const handleElectronKeyboard = (event: KeyboardEvent) => {
-        // Ctrl/Cmd + Shift + D: Toggle developer tools
-        if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key === 'D') {
-          event.preventDefault();
-          if (window.electronAPI?.toggleDevTools) {
-            window.electronAPI.toggleDevTools();
-          }
-        }
-        
-        // Ctrl/Cmd + R: Reload (prevent default browser reload)
-        if ((event.ctrlKey || event.metaKey) && event.key === 'r') {
-          event.preventDefault();
-          if (window.electronAPI?.reload) {
-            window.electronAPI.reload();
-          }
-        }
-        
-        // F11: Toggle fullscreen
-        if (event.key === 'F11') {
-          event.preventDefault();
-          if (window.electronAPI?.toggleFullscreen) {
-            window.electronAPI.toggleFullscreen();
-          }
-        }
-        
-        // Alt + F4: Close window (Windows)
-        if (event.altKey && event.key === 'F4') {
-          event.preventDefault();
-          if (window.electronAPI?.closeWindow) {
-            window.electronAPI.closeWindow();
-          }
-        }
+        // (Electron keyboard shortcuts removed: toggleDevTools, reload, fullscreen, closeWindow)
       };
 
       // Add keyboard event listener
       document.addEventListener('keydown', handleElectronKeyboard);
       
-      // Set up window state tracking
-      const handleWindowStateChange = (state: 'maximized' | 'normal' | 'minimized') => {
-        setElectronWindowState(state);
-      };
-
-      // Listen for window state changes if Electron API is available
-      if (window.electronAPI?.onWindowStateChange) {
-        window.electronAPI.onWindowStateChange(handleWindowStateChange);
-      }
+      // (Window state tracking removed: onWindowStateChange)
 
       appDebug.log('Electron features initialized successfully');
       
@@ -927,32 +898,63 @@ const App: React.FC = () => {
   useEffect(() => {
     const initializeApp = async () => {
       try {
+        // Update loading progress and message
+        setLoadingProgress(10);
+        setLoadingMessage('Loading configuration...');
+
         appDebug.log('Initializing application configuration...');
         // Try to initialize config with fallback support
         const config = await initializeConfigWithFallback('./default-config.json');
-        
+
+        setLoadingProgress(30);
+        setLoadingMessage('Setting up channels and users...');
+
         // Update state with the initialized config
         const { nickname, virtualUsers: configUsers, channels: configChannels, simulationSpeed, aiModel, typingDelay, typingIndicator } = initializeStateFromConfig(config);
-        
+
         setCurrentUserNickname(nickname);
         setVirtualUsers(configUsers);
         setChannels(configChannels);
         setSimulationSpeed(simulationSpeed);
         setAiModel(aiModel || DEFAULT_AI_MODEL);
-        
+
         if (typingDelay) {
           setTypingDelayConfig(typingDelay);
         }
         if (typingIndicator) {
           setTypingIndicatorConfig(typingIndicator);
         }
-        
-        setIsConfigInitialized(true);
+
+        setLoadingProgress(60);
+        setLoadingMessage('Initializing chat logs...');
+
+        // Initialize chat logs
+        await initializeChatLogs();
+
+        setLoadingProgress(80);
+        setLoadingMessage('Setting up UI theme...');
+
+        // Initialize UI theme
+        const themeService = getUIThemeService();
+        const savedConfig = loadConfig();
+        const themeId = savedConfig?.theme?.id || 'modern-dark';
+        themeService.setTheme(themeId);
+
+        setLoadingProgress(100);
+        setLoadingMessage('Station V is ready!');
+
+        // Small delay to show completion message
+        setTimeout(() => {
+          setIsConfigInitialized(true);
+          setShowLoadingScreen(false);
+        }, 300);
+
         appDebug.log('Application configuration initialized successfully');
       } catch (error) {
         console.error('Failed to initialize application configuration:', error);
         setConfigError('Failed to initialize configuration. Using default settings.');
         setIsConfigInitialized(true); // Still allow app to run with defaults
+        setShowLoadingScreen(false);
       }
     };
 
@@ -964,16 +966,16 @@ const App: React.FC = () => {
     const detectElectron = () => {
       const electronDetected = isElectron();
       setIsElectronApp(electronDetected);
-      
+
       if (electronDetected) {
         appDebug.log('Electron environment detected - enabling desktop optimizations');
-        
+
         // Set up Electron-specific features
         setupElectronFeatures();
-        
+
         // Hide mobile navigation in Electron
         setMobileActivePanel('chat');
-        
+
         // Set desktop-optimized defaults
         setShowElectronTitleBar(true);
         setElectronMenuVisible(false);
@@ -983,6 +985,25 @@ const App: React.FC = () => {
     };
 
     detectElectron();
+  }, []);
+
+  // Dynamic import heavy components
+  useEffect(() => {
+    const loadHeavyComponents = async () => {
+      try {
+        // Load SettingsModal dynamically
+        const settingsModule = await import('./components/SettingsModal');
+        setSettingsModal(() => settingsModule.SettingsModal);
+
+        // Load ChatLogManager dynamically
+        const chatLogModule = await import('./components/ChatLogManager');
+        setChatLogManager(() => chatLogModule.ChatLogManager);
+      } catch (error) {
+        console.error('Failed to load heavy components:', error);
+      }
+    };
+
+    loadHeavyComponents();
   }, []);
 
   // Initialize chat log service
@@ -3702,7 +3723,7 @@ const App: React.FC = () => {
     // The quoted message will be passed to handleSendMessage when the user sends their reply
   }, []);
 
-  const handleSendMessage = async (content: string, quotedMessage?: Message) => {
+  const handleSendMessage = async (content: string, quotedMessage?: Message, messageData?: { images?: string[], audio?: string[] }) => {
     notificationDebug.log('handleSendMessage called with content:', content, 'activeContext:', activeContext, 'quotedMessage:', quotedMessage);
     
     if (content.startsWith('/')) {
@@ -3733,6 +3754,8 @@ const App: React.FC = () => {
       content,
       timestamp: new Date(),
       type: activeContext?.type === 'pm' ? 'pm' : 'user',
+      images: messageData?.images,
+      audio: messageData?.audio,
       quotedMessage: quotedMessage ? {
         id: quotedMessage.id,
         nickname: quotedMessage.nickname,
@@ -5191,32 +5214,55 @@ The response must be a single line in the format: "nickname: greeting message"
   }, [currentUserNickname, aiModel, handleNetworkChannelData, virtualUsers]);
 
   // Show loading screen while configuration is being initialized
-  if (!isConfigInitialized) {
+  if (showLoadingScreen) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
-        alignItems: 'center', 
-        justifyContent: 'center', 
-        height: '100vh', 
+      <LoadingScreen
+        progress={loadingProgress}
+        message={loadingMessage}
+        isComplete={isConfigInitialized && !configError}
+      />
+    );
+  }
+
+  // Show error screen if configuration failed
+  if (configError && !isConfigInitialized) {
+    return (
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '100vh',
         backgroundColor: '#1a1a1a',
         color: '#ffffff',
         fontFamily: 'monospace'
       }}>
         <h1>Station V - Virtual IRC Simulator</h1>
-        <p>Initializing configuration...</p>
-        {configError && (
-          <div style={{ 
-            color: '#ff6b6b', 
-            marginTop: '20px', 
-            padding: '10px', 
-            border: '1px solid #ff6b6b',
+        <p>Configuration Error</p>
+        <div style={{
+          color: '#ff6b6b',
+          marginTop: '20px',
+          padding: '10px',
+          border: '1px solid #ff6b6b',
+          borderRadius: '4px',
+          backgroundColor: '#2a1a1a'
+        }}>
+          {configError}
+        </div>
+        <button
+          onClick={() => window.location.reload()}
+          style={{
+            marginTop: '20px',
+            padding: '10px 20px',
+            backgroundColor: '#ff6b6b',
+            color: '#ffffff',
+            border: 'none',
             borderRadius: '4px',
-            backgroundColor: '#2a1a1a'
-          }}>
-            {configError}
-          </div>
-        )}
+            cursor: 'pointer'
+          }}
+        >
+          Retry
+        </button>
       </div>
     );
   }
@@ -5229,21 +5275,12 @@ The response must be a single line in the format: "nickname: greeting message"
       {isElectronApp && showElectronTitleBar && (
         <div className="electron-title-bar bg-gray-900 border-b border-gray-700 px-4 py-2 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-red-500 rounded-full cursor-pointer hover:bg-red-400" 
-                 onClick={() => window.electronAPI?.closeWindow?.()} 
-                 title="Close"></div>
-            <div className="w-3 h-3 bg-yellow-500 rounded-full cursor-pointer hover:bg-yellow-400" 
-                 onClick={() => window.electronAPI?.minimizeWindow?.()} 
-                 title="Minimize"></div>
-            <div className="w-3 h-3 bg-green-500 rounded-full cursor-pointer hover:bg-green-400" 
-                 onClick={() => window.electronAPI?.maximizeWindow?.()} 
-                 title="Maximize"></div>
+            <div className="w-3 h-3 bg-red-500 rounded-full cursor-pointer hover:bg-red-400" title="Close"></div>
+            <div className="w-3 h-3 bg-yellow-500 rounded-full cursor-pointer hover:bg-yellow-400" title="Minimize"></div>
+            <div className="w-3 h-3 bg-green-500 rounded-full cursor-pointer hover:bg-green-400" title="Maximize"></div>
           </div>
           <div className="flex items-center gap-2 text-sm text-gray-300">
             <span className="font-semibold">Station V - Virtual IRC Simulator</span>
-            {window.electronAPI?.getVersion && (
-              <span className="text-xs text-gray-500">v{window.electronAPI.getVersion()}</span>
-            )}
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -5278,48 +5315,21 @@ The response must be a single line in the format: "nickname: greeting message"
           >
             Chat Logs
           </button>
-          <button
-            onClick={() => {
-              window.electronAPI?.toggleDevTools?.();
-              setElectronMenuVisible(false);
-            }}
-            className="text-gray-300 hover:text-white"
-          >
-            Developer Tools
-          </button>
-          <button
-            onClick={() => {
-              window.electronAPI?.reload?.();
-              setElectronMenuVisible(false);
-            }}
-            className="text-gray-300 hover:text-white"
-          >
-            Reload
-          </button>
-          <button
-            onClick={() => {
-              window.electronAPI?.setAlwaysOnTop?.(true);
-              setElectronMenuVisible(false);
-            }}
-            className="text-gray-300 hover:text-white"
-          >
-            Always On Top
-          </button>
         </div>
       )}
 
-      {isSettingsOpen && (
-        <SettingsModal 
-          onSave={handleSaveSettings} 
-          onCancel={handleCloseSettings} 
-          currentChannels={channels} 
-          onChannelsChange={setChannels} 
+      {isSettingsOpen && SettingsModal && (
+        <SettingsModal
+          onSave={handleSaveSettings}
+          onCancel={handleCloseSettings}
+          currentChannels={channels}
+          onChannelsChange={setChannels}
           currentUsers={virtualUsers}
           onUsersChange={handleUsersChange}
         />
       )}
-      {isChatLogOpen && (
-        <ChatLogManager 
+      {isChatLogOpen && ChatLogManager && (
+        <ChatLogManager
           isOpen={isChatLogOpen}
           onClose={handleCloseChatLogs}
           currentChannel={activeContext?.type === 'channel' ? activeContext.name : undefined}
@@ -5475,6 +5485,9 @@ The response must be a single line in the format: "nickname: greeting message"
               isPrivateMessage={activeContext?.type === 'pm'}
               onQuoteMessage={handleQuoteMessage}
             />
+            <div className="p-2 bg-gray-900 border-t border-gray-700">
+              <VersionDisplay />
+            </div>
           </main>
 
   {/* Desktop Layout - User List - Always visible in Electron */}

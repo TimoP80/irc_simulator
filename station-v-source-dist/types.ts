@@ -66,27 +66,34 @@ export interface InteractionRecord {
 }
 
 export interface Message {
-  id: number;
-  nickname: string;
-  content: string;
-  timestamp: Date;
-  type: MessageType;
-  command?: string; // For commands like 'me', 'notice', 'topic', etc.
-  target?: string; // For commands that target specific users or channels
-  links?: string[]; // Array of URLs that were mentioned in the message
-  images?: string[]; // Array of image URLs that were mentioned in the message
-  // Bot-specific message properties
-  botCommand?: BotCommandType; // Type of bot command that generated this message
-  botResponse?: any; // Bot response data (image URL, weather data, etc.)
-  // Quote/reply functionality
-  quotedMessage?: {
-    id: number;
-    nickname: string;
-    content: string;
-    timestamp: Date;
-    type: MessageType;
-  }; // Reference to the message being quoted/replied to
-}
+   id: number;
+   nickname: string;
+   content: string;
+   timestamp: Date;
+   type: MessageType;
+   command?: string; // For commands like 'me', 'notice', 'topic', etc.
+   target?: string; // For commands that target specific users or channels
+   links?: string[]; // Array of URLs that were mentioned in the message
+   images?: string[]; // Array of image URLs that were mentioned in the message
+   audio?: string[]; // Array of audio URLs that were mentioned in the message
+   // Bot-specific message properties
+   botCommand?: BotCommandType; // Type of bot command that generated this message
+   botResponse?: any; // Bot response data (image URL, weather data, etc.)
+   // Progress tracking for long-running operations like image generation
+   progress?: {
+     status: 'generating' | 'completed' | 'failed';
+     progress: number; // 0-100
+     message?: string; // Optional progress message
+   };
+   // Quote/reply functionality
+   quotedMessage?: {
+     id: number;
+     nickname: string;
+     content: string;
+     timestamp: Date;
+     type: MessageType;
+   }; // Reference to the message being quoted/replied to
+ }
 
 export interface Channel {
   name: string;
@@ -396,17 +403,16 @@ export interface RandomWorldConfig {
 
 // Electron API types
 export interface ElectronAPI {
-  toggleDevTools: () => void;
-  reload: () => void;
-  toggleFullscreen: () => void;
-  closeWindow: () => void;
-  onWindowStateChange: (callback: (state: 'maximized' | 'normal' | 'minimized') => void) => void;
-  minimizeWindow: () => void;
-  maximizeWindow: () => void;
-  restoreWindow: () => void;
-  setAlwaysOnTop: (alwaysOnTop: boolean) => void;
-  getVersion: () => string;
-  getPlatform: () => string;
+  getAppVersion: () => Promise<string>;
+  getAppName: () => Promise<string>;
+  onMenuNewChannel: (callback: () => void) => void;
+  onMenuAddUser: (callback: () => void) => void;
+  onMenuSettings: (callback: () => void) => void;
+  onMenuAbout: (callback: () => void) => void;
+  removeAllListeners: (channel: string) => void;
+  send: (channel: string, ...args: any[]) => void;
+  on: (channel: string, callback: (...args: any[]) => void) => void;
+  removeListener: (channel: string, callback: (...args: any[]) => void) => void;
 }
 
 // Extend Window interface to include Electron API

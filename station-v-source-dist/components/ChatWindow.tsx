@@ -1,69 +1,301 @@
-
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import type { Message, User } from '../types';
-import { MessageEntry } from './Message';
-import { SendIcon } from './icons';
-import { convertEmoticonsToEmojis, convertEmojisToEmoticons } from '../utils/emojiConverter';
-
-interface ChatWindowProps {
-  title: string;
-  messages: Message[];
-  onSendMessage: (content: string, quotedMessage?: Message) => void;
-  isLoading: boolean;
-  currentUserNickname: string;
-  typingUsers: string[];
-  channel?: { operators: string[] };
-  users?: User[]; // Optional users array for profile pictures
-  onClose?: () => void;
-  showCloseButton?: boolean;
-  typingIndicatorMode?: 'all' | 'private_only' | 'none'; // Typing indicator display mode
-  isPrivateMessage?: boolean; // Whether this is a private message window
-  onQuoteMessage?: (message: Message) => void; // Callback for quoting a message
+// Add global declaration for window.scrollToBottom
+declare global {
+  interface Window {
+    scrollToBottom?: () => void;
+  }
 }
 
-export const ChatWindow: React.FC<ChatWindowProps> = ({ 
-  title, 
-  messages, 
-  onSendMessage, 
-  isLoading, 
-  currentUserNickname, 
-  typingUsers, 
-  channel, 
-  users, 
-  onClose, 
+import React, { useState, useRef, useEffect, useCallback, useMemo, useLayoutEffect, Suspense } from 'react';
+// Simple error boundary for ChatWindow
+interface ChatWindowErrorBoundaryProps {
+  children: React.ReactNode;
+}
+interface ChatWindowErrorBoundaryState {
+  hasError: boolean;
+  error: any;
+}
+class ChatWindowErrorBoundary extends React.Component<ChatWindowErrorBoundaryProps, ChatWindowErrorBoundaryState> {
+  declare state: ChatWindowErrorBoundaryState;
+  declare props: ChatWindowErrorBoundaryProps;
+  constructor(props: ChatWindowErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error: any, errorInfo: any) {
+    // You can log errorInfo here if needed
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ color: 'red', background: '#222', padding: 24, borderRadius: 8, margin: 16 }}>
+          <h2>Something went wrong in ChatWindow.</h2>
+          <pre style={{ whiteSpace: 'pre-wrap' }}>{String(this.state.error)}</pre>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+import { startTransition, useTransition } from 'react';
+import type { Message, User } from '../types';
+import { SendIcon, PaperclipIcon } from './icons';
+import { convertEmoticonsToEmojis, convertEmojisToEmoticons } from '../utils/emojiConverter';
+import { MessageItem } from './MessageItem';
+import { TypingIndicator } from './TypingIndicator';
+
+// Performance configuration
+const PERF_CONFIG = {
+  SCROLL_THROTTLE: 100, // ms
+  MESSAGE_CHUNK_SIZE: 50,
+  RESIZE_DEBOUNCE: 150, // ms
+  MESSAGE_HEIGHT: 60, // px
+  OVERSCAN_COUNT: 5 // items
+} as const;
+
+function useThrottledCallback<T extends (...args: any[]) => void>(callback: T, delay: number) {
+  const lastCall = useRef(0);
+  return useCallback((...args: Parameters<T>) => {
+    const now = Date.now();
+    if (now - lastCall.current >= delay) {
+      callback(...args);
+      lastCall.current = now;
+    }
+  }, [callback, delay]);
+}
+
+
+const useDebounce = (fn: Function, delay: number) => {
+  const timeoutRef = useRef<NodeJS.Timeout>();
+  
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
+
+  return useCallback((...args: any[]) => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    timeoutRef.current = setTimeout(() => fn(...args), delay);
+  }, [fn, delay]);
+};
+
+interface ChatWindowProps {
+   title: string;
+   messages: Message[];
+   onSendMessage: (content: string, quotedMessage?: Message, messageData?: any) => void;
+   isLoading: boolean;
+   currentUserNickname: string;
+   typingUsers: string[];
+   channel?: { operators: string[] };
+   users?: User[]; // Optional users array for profile pictures
+   onClose?: () => void;
+   showCloseButton?: boolean;
+   typingIndicatorMode?: 'all' | 'private_only' | 'none'; // Typing indicator display mode
+   isPrivateMessage?: boolean; // Whether this is a private message window
+   onQuoteMessage?: (message: Message) => void; // Callback for quoting a message
+ }
+
+
+// (removed duplicate PERF_CONFIG)
+
+// Remove unused chunkArray function
+
+const ChatWindowComponent = React.memo(({
+  title,
+  messages,
+  onSendMessage,
+  isLoading,
+  currentUserNickname,
+  typingUsers,
+  channel,
+  users,
+  onClose,
   showCloseButton = false,
   typingIndicatorMode = 'all',
   isPrivateMessage = false,
   onQuoteMessage
-}) => {
+}: ChatWindowProps) => {
+  // Core state
   const [input, setInput] = useState('');
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [quotedMessage, setQuotedMessage] = useState<Message | null>(null);
+  const [showFormattingHelp, setShowFormattingHelp] = useState(false);
+  const [shouldScrollToBottom, setShouldScrollToBottom] = useState(true);
+  const [showScrollToLatest, setShowScrollToLatest] = useState(false);
+  // Attachment state
+  const [attachments, setAttachments] = useState<{ type: 'image' | 'audio'; url: string; file?: File }[]>([]);
+  const [showAttachmentModal, setShowAttachmentModal] = useState(false);
+  // Layout state
   const [isResizing, setIsResizing] = useState(false);
   const [resizeType, setResizeType] = useState<'height' | 'width-left' | 'width-right' | null>(null);
   const [chatHeight, setChatHeight] = useState<number | null>(null);
   const [chatWidth, setChatWidth] = useState<number | null>(null);
   const [chatLeft, setChatLeft] = useState<number | null>(null);
-  const [showFormattingHelp, setShowFormattingHelp] = useState(false);
-  const [quotedMessage, setQuotedMessage] = useState<Message | null>(null);
+
+  // Performance optimization state
+  const [isScrolling, setIsScrolling] = useState(false);
+  const [scrollPosition, setScrollPosition] = useState(0);
+  // For short message lists, disable virtualization
+  // Always default users to an empty array if not provided
+  const safeUsers = users || [];
+  const disableVirtualization = messages.length < 20;
+  const [visibleRange, setVisibleRange] = useState({ start: 0, end: disableVirtualization ? messages.length : 50 });
+
+  // Throttled handlers (hooks must be at top level)
+  const throttledHandleScroll = useThrottledCallback(() => {
+    if (chatWindowRef.current) {
+      const target = chatWindowRef.current;
+      // If virtualization is disabled, always allow scroll to bottom
+      if (disableVirtualization) {
+        setShouldScrollToBottom(true);
+        setShowScrollToLatest(false);
+        return;
+      }
+      const isAtBottom = target.scrollHeight - target.scrollTop - target.clientHeight < 50;
+      setShouldScrollToBottom(isAtBottom);
+      setShowScrollToLatest(!isAtBottom);
+    }
+  }, PERF_CONFIG.SCROLL_THROTTLE);
+
+  const handleResize = useThrottledCallback(() => {
+    if (chatWindowRef.current) {
+      const target = chatWindowRef.current;
+      const elementHeight = target.clientHeight;
+      const scrollTop = target.scrollTop;
+      startTransition(() => {
+        if (disableVirtualization) {
+          setVisibleRange({ start: 0, end: messages.length });
+        } else {
+          setVisibleRange({
+            start: Math.max(0, Math.floor(scrollTop / PERF_CONFIG.MESSAGE_HEIGHT) - PERF_CONFIG.OVERSCAN_COUNT),
+            end: Math.min(
+              messages.length,
+              Math.ceil((scrollTop + elementHeight) / PERF_CONFIG.MESSAGE_HEIGHT) + PERF_CONFIG.OVERSCAN_COUNT
+            )
+          });
+        }
+      });
+    }
+  }, PERF_CONFIG.RESIZE_DEBOUNCE);
+
+  // Scroll position tracking
+  useEffect(() => {
+    const target = chatWindowRef.current;
+    if (!target) return;
+
+    target.addEventListener('scroll', throttledHandleScroll);
+    // Initial check
+    throttledHandleScroll();
+
+    return () => target.removeEventListener('scroll', throttledHandleScroll);
+  }, [throttledHandleScroll]);
+
+  // Refs
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout>();
+  const lastScrollPositionRef = useRef(0);
+  const frameRequestRef = useRef<number>();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatWindowRef = useRef<HTMLDivElement>(null);
   const resizeHandleRef = useRef<HTMLDivElement>(null);
   const leftResizeHandleRef = useRef<HTMLDivElement>(null);
   const rightResizeHandleRef = useRef<HTMLDivElement>(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  const scrollToBottom = useCallback(() => {
+    if (chatWindowRef.current) {
+      chatWindowRef.current.scrollTo({
+        top: chatWindowRef.current.scrollHeight,
+        behavior: 'smooth',
+      });
+    } else {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+    setShouldScrollToBottom(true);
+    setShowScrollToLatest(false);
+  }, []);
+  // Expose scrollToBottom globally for image onLoad
+  React.useEffect(() => {
+    window.scrollToBottom = scrollToBottom;
+    return () => {
+      if (window.scrollToBottom === scrollToBottom) {
+        delete window.scrollToBottom;
+      }
+    };
+  }, []);
 
+  // Track last message id to detect new messages
+  const lastMessageIdRef = useRef<string | null>(null);
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, typingUsers]); // Also scroll when typing users change
+    const lastMsg = messages[messages.length - 1];
+    const lastMsgId = lastMsg ? lastMsg.id : null;
+    const prevLastMsgId = lastMessageIdRef.current;
+
+    // Only auto-scroll for short lists, or if user is at bottom, or if a new message arrives from another user and user was at bottom
+    const isNewMessage = lastMsgId && lastMsgId !== prevLastMsgId;
+    const isFromOtherUser = isNewMessage && lastMsg && lastMsg.nickname !== currentUserNickname;
+
+    if (disableVirtualization || shouldScrollToBottom || (isNewMessage && isFromOtherUser && shouldScrollToBottom)) {
+      scrollToBottom();
+    }
+    lastMessageIdRef.current = lastMsgId;
+  }, [messages, typingUsers, disableVirtualization, shouldScrollToBottom, currentUserNickname, scrollToBottom]);
+
+    // Optimized scroll handling with debounce and RAF
+  useEffect(() => {
+    if (messages.length > 0 && (disableVirtualization || shouldScrollToBottom)) {
+      if (frameRequestRef.current) {
+        cancelAnimationFrame(frameRequestRef.current);
+      }
+      frameRequestRef.current = requestAnimationFrame(() => {
+        if (chatWindowRef.current) {
+          const target = chatWindowRef.current;
+          startTransition(() => {
+            target.scrollTo({
+              top: target.scrollHeight,
+              behavior: 'smooth'
+            });
+          });
+        }
+      });
+    }
+  }, [messages, shouldScrollToBottom, disableVirtualization]);
+
+  // Handle layout calculations
+  useLayoutEffect(() => {
+    // Initial calculation
+    handleResize();
+    // Add resize listener
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [handleResize, messages.length]);
+
+  // Cleanup effects
+  useEffect(() => {
+    return () => {
+      if (frameRequestRef.current) {
+        cancelAnimationFrame(frameRequestRef.current);
+      }
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Close formatting help when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (showFormattingHelp && !(event.target as Element).closest('.formatting-help-container')) {
-        setShowFormattingHelp(false);
+        startTransition(() => {
+          setShowFormattingHelp(false);
+        });
       }
     };
 
@@ -200,16 +432,65 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     setQuotedMessage(null);
   }, []);
 
+  // Handle file selection for attachments
+  const handleFileSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files) return;
+
+    Array.from(files).forEach((file: File) => {
+      if (file.type.startsWith('image/') || file.type.startsWith('audio/')) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const result = e.target?.result as string;
+          if (result) {
+            const attachment = {
+              type: file.type.startsWith('image/') ? 'image' as const : 'audio' as const,
+              url: result,
+              file
+            };
+            setAttachments(prev => [...prev, attachment]);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    // Reset input
+    event.target.value = '';
+  }, []);
+
+  // Handle URL input for attachments
+  const handleUrlAttachment = useCallback((url: string, type: 'image' | 'audio') => {
+    if (url.trim()) {
+      setAttachments(prev => [...prev, { type, url: url.trim() }]);
+    }
+  }, []);
+
+  // Remove attachment
+  const removeAttachment = useCallback((index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
   // Handle form submission
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (input.trim() && !isLoading) {
+    if ((input.trim() || attachments.length > 0) && !isLoading) {
       // Convert emoticons to emojis before sending
       const convertedInput = convertEmoticonsToEmojis(input.trim());
-      onSendMessage(convertedInput, quotedMessage || undefined);
+
+      // Prepare message data with attachments
+      const messageData = {
+        content: convertedInput,
+        images: attachments.filter(att => att.type === 'image').map(att => att.url),
+        audio: attachments.filter(att => att.type === 'audio').map(att => att.url),
+        quotedMessage: quotedMessage || undefined
+      };
+
+      onSendMessage(convertedInput, quotedMessage || undefined, messageData);
+      // Always clear input after sending, but do not trigger extra scroll or re-render
       setInput('');
       setQuotedMessage(null); // Clear quoted message after sending
-      
+      setAttachments([]); // Clear attachments after sending
       // Reset textarea height
       if (inputRef.current) {
         inputRef.current.style.height = 'auto';
@@ -299,6 +580,146 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     };
   }, [isResizing, resizeType, handleMouseMove, handleMouseUp]);
 
+  // Optimized scroll handling with virtual list
+  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.currentTarget;
+    if (disableVirtualization) return; // No-op for short lists
+
+    // Clear existing scroll timeout
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+
+    setIsScrolling(true);
+    lastScrollPositionRef.current = target.scrollTop;
+    setScrollPosition(target.scrollTop);
+
+    // Calculate visible range for virtualization
+    const elementHeight = target.clientHeight;
+    const scrollTop = target.scrollTop;
+
+    const itemHeight = 60; // Approximate height of a message
+    const overscanCount = 5; // Number of items to render above/below viewport
+
+    const visibleStartIndex = Math.max(0, Math.floor(scrollTop / itemHeight) - overscanCount);
+    const visibleEndIndex = Math.min(
+      messages.length,
+      Math.ceil((scrollTop + elementHeight) / itemHeight) + overscanCount
+    );
+
+    // Prevent unnecessary re-renders by checking if range actually changed
+    setVisibleRange(prevRange => {
+      if (prevRange.start === visibleStartIndex && prevRange.end === visibleEndIndex) {
+        return prevRange; // No change, return same object to prevent re-render
+      }
+      return { start: visibleStartIndex, end: visibleEndIndex };
+    });
+
+    // Debounce scroll end detection
+    scrollTimeoutRef.current = setTimeout(() => {
+      setIsScrolling(false);
+    }, PERF_CONFIG.SCROLL_THROTTLE);
+  }, [messages.length, disableVirtualization]);
+
+  // Memoize the message rendering with virtualization
+  const renderMessages = useCallback(() => {
+    if (disableVirtualization) {
+      // Render all messages directly for short lists (e.g., PMs), let height be auto and remove any fixed height/minHeight
+      return (
+        <div>
+          {messages.map((msg) => (
+                <div key={msg.id} style={{ marginBottom: 8 }}>
+              <MessageItem
+                message={msg}
+                currentUserNickname={currentUserNickname}
+                user={safeUsers.find(u => u.nickname === msg.nickname)}
+                onQuote={msg.type !== 'system' && onQuoteMessage ? handleQuoteMessage : undefined}
+              />
+            </div>
+          ))}
+        </div>
+      );
+    }
+    // Only render messages within the visible range (virtualized)
+    const visibleMessages = messages.slice(visibleRange.start, visibleRange.end);
+    const totalHeight = messages.length * PERF_CONFIG.MESSAGE_HEIGHT; // Total scrollable height
+    const topPadding = visibleRange.start * PERF_CONFIG.MESSAGE_HEIGHT; // Padding before visible items
+
+    return (
+      <div style={{ height: totalHeight, position: 'relative' }}>
+        <div style={{ position: 'absolute', top: topPadding, left: 0, right: 0 }}>
+          {visibleMessages.map((msg) => {
+            const user = safeUsers.find(u => u.nickname === msg.nickname);
+            return (
+                  <div key={msg.id} className="group" style={{ height: PERF_CONFIG.MESSAGE_HEIGHT, display: 'block' }}>
+                <MessageItem
+                  message={msg}
+                  currentUserNickname={currentUserNickname}
+                  user={user}
+                  onQuote={msg.type !== 'system' && onQuoteMessage ? handleQuoteMessage : undefined}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  // Handle input change with cursor position preservation
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    const cursorPosition = e.target.selectionStart || 0;
+    
+    // Convert emojis back to emoticons for internal state
+    const rawValue = convertEmojisToEmoticons(value);
+    setInput(rawValue);
+    
+    // Restore cursor position after state update
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.setSelectionRange(cursorPosition, cursorPosition);
+      }
+    }, 0);
+  }, []);
+
+  // Patch: When sending a message, include attachments in the message object
+  const handleSubmit = useCallback((e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() && attachments.length === 0) return;
+    // Prepare message data
+    const messageData: any = {};
+    if (attachments.length > 0) {
+      messageData.images = attachments.filter(a => a.type === 'image').map(a => a.url);
+      messageData.audio = attachments.filter(a => a.type === 'audio').map(a => a.url);
+    }
+    onSendMessage(input, quotedMessage || undefined, messageData);
+    setInput('');
+    setQuotedMessage(null);
+    setAttachments([]);
+  }, [input, attachments, quotedMessage, onSendMessage]);
+  }, [messages, visibleRange, safeUsers, currentUserNickname, onQuoteMessage, handleQuoteMessage, disableVirtualization]);
+
+  // Remove duplicate message chunking logic - using renderMessages() instead
+
+  // Remove duplicate renderedMessages - using renderMessages() instead
+  
+  // Memoized typing indicator
+  const typingIndicatorElement = useMemo(() => {
+    if (typingUsers.length === 0) return null;
+    const shouldShow = 
+      typingIndicatorMode === 'all' || 
+      (typingIndicatorMode === 'private_only' && isPrivateMessage);
+    
+    if (!shouldShow) return null;
+    
+    return (
+      <TypingIndicator
+        users={typingUsers}
+        mode={typingIndicatorMode}
+        isPrivateMessage={isPrivateMessage}
+      />
+    );
+  }, [typingUsers, typingIndicatorMode, isPrivateMessage]);
+
   return (
     <div 
       ref={chatWindowRef}
@@ -355,62 +776,23 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         </div>
       </div>
 
-      <div className="flex-1 p-3 lg:p-4 overflow-y-auto min-h-0">
-        <div className="flex flex-col gap-3 lg:gap-3">
-          {messages.map((msg) => {
-            // Find user for profile picture
-            const user = users?.find(u => u.nickname === msg.nickname);
-            
-            return (
-              <div key={msg.id} className="group relative">
-                <MessageEntry 
-                  message={msg} 
-                  currentUserNickname={currentUserNickname} 
-                  user={user}
-                />
-                {/* Reply button - only show for non-system messages */}
-                {msg.type !== 'system' && onQuoteMessage && (
-                  <button
-                    onClick={() => handleQuoteMessage(msg)}
-                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white px-2 py-1 rounded text-xs flex items-center gap-1"
-                    title="Reply to this message"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                    </svg>
-                    Reply
-                  </button>
-                )}
-              </div>
-            );
-          })}
-          {/* Show typing indicator based on configuration */}
-          {typingUsers.length > 0 && (() => {
-            // Determine if we should show the typing indicator based on mode
-            const shouldShow = 
-              typingIndicatorMode === 'all' || 
-              (typingIndicatorMode === 'private_only' && isPrivateMessage);
-            
-            if (!shouldShow) return null;
-            
-            return (
-              <div className="text-gray-400 italic text-sm px-3 py-2 flex items-center gap-2 bg-gray-800/50 rounded-lg mx-2 my-1 border border-gray-600/30">
-                <div className="flex space-x-1">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                </div>
-                <span className="text-gray-300">
-                  {typingUsers.length === 1 
-                    ? `${typingUsers[0]} is typing...`
-                    : `${typingUsers.join(', ')} are typing...`
-                  }
-                </span>
-              </div>
-            );
-          })()}
-        </div>
-        <div ref={messagesEndRef} />
+      <div 
+        className="flex-1 p-3 lg:p-4 overflow-y-auto min-h-0 overscroll-contain will-change-scroll relative"
+        style={{ minHeight: 0, overflowAnchor: 'auto' }}
+        onScroll={handleScroll}
+      >
+        {showScrollToLatest && (
+          <button
+            className="absolute right-4 bottom-4 z-20 bg-indigo-600 text-white px-4 py-2 rounded shadow-lg hover:bg-indigo-500 transition-colors"
+            onClick={scrollToBottom}
+            title="Scroll to latest message"
+          >
+            Scroll to latest
+          </button>
+        )}
+        {renderMessages()}
+        {typingIndicatorElement}
+        <div ref={messagesEndRef} style={{ height: 0 }} />
       </div>
 
       <footer className="p-3 lg:p-4 border-t border-gray-700 bg-gray-900">
@@ -444,28 +826,59 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         )}
         
         <form onSubmit={handleSubmit} className="flex items-end gap-3">
-          <div className="flex-1 relative">
-            <textarea
-              ref={inputRef}
-              value={displayInput}
-              onChange={handleInputChange}
-              onPaste={handlePaste}
-              onKeyDown={handleKeyDown}
-              placeholder="Type your message... (try /nick, /join, /who or !image, !weather, !help) - Emoticons like :) will auto-convert to emojis - Use Ctrl+Enter to send"
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 lg:px-4 py-3 lg:py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base lg:text-base resize-none min-h-[48px] max-h-[120px] touch-manipulation"
-              disabled={isLoading}
-              rows={1}
-              style={{ 
-                height: 'auto',
-                minHeight: '48px',
-                maxHeight: '120px'
-              }}
-              onInput={(e) => {
-                const target = e.target as HTMLTextAreaElement;
-                target.style.height = 'auto';
-                target.style.height = Math.min(target.scrollHeight, 120) + 'px';
-              }}
-            />
+           <div className="flex-1 relative">
+             {/* Attachment previews */}
+             {attachments.length > 0 && (
+               <div className="mb-2 flex flex-wrap gap-2">
+                 {attachments.map((attachment, index) => (
+                   <div key={index} className="relative bg-gray-600 rounded-lg p-2 flex items-center gap-2 max-w-xs">
+                     {attachment.type === 'image' ? (
+                       <img src={attachment.url} alt="Attachment" className="w-8 h-8 object-cover rounded" />
+                     ) : (
+                       <div className="w-8 h-8 bg-gray-500 rounded flex items-center justify-center">
+                         <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                           <path fillRule="evenodd" d="M18 3a1 1 0 00-1.196-.98l-10 2A1 1 0 006 5v9.114A4.369 4.369 0 005 14c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2V7.82l8-1.6v5.894A4.37 4.37 0 0015 14c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2V3z" clipRule="evenodd" />
+                         </svg>
+                       </div>
+                     )}
+                     <span className="text-xs text-gray-300 truncate flex-1">
+                       {attachment.type === 'image' ? 'Image' : 'Audio'}
+                     </span>
+                     <button
+                       type="button"
+                       onClick={() => removeAttachment(index)}
+                       className="text-gray-400 hover:text-white"
+                     >
+                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                       </svg>
+                     </button>
+                   </div>
+                 ))}
+               </div>
+             )}
+
+             <textarea
+               ref={inputRef}
+               value={displayInput}
+               onChange={handleInputChange}
+               onPaste={handlePaste}
+               onKeyDown={handleKeyDown}
+               placeholder="Type your message... (try /nick, /join, /who or !image, !weather, !help) - Emoticons like :) will auto-convert to emojis - Use Ctrl+Enter to send"
+               className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 lg:px-4 py-3 lg:py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base lg:text-base resize-none min-h-[48px] max-h-[120px] touch-manipulation"
+               disabled={isLoading}
+               rows={1}
+               style={{
+                 height: 'auto',
+                 minHeight: '48px',
+                 maxHeight: '120px'
+               }}
+               onInput={(e) => {
+                 const target = e.target as HTMLTextAreaElement;
+                 target.style.height = 'auto';
+                 target.style.height = Math.min(target.scrollHeight, 120) + 'px';
+               }}
+             />
             
             {/* Formatting Help Tooltip */}
             {showFormattingHelp && (
@@ -498,10 +911,28 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           >
             <span className="text-sm font-bold">?</span>
           </button>
-          
+
+          <div className="relative">
+            <input
+              type="file"
+              accept="image/*,audio/*"
+              multiple
+              onChange={handleFileSelect}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              title="Attach files"
+            />
+            <button
+              type="button"
+              className="px-3 py-3 lg:py-2 bg-gray-600 hover:bg-gray-500 text-gray-300 rounded-lg transition-colors duration-200 min-h-[48px] touch-manipulation"
+              title="Attach files"
+            >
+              <PaperclipIcon className="h-5 w-5 lg:h-5 lg:w-5" />
+            </button>
+          </div>
+
           <button
             type="submit"
-            disabled={isLoading || !input.trim()}
+            disabled={isLoading || (!input.trim() && attachments.length === 0)}
             className="bg-indigo-600 text-white rounded-lg px-4 lg:px-4 py-3 lg:py-2 flex items-center justify-center disabled:bg-indigo-800 disabled:cursor-not-allowed hover:bg-indigo-500 active:bg-indigo-700 transition-colors touch-manipulation min-h-[48px]"
           >
             <SendIcon className="h-5 w-5 lg:h-5 lg:w-5"/>
@@ -552,4 +983,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       </div>
     </div>
   );
-};
+});
+
+// Export with error boundary
+export const ChatWindow = (props: ChatWindowProps) => (
+  <ChatWindowErrorBoundary>
+    <ChatWindowComponent {...props} />
+  </ChatWindowErrorBoundary>
+);

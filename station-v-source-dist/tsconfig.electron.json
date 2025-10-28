@@ -14,7 +14,8 @@
     "strict": true,
     "types": ["node", "electron"],
     "allowJs": true,
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "resolveJsonModule": true
   },
   "include": [
     "electron/**/*.ts"

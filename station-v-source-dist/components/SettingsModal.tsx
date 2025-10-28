@@ -11,6 +11,7 @@ import { DataExportModal } from './DataExportModal';
 import { DebugLogWindow } from './DebugLogWindow';
 import { ThemeSelector } from './ThemeSelector';
 import { getUIThemeService } from '../services/uiThemeService';
+import { VersionDisplay } from './VersionDisplay';
 
 interface SettingsModalProps {
   onSave: (config: AppConfig) => void;
@@ -289,7 +290,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
       <div className="bg-gray-800 rounded-lg shadow-xl p-4 lg:p-8 w-full max-w-4xl border border-gray-700 max-h-[95vh] overflow-y-auto">
-        <h2 className="text-xl lg:text-2xl font-bold text-white mb-4">Simulation Configuration</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl lg:text-2xl font-bold text-white">Simulation Configuration</h2>
+          <VersionDisplay />
+        </div>
         <p className="text-gray-400 mb-6 text-sm lg:text-base">Customize the channels, virtual users, and your nickname. Changes are saved locally.</p>
         
         <div className="space-y-6">
@@ -634,8 +638,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               
               <div className="bg-red-900/20 border border-red-500/30 p-3 rounded-lg">
                 <p className="text-xs text-red-300">
-                  <strong>🚫 Browser Limitation:</strong> Direct browser requests to external APIs are blocked by CORS. 
-                  To use external APIs, you need to set up a proxy server or use server-side rendering.
+                  <strong>🚫 Browser Limitation:</strong> Direct browser requests to external APIs are blocked by CORS.
+                  In web mode, image generation automatically falls back to placeholder images.
+                  For real AI-generated images, use the Electron desktop app.
                 </p>
               </div>
               

@@ -1,9 +1,11 @@
 {
   "appId": "com.stationv.ircsimulator",
   "productName": "Station V - Virtual IRC Simulator",
-  "asar": false,
+  "asar": true,
   "asarUnpack": [
-    "node_modules/electron/dist/**/*"
+    "node_modules/electron/dist/**/*",
+    "server/**/*",
+    "dist-electron/**/*"
   ],
   "directories": {
     "output": "release"
@@ -14,6 +16,10 @@
     "server/",
     "node_modules/",
     "!node_modules/electron/dist/",
+    "!node_modules/.bin/",
+    "!node_modules/**/*.md",
+    "!node_modules/**/test*/",
+    "!node_modules/**/example*/",
     "default-config.json"
   ],
   "extraFiles": [

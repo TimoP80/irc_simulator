@@ -13,16 +13,17 @@ const ai = new GoogleGenAI({ apiKey: API_KEY });
 
 // Bot command handlers
 export const handleBotCommand = async (
-  command: string, 
-  user: User, 
-  channelName: string, 
+  command: string,
+  user: User,
+  channelName: string,
   model: string = 'gemini-2.5-flash',
   imageConfig?: {
     provider: 'nano-banana' | 'imagen' | 'placeholder' | 'dalle';
     apiKey?: string;
     model?: string;
     baseUrl?: string;
-  }
+  },
+  onProgressUpdate?: (message: Message) => void
 ): Promise<Message | null> => {
   // Safety check: Ensure command is actually a command
   if (!command.trim().startsWith('!')) {
@@ -38,7 +39,7 @@ export const handleBotCommand = async (
   switch (botCommand) {
     case '!image':
     case '!img':
-      return await generateImageCommand(args, user, channelName, model, imageConfig);
+      return await generateImageCommand(args, user, channelName, model, imageConfig, onProgressUpdate);
     
     case '!weather':
       return await generateWeatherCommand(args, user, channelName, model);
@@ -78,53 +79,103 @@ export const handleBotCommand = async (
 
 // Generate AI image using proper image generation service
 const generateImageCommand = async (
-  args: string[], 
-  user: User, 
-  channelName: string, 
+  args: string[],
+  user: User,
+  channelName: string,
   model: string,
   imageConfig?: {
     provider: 'nano-banana' | 'imagen' | 'placeholder' | 'dalle';
     apiKey?: string;
     model?: string;
     baseUrl?: string;
-  }
+  },
+  onProgressUpdate?: (message: Message) => void
 ): Promise<Message> => {
   const prompt = args.join(' ') || 'a beautiful landscape';
-  
+
   try {
     console.log(`[Bot Service] Generating image for prompt: "${prompt}"`);
-    
-    // Use the image generation service with configuration
+
+    // Use the image generation service with configuration and progress callback
     const imageService = getImageGenerationService(imageConfig);
+
+    // Create initial progress message
+    const progressMessageId = Date.now();
+    let currentProgressMessage: Message = {
+      id: progressMessageId,
+      nickname: user.nickname,
+      content: `🖼️ Starting image generation for "${prompt}"...`,
+      timestamp: new Date(),
+      type: 'bot',
+      botCommand: 'image',
+      progress: {
+        status: 'generating',
+        progress: 0,
+        message: 'Initializing...'
+      }
+    };
+
+    // Send initial progress message
+    if (onProgressUpdate) {
+      onProgressUpdate(currentProgressMessage);
+    }
+
     const result = await imageService.generateImage({
       prompt,
       width: 512,
       height: 512
+    }, (progress) => {
+      // Update progress message
+      currentProgressMessage = {
+        ...currentProgressMessage,
+        content: progress.message || `🖼️ Generating image for "${prompt}"...`,
+        progress: {
+          status: progress.status,
+          progress: progress.progress,
+          message: progress.message
+        }
+      };
+
+      if (onProgressUpdate) {
+        onProgressUpdate(currentProgressMessage);
+      }
     });
-    
+
     if (result.success && result.imageUrl) {
       console.log(`[Bot Service] Image generated successfully: ${result.imageUrl}`);
-      
-      return {
-        id: Date.now(),
+
+      // Send final success message
+      const finalMessage: Message = {
+        id: progressMessageId + 1, // Use a new ID for the final message
         nickname: user.nickname,
         content: `🖼️ Generated image for "${prompt}"`,
         timestamp: new Date(),
         type: 'bot',
         botCommand: 'image',
-        botResponse: { 
-          imageUrl: result.imageUrl, 
+        botResponse: {
+          imageUrl: result.imageUrl,
           prompt,
-          metadata: result.metadata 
+          metadata: result.metadata
         },
-        images: [result.imageUrl]
+        images: [result.imageUrl],
+        progress: {
+          status: 'completed',
+          progress: 100,
+          message: 'Image generation completed!'
+        }
       };
+
+      if (onProgressUpdate) {
+        onProgressUpdate(finalMessage);
+      }
+
+      return finalMessage;
     } else {
       console.error('[Bot Service] Image generation failed:', result.error);
-      
+
       // Provide helpful error message based on the error type
       let errorMessage = `❌ Image generation failed: ${result.error || 'Unknown error'}`;
-      
+
       if (result.error?.includes('CORS')) {
         errorMessage = `❌ Image generation failed due to CORS restrictions. Please try using the placeholder service or contact your administrator.`;
       } else if (result.error?.includes('Network')) {
@@ -134,26 +185,50 @@ const generateImageCommand = async (
       } else if (result.error?.includes('API key')) {
         errorMessage = `❌ Image generation failed: API key not configured. Please check your settings.`;
       }
-      
-      return {
-        id: Date.now(),
+
+      // Send error message
+      const errorProgressMessage: Message = {
+        id: progressMessageId,
         nickname: user.nickname,
         content: errorMessage,
         timestamp: new Date(),
         type: 'bot',
-        botCommand: 'image'
+        botCommand: 'image',
+        progress: {
+          status: 'failed',
+          progress: 0,
+          message: result.error || 'Unknown error occurred'
+        }
       };
+
+      if (onProgressUpdate) {
+        onProgressUpdate(errorProgressMessage);
+      }
+
+      return errorProgressMessage;
     }
   } catch (error) {
     console.error('[Bot Service] Image generation failed:', error);
-    return {
+
+    const errorMessage: Message = {
       id: Date.now(),
       nickname: user.nickname,
       content: `❌ Sorry, I couldn't generate an image for "${prompt}". Please try again later.`,
       timestamp: new Date(),
       type: 'bot',
-      botCommand: 'image'
+      botCommand: 'image',
+      progress: {
+        status: 'failed',
+        progress: 0,
+        message: error instanceof Error ? error.message : 'Unknown error occurred'
+      }
     };
+
+    if (onProgressUpdate) {
+      onProgressUpdate(errorMessage);
+    }
+
+    return errorMessage;
   }
 };
 
