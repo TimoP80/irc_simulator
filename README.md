@@ -381,6 +381,7 @@ npm run electron:test
 npm run electron:clean
 ```
 
+<<<<<<< HEAD
 #### **Enhanced Development Commands** (Based on Working Test App)
 ```bash
 # Development with DevTools control
@@ -459,6 +460,8 @@ npm run type-check         # TypeScript type checking without emit
 
 **Note**: Installer creation is currently limited by Windows permissions, but ZIP distribution provides a complete solution for immediate distribution.
 
+=======
+>>>>>>> a04f68fc53a4e2dbd385498500cd8750599be0f7
 #### **The Debugging Process** 🐛
 The multiplatform executable build required extensive debugging over 2-3 hours to resolve critical issues:
 
@@ -584,6 +587,7 @@ For developers using Cursor AI to improve and enhance the codebase:
 
 ## Recent Updates
 
+<<<<<<< HEAD
 ### v1.19.7 - Complete Distribution Build
 - 🎉 **Complete Windows EXE build** - Successfully built and tested
 - 📦 **Distribution ready** - Station-V-Portable.zip (138.51 MB) created
@@ -638,6 +642,14 @@ For developers using Cursor AI to improve and enhance the codebase:
 - **Enhanced build process** - Robust error handling and comprehensive logging
 - **Critical debugging resolved** - Fixed multiple silent failures and configuration issues
 - **Desktop-focused development** - Optimized for Electron and native desktop features
+=======
+### v1.19.0 - Multiplatform Executable Build (Major Debugging Effort)
+- **Standalone Windows executable** - Complete desktop application with auto-starting IRC server
+- **Cross-platform support** - Windows, macOS, and Linux builds with native installers
+- **Enhanced build process** - Robust error handling and comprehensive logging
+- **Critical debugging resolved** - Fixed multiple silent failures and configuration issues
+- **Future Electron Repository** - Once the executable building process is fully stabilized, a separate repository will be created specifically for Electron capabilities
+>>>>>>> a04f68fc53a4e2dbd385498500cd8750599be0f7
 
 #### **The 2-3 Hour Debugging Marathon** 🐛
 The multiplatform executable build required extensive debugging to resolve several critical issues:
@@ -655,6 +667,7 @@ The multiplatform executable build required extensive debugging to resolve sever
 **Result**: After extensive debugging, the build process now works reliably with comprehensive error handling, step-by-step logging, and proper cross-platform compatibility.
 
 #### **Future Development Plans** 🚀
+<<<<<<< HEAD
 
 This **desktop executable repository** focuses exclusively on:
 
@@ -664,6 +677,17 @@ This **desktop executable repository** focuses exclusively on:
 - **Electron-Specific Enhancements** - Performance optimizations and native integrations
 
 The main Station V web application continues to be developed in the [original repository](https://github.com/TimoP80/station-v-virtual-chat-simulator), while this repository focuses on desktop distribution and Electron-specific features.
+=======
+Once the executable building process is fully stabilized and tested across all platforms, a **separate Electron-focused repository** will be created. This dedicated repository will:
+
+- **Focus exclusively on Electron capabilities** - Desktop application features and cross-platform builds
+- **Streamlined development workflow** - Optimized for desktop application development
+- **Enhanced Electron features** - Native menus, system integration, and platform-specific optimizations
+- **Simplified distribution** - Easy installer creation and app store distribution
+- **Dedicated documentation** - Electron-specific guides and troubleshooting resources
+
+This separation will allow the main Station V repository to focus on web-based features while providing a dedicated space for desktop application development and distribution.
+>>>>>>> a04f68fc53a4e2dbd385498500cd8750599be0f7
 
 ### v1.17.0 - Text Formatting & UI Improvements
 - **Rich text formatting** - Bold, italic, code blocks, spoilers, and colored text
