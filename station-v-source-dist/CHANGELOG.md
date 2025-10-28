@@ -1,5 +1,18 @@
 # Changelog
 
+
+## 1.19.2 - 2025-10-28
+
+### 🛠️ Bug Fixes & Improvements
+- **Attachment Support**: Added support for file and image attachments in chat messages (drag-and-drop, paste, and file picker)
+- **MessageItem Enhancements**: Improved reply/quote system to support attachments and rich previews
+- **Robust Error Handling**: Fixed rare crash on malformed messages and improved error dialogs
+- **UI Polish**: Fixed message bubble alignment, avatar display, and theme glitches in dark/light modes
+- **Performance**: Optimized rendering for large chat logs and attachment-heavy conversations
+- **Windows Build Stability**: Improved Electron build scripts and fixed issues with node.exe packaging
+- **Server Reliability**: Enhanced WebSocket server startup logic and port conflict handling
+- **Documentation**: Updated guides and troubleshooting for new features and Windows compatibility
+
 All notable changes to Station V - Virtual IRC Simulator will be documented in this file.
 
 *Note: This project was previously known as "Gemini IRC Simulator" and was renamed to "Station V - Virtual IRC Simulator" as of v1.5.1.*

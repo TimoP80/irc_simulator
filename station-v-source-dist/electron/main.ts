@@ -1,26 +1,22 @@
-// --- Unconditional debug logging for packaging and path resolution ---
-// (uses ES import for join)
-const isPackagedEarly = typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'production';
-const execPathEarly = typeof process !== 'undefined' ? process.execPath : 'undefined';
-let exeDirEarly = 'undefined';
-let nodeExeWinEarly = 'undefined';
-try {
-  // join is imported below, so this works after the import
-  // @ts-ignore
-  exeDirEarly = typeof process !== 'undefined' && typeof join !== 'undefined' ? join(execPathEarly, '..') : 'undefined';
-  // @ts-ignore
-  nodeExeWinEarly = typeof process !== 'undefined' && typeof join !== 'undefined' ? join(exeDirEarly, 'node.exe') : 'undefined';
-} catch (e) {}
-console.log(`[EARLY DEBUG] isPackaged: ${isPackagedEarly}`);
-console.log(`[EARLY DEBUG] process.execPath: ${execPathEarly}`);
-console.log(`[EARLY DEBUG] exeDir: ${exeDirEarly}`);
-console.log(`[EARLY DEBUG] nodeExeWin: ${nodeExeWinEarly}`);
-// --- End unconditional debug logging ---
+// ...existing code...
+
 import { app, BrowserWindow, Menu, shell, ipcMain, dialog } from 'electron';
 import { join } from 'path';
 import { spawn } from 'child_process';
 import process from 'process';
 import { existsSync, writeFileSync, appendFileSync } from 'fs';
+
+// --- Unconditional debug logging for packaging and path resolution ---
+// (uses ES import for join)
+const isPackagedEarly = typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'production';
+const execPathEarly = typeof process !== 'undefined' ? process.execPath : 'undefined';
+try {
+  // join is imported below, so this works after the import
+  // @ts-ignore
+} catch (e) {}
+console.log(`[EARLY DEBUG] isPackaged: ${isPackagedEarly}`);
+console.log(`[EARLY DEBUG] process.execPath: ${execPathEarly}`);
+// --- End unconditional debug logging ---
 
 // Check if we're in a packaged app more safely
 const isPackaged = app && app.isPackaged ? app.isPackaged : false;
@@ -197,27 +193,13 @@ function createWindow(): void {
 
   // Load the application
   try {
-    if (isDev) {
-      logInfo('Loading development URL: http://localhost:3000');
-      mainWindow.loadURL('http://localhost:3000');
-      // Open DevTools in development
-      mainWindow.webContents.openDevTools();
+    if (isPackaged) {
+      // In packaged app with ASAR, the executable is in win-unpacked directory
+      // ICU files are in the same directory as the executable
+      logInfo(`Packaged app - current working directory: ${process.cwd()}`);
+      logInfo(`Packaged app - resources path: ${process.resourcesPath}`);
+      // No exeDir logic needed
     } else {
-      // In production, load the built HTML file
-      logInfo('Loading production HTML file');
-      try {
-        // Try multiple possible paths for the HTML file
-        const possiblePaths = [
-          join(__dirname, '..', 'dist', 'index-electron.html'),
-          join(process.cwd(), 'dist', 'index-electron.html'),
-          join(process.resourcesPath, 'app', 'dist', 'index-electron.html')
-        ];
-        
-        let htmlPath = '';
-        for (const path of possiblePaths) {
-          logInfo(`Checking HTML path: ${path}`);
-          if (existsSync(path)) {
-            htmlPath = path;
             break;
           }
         }
@@ -515,27 +497,9 @@ function startServer(): void {
   let serverStarted = false;
   
 
-  // Unconditional debug logging for path resolution
-  logInfo(`[DEBUG] isPackaged: ${isPackaged}`);
-  logInfo(`[DEBUG] process.execPath: ${process.execPath}`);
-  const exeDir = join(process.execPath, '..');
-  logInfo(`[DEBUG] exeDir: ${exeDir}`);
-  const nodeExeWin = join(exeDir, 'node.exe');
-  logInfo(`[DEBUG] nodeExeWin: ${nodeExeWin}`);
-  let nodeExec = process.execPath;
-  if (isPackaged) {
-    if (existsSync(nodeExeWin)) {
-      nodeExec = nodeExeWin;
-      logInfo(`Using node.exe for server: ${nodeExec}`);
-    } else {
-      const errorMsg = `Could not find node.exe for server process. Please ensure node.exe is present in: ${exeDir}`;
-      logError(errorMsg);
-      if (mainWindow) {
-        dialog.showErrorBox('Station V Startup Error', errorMsg + '\n\nThe app cannot start the server without node.exe.');
-      }
-      return;
-    }
-  }
+  // Only use process.execPath for server process
+  const nodeExec = process.execPath;
+  logInfo(`[DEBUG] Using process.execPath for server: ${nodeExec}`);
 
   for (const port of ports) {
     try {
