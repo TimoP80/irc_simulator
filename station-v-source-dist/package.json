@@ -1,7 +1,7 @@
 {
   "name": "station-v-executable",
   "private": true,
-  "version": "1.19.1",
+  "version": "1.19.2",
   "description": "Station V - Virtual IRC Simulator - Desktop Executable - A cross-platform desktop application for simulating IRC chat environments with AI-powered virtual users",
   "author": "Station V Development Team",
   "repository": {

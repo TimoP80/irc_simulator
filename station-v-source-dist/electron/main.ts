@@ -193,31 +193,36 @@ function createWindow(): void {
 
   // Load the application
   try {
+    let htmlPath: string | undefined;
     if (isPackaged) {
-      // In packaged app with ASAR, the executable is in win-unpacked directory
-      // ICU files are in the same directory as the executable
-      logInfo(`Packaged app - current working directory: ${process.cwd()}`);
-      logInfo(`Packaged app - resources path: ${process.resourcesPath}`);
-      // No exeDir logic needed
-    } else {
-            break;
-          }
+      // In packaged app, look for index-electron.html in the correct location
+      const possiblePaths = [
+        getResourcePath('dist/index-electron.html'),
+        getResourcePath('index-electron.html'),
+        getResourcePath('index.html')
+      ];
+      for (const p of possiblePaths) {
+        if (existsSync(p)) {
+          htmlPath = p;
+          break;
         }
-        
-        if (htmlPath) {
-          logInfo(`HTML file path: ${htmlPath}`);
-          mainWindow.loadFile(htmlPath);
-          logInfo('Production HTML file loaded successfully');
-        } else {
-          logError(`HTML file not found in any of the expected locations`);
-          // Fallback to test page
-          mainWindow.loadURL('data:text/html,<h1>Station V - Virtual IRC Simulator</h1><p>HTML file not found. Please rebuild the application.</p>');
-        }
-      } catch (error) {
-        logError('Failed to load production HTML:', error);
-        // Try to show error page
-        mainWindow.loadURL('data:text/html,<h1>Error Loading Application</h1><p>An error occurred while loading the application.</p>');
       }
+    } else {
+      // In development, use Vite dev server
+      htmlPath = undefined;
+    }
+    if (htmlPath) {
+      logInfo(`HTML file path: ${htmlPath}`);
+      mainWindow.loadFile(htmlPath);
+      logInfo('Production HTML file loaded successfully');
+    } else if (!isPackaged) {
+      // In dev, load from Vite dev server
+      mainWindow.loadURL('http://localhost:3000');
+      logInfo('Loaded Vite dev server');
+    } else {
+      logError(`HTML file not found in any of the expected locations`);
+      // Fallback to test page
+      mainWindow.loadURL('data:text/html,<h1>Station V - Virtual IRC Simulator</h1><p>HTML file not found. Please rebuild the application.</p>');
     }
   } catch (error) {
     logError('Failed to load application:', error);
