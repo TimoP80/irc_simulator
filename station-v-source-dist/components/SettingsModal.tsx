@@ -3,6 +3,7 @@ import type { AppConfig, User, GeminiModel, Channel } from '../types';
 import { loadConfig } from '../utils/config';
 import { DEFAULT_NICKNAME, FALLBACK_AI_MODELS, DEFAULT_AI_MODEL, DEFAULT_TYPING_DELAY, DEFAULT_TYPING_INDICATOR } from '../constants';
 import { generateRandomWorldConfiguration, listAvailableModels } from '../services/geminiService';
+import { fetchStableDiffusionModels, type StableDiffusionModel } from '../services/imageGenerationService';
 import { UserManagement } from './UserManagement';
 import { BotManagement } from './BotManagement';
 import { ChannelManagement } from './ChannelManagement';
@@ -144,6 +145,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [availableModels, setAvailableModels] = useState<GeminiModel[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [modelsError, setModelsError] = useState<string | null>(null);
+  const [stableDiffusionModels, setStableDiffusionModels] = useState<StableDiffusionModel[]>([]);
+  const [isLoadingSDModels, setIsLoadingSDModels] = useState(false);
+  const [sdModelsError, setSdModelsError] = useState<string | null>(null);
   const [showDataExportModal, setShowDataExportModal] = useState(false);
   const [showDebugLogWindow, setShowDebugLogWindow] = useState(false);
   
@@ -201,6 +205,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     fetchModels();
   }, []);
 
+  // Fetch Stable Diffusion models when provider changes to stable-diffusion
+  useEffect(() => {
+    if (config.imageGeneration?.provider === 'stable-diffusion') {
+      const fetchSDModels = async () => {
+        setIsLoadingSDModels(true);
+        setSdModelsError(null);
+        try {
+          const models = await fetchStableDiffusionModels(config.imageGeneration?.apiKey);
+          setStableDiffusionModels(models);
+        } catch (error) {
+          console.error('Failed to fetch Stable Diffusion models:', error);
+          setSdModelsError(error instanceof Error ? error.message : 'Failed to fetch models');
+          // Set default models on error
+          setStableDiffusionModels([
+            { id: 'stable-diffusion-v1-6', name: 'Stable Diffusion v1.6', description: 'High-quality general purpose model' },
+            { id: 'stable-diffusion-xl-1024-v1-0', name: 'Stable Diffusion XL 1.0', description: 'Latest high-resolution model' }
+          ]);
+        } finally {
+          setIsLoadingSDModels(false);
+        }
+      };
+
+      fetchSDModels();
+    }
+  }, [config.imageGeneration?.provider, config.imageGeneration?.apiKey]);
+
   // Ensure AI model is valid when models are loaded
   useEffect(() => {
     if (availableModels.length > 0) {
@@ -230,10 +260,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         id: themeService.getCurrentTheme().id
       }
     };
-    
+
+    // Apply font settings to the current theme
+    if (config.font) {
+      themeService.setTheme(themeService.getCurrentTheme().id, {
+        family: config.font.family,
+        size: config.font.size,
+        weight: config.font.weight,
+        lineHeight: config.font.lineHeight
+      });
+    }
+
     // Notify parent component about channel changes
     onChannelsChange?.(channels);
-    
+
     onSave(configToSave);
   };
   
@@ -299,7 +339,141 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         <div className="space-y-6">
           <ThemeSelector />
 
-          <div>
+          <div className="border-t border-gray-600 pt-6">
+            <h3 className="text-lg font-semibold text-gray-200 mb-4">Font Customization</h3>
+            <p className="text-sm text-gray-400 mb-4">Customize the appearance of text throughout the application.</p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Font Family</label>
+                <select
+                  value={config.font?.family || 'Inter, system-ui, sans-serif'}
+                  onChange={(e) => setConfig(prev => ({
+                    ...prev,
+                    font: {
+                      ...prev.font,
+                      family: e.target.value
+                    }
+                  }))}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="Inter, system-ui, sans-serif">Inter (Default)</option>
+                  <option value="system-ui, sans-serif">System UI</option>
+                  <option value="Arial, sans-serif">Arial</option>
+                  <option value="Helvetica, sans-serif">Helvetica</option>
+                  <option value="Times New Roman, serif">Times New Roman</option>
+                  <option value="Georgia, serif">Georgia</option>
+                  <option value="Consolas, Monaco, monospace">Consolas (Monospace)</option>
+                  <option value="Source Code Pro, monospace">Source Code Pro</option>
+                  <option value="Roboto, sans-serif">Roboto</option>
+                  <option value="Open Sans, sans-serif">Open Sans</option>
+                  <option value="Lato, sans-serif">Lato</option>
+                  <option value="Montserrat, sans-serif">Montserrat</option>
+                  <option value="Poppins, sans-serif">Poppins</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Font Size: {config.font?.size || 14}px
+                </label>
+                <input
+                  type="range"
+                  min="10"
+                  max="24"
+                  step="1"
+                  value={config.font?.size || 14}
+                  onChange={(e) => setConfig(prev => ({
+                    ...prev,
+                    font: {
+                      ...prev.font,
+                      size: parseInt(e.target.value)
+                    }
+                  }))}
+                  className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                />
+                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                  <span>10px (Small)</span>
+                  <span>24px (Large)</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Font Weight</label>
+                <select
+                  value={config.font?.weight || 'normal'}
+                  onChange={(e) => setConfig(prev => ({
+                    ...prev,
+                    font: {
+                      ...prev.font,
+                      weight: e.target.value as any
+                    }
+                  }))}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="normal">Normal (400)</option>
+                  <option value="bold">Bold (700)</option>
+                  <option value="lighter">Lighter</option>
+                  <option value="bolder">Bolder</option>
+                  <option value="100">Thin (100)</option>
+                  <option value="200">Extra Light (200)</option>
+                  <option value="300">Light (300)</option>
+                  <option value="400">Regular (400)</option>
+                  <option value="500">Medium (500)</option>
+                  <option value="600">Semi Bold (600)</option>
+                  <option value="700">Bold (700)</option>
+                  <option value="800">Extra Bold (800)</option>
+                  <option value="900">Black (900)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Line Height: {config.font?.lineHeight || 1.5}
+                </label>
+                <input
+                  type="range"
+                  min="1.0"
+                  max="2.0"
+                  step="0.1"
+                  value={config.font?.lineHeight || 1.5}
+                  onChange={(e) => setConfig(prev => ({
+                    ...prev,
+                    font: {
+                      ...prev.font,
+                      lineHeight: parseFloat(e.target.value)
+                    }
+                  }))}
+                  className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                />
+                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                  <span>1.0 (Tight)</span>
+                  <span>2.0 (Loose)</span>
+                </div>
+              </div>
+
+              <div className="bg-gray-700 p-3 rounded-lg">
+                <p className="text-xs text-gray-400">
+                  <strong>Font Preview:</strong> This is how your text will look with the current settings.
+                </p>
+                <div
+                  className="mt-2 p-2 bg-gray-800 rounded text-sm"
+                  style={{
+                    fontFamily: config.font?.family || 'Inter, system-ui, sans-serif',
+                    fontSize: `${config.font?.size || 14}px`,
+                    fontWeight: config.font?.weight || 'normal',
+                    lineHeight: config.font?.lineHeight || 1.5
+                  }}
+                >
+                  The quick brown fox jumps over the lazy dog. 1234567890
+                  <br />
+                  <strong>Bold text</strong> and <em>italic text</em> for comparison.
+                </div>
+              </div>
+            </div>
+          </div>
+
+           <div>
             <label htmlFor="currentUserNickname" className="block text-sm font-medium text-gray-300 mb-2">Your Nickname</label>
             <input
               type="text"
@@ -560,12 +734,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     ...prev,
                     imageGeneration: {
                       ...prev.imageGeneration,
-                      provider: e.target.value as 'nano-banana' | 'imagen' | 'placeholder' | 'dalle'
+                      provider: e.target.value as 'nano-banana' | 'imagen' | 'placeholder' | 'dalle' | 'stable-diffusion'
                     }
                   }))}
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="nano-banana">Gemini AI (Default - Real AI-generated images)</option>
+                  <option value="stable-diffusion">Stable Diffusion (AI-generated images via Stability AI)</option>
                   <option value="placeholder">Placeholder (Simple placeholder images)</option>
                   <option value="imagen">Google Imagen (Coming Soon)</option>
                   <option value="dalle">OpenAI DALLE (Coming Soon)</option>
@@ -592,27 +767,70 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Model</label>
-                    <input
-                      type="text"
-                      value={config.imageGeneration?.model || 'stable-diffusion-xl'}
-                      onChange={(e) => setConfig(prev => ({
-                        ...prev,
-                        imageGeneration: {
-                          ...prev.imageGeneration,
-                          model: e.target.value
-                        }
-                      }))}
-                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Model name (e.g., stable-diffusion-xl)"
-                    />
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Model
+                      {isLoadingSDModels && <span className="ml-2 text-blue-400">(Loading...)</span>}
+                    </label>
+                    {config.imageGeneration?.provider === 'stable-diffusion' ? (
+                      <select
+                        value={config.imageGeneration?.model || 'stable-diffusion-v1-6'}
+                        onChange={(e) => setConfig(prev => ({
+                          ...prev,
+                          imageGeneration: {
+                            ...prev.imageGeneration,
+                            model: e.target.value
+                          }
+                        }))}
+                        disabled={isLoadingSDModels}
+                        className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                      >
+                        {stableDiffusionModels.length > 0 ? (
+                          stableDiffusionModels.map((model) => (
+                            <option key={model.id} value={model.id}>
+                              {model.name} {model.description && `- ${model.description}`}
+                            </option>
+                          ))
+                        ) : (
+                          <option value="stable-diffusion-v1-6">Loading models...</option>
+                        )}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        value={config.imageGeneration?.model || 'stable-diffusion-xl'}
+                        onChange={(e) => setConfig(prev => ({
+                          ...prev,
+                          imageGeneration: {
+                            ...prev.imageGeneration,
+                            model: e.target.value
+                          }
+                        }))}
+                        className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Model name (e.g., stable-diffusion-xl)"
+                      />
+                    )}
+                    {sdModelsError && (
+                      <p className="text-xs text-red-400 mt-1">
+                        ⚠️ {sdModelsError} (Using default models)
+                      </p>
+                    )}
                   </div>
                   
                   {config.imageGeneration?.provider === 'nano-banana' && (
                     <div className="bg-blue-900/20 border border-blue-500/30 p-3 rounded-lg">
                       <p className="text-xs text-blue-300">
-                        <strong>ℹ️ Nano Banana Info:</strong> Nano Banana uses the Google GenAI SDK with the <code className="bg-gray-800 px-1 rounded">gemini-2.0-flash-exp</code> model. 
+                        <strong>ℹ️ Nano Banana Info:</strong> Nano Banana uses the Google GenAI SDK with the <code className="bg-gray-800 px-1 rounded">gemini-2.0-flash-exp</code> model.
                         No base URL configuration needed - it uses Google's infrastructure directly.
+                      </p>
+                    </div>
+                  )}
+
+                  {config.imageGeneration?.provider === 'stable-diffusion' && (
+                    <div className="bg-purple-900/20 border border-purple-500/30 p-3 rounded-lg">
+                      <p className="text-xs text-purple-300">
+                        <strong>🎨 Stable Diffusion Info:</strong> Uses Stability AI's API for high-quality image generation.
+                        Get your API key from <a href="https://platform.stability.ai" target="_blank" rel="noopener noreferrer" className="underline hover:text-purple-200">platform.stability.ai</a>.
+                        Default model: <code className="bg-gray-800 px-1 rounded">stable-diffusion-v1-6</code>
                       </p>
                     </div>
                   )}
@@ -623,6 +841,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <p className="text-xs text-gray-400">
                   <strong>Image Generation Services:</strong><br/>
                   • <strong>Gemini AI:</strong> Real AI-generated images using Google's Gemini model (requires API key)<br/>
+                  • <strong>Stable Diffusion:</strong> High-quality AI images via Stability AI (requires API key)<br/>
                   • <strong>Placeholder:</strong> Simple placeholder images (no API key needed, no CORS issues)<br/>
                   • <strong>Imagen:</strong> Google's dedicated image generation (coming soon)<br/>
                   • <strong>DALLE:</strong> OpenAI's image generation (coming soon)

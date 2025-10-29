@@ -433,6 +433,20 @@ const extractTextFromResponse = (response: any): string => {
         return text;
       }
     }
+  
+    // Handle thinking mode responses - check for thinking content
+    if (candidate.content && candidate.content.parts) {
+      for (const part of candidate.content.parts) {
+        // Skip thinking parts and look for actual response
+        if (part.text && !part.text.includes('<thinking>') && !part.text.includes('</thinking>')) {
+          const cleanText = part.text.trim();
+          if (cleanText) {
+            aiDebug.log(" Found non-thinking text:", cleanText.substring(0, 100) + "...");
+            return cleanText;
+          }
+        }
+      }
+    }
     
     // Try direct text extraction from candidate
     if (candidate.text) {
@@ -471,6 +485,22 @@ const extractTextFromResponse = (response: any): string => {
         return candidate[prop].trim();
       }
     }
+  
+    // Handle thinking mode - look for the final answer after thinking
+    if (candidate.content && candidate.content.parts) {
+      // Look for parts that don't contain thinking tags
+      const nonThinkingParts = candidate.content.parts.filter(part =>
+        part.text && !part.text.includes('<thinking>') && !part.text.includes('</thinking>')
+      );
+  
+      if (nonThinkingParts.length > 0) {
+        const finalText = nonThinkingParts[nonThinkingParts.length - 1].text?.trim();
+        if (finalText) {
+          aiDebug.log(" Using final non-thinking text from thinking mode");
+          return finalText;
+        }
+      }
+    }
     
     // Check content for other possible text properties
     if (candidate.content) {
@@ -493,6 +523,22 @@ const extractTextFromResponse = (response: any): string => {
   if (response.candidates?.[0]?.text) {
     aiDebug.log(" Using direct candidate text");
     return response.candidates[0].text.trim();
+  }
+
+  // Handle thinking mode responses that might be truncated
+  if (response.candidates?.[0]?.content?.parts) {
+    const parts = response.candidates[0].content.parts;
+    // Look for the last part that contains actual response text
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const part = parts[i];
+      if (part.text && !part.text.includes('<thinking>') && !part.text.includes('</thinking>')) {
+        const text = part.text.trim();
+        if (text) {
+          aiDebug.log(` Using text from part ${i} (thinking mode response)`);
+          return text;
+        }
+      }
+    }
   }
   
     aiDebug.error("Invalid response structure:", response);

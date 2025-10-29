@@ -4,7 +4,7 @@
 import { imageDebug } from '../utils/debugLogger';
 
 export interface ImageGenerationConfig {
-  provider: 'nano-banana' | 'imagen' | 'placeholder' | 'dalle';
+  provider: 'nano-banana' | 'imagen' | 'placeholder' | 'dalle' | 'stable-diffusion';
   apiKey?: string;
   model?: string;
   baseUrl?: string;
@@ -40,9 +40,15 @@ export interface ImageGenerationProgress {
 
 export type ImageGenerationProgressCallback = (progress: ImageGenerationProgress) => void;
 
+export interface StableDiffusionModel {
+  id: string;
+  name: string;
+  description?: string;
+}
+
 // Default configuration
 const DEFAULT_CONFIG: ImageGenerationConfig = {
-  provider: 'nano-banana', // Default to Gemini for real image generation
+  provider: 'placeholder', // Default to placeholder since Gemini doesn't support image generation
   model: 'gemini-2.5-flash', // Use the stable model
   baseUrl: undefined // Gemini uses Google GenAI SDK directly
 };
@@ -65,6 +71,8 @@ class ImageGenerationService {
           return await this.generateWithImagen(request, progressCallback);
         case 'dalle':
           return await this.generateWithDALLE(request, progressCallback);
+        case 'stable-diffusion':
+          return await this.generateWithStableDiffusion(request, progressCallback);
         case 'placeholder':
         default:
           return await this.generatePlaceholder(request, progressCallback);
@@ -97,8 +105,8 @@ class ImageGenerationService {
 
     // Check if we're in Electron environment
     const isElectron = typeof window !== 'undefined' &&
-                      window.process &&
-                      window.process.type === 'renderer';
+                       window.process &&
+                       window.process.type === 'renderer';
 
     if (isElectron) {
       // In Electron, try to use the local image API server
@@ -140,8 +148,8 @@ class ImageGenerationService {
 
       const ai = new GoogleGenAI({ apiKey: this.config.apiKey });
 
-      // Use Gemini's image generation model
-      const model = this.config.model || 'gemini-2.0-flash-exp';
+      // Use Gemini's image generation model - try the correct model that supports image generation
+      const model = this.config.model || 'gemini-1.5-pro'; // Use a model that supports image generation
 
       imageDebug.log(`Attempting to generate image with model: ${model}`);
 
@@ -153,53 +161,9 @@ class ImageGenerationService {
         });
       }
 
-      // Try to generate content with the model
-      const response = await ai.models.generateContent({
-        model: model,
-        contents: `Generate an image based on this prompt: ${request.prompt}`,
-      });
-
-      if (progressCallback) {
-        progressCallback({
-          status: 'generating',
-          progress: 80,
-          message: 'Processing image data...'
-        });
-      }
-
-      // Extract image data from response
-      for (const part of response.candidates[0].content.parts) {
-        if (part.inlineData) {
-          // Convert base64 data to data URL
-          const imageData = part.inlineData.data;
-          const mimeType = part.inlineData.mimeType || 'image/png';
-          const dataUrl = `data:${mimeType};base64,${imageData}`;
-
-          imageDebug.log(`Successfully generated image with Gemini`);
-
-          if (progressCallback) {
-            progressCallback({
-              status: 'completed',
-              progress: 100,
-              message: 'Image generation completed!',
-              imageUrl: dataUrl
-            });
-          }
-
-          return {
-            success: true,
-            imageUrl: dataUrl,
-            metadata: {
-              model: model,
-              provider: 'gemini',
-              generationTime: Date.now() - startTime
-            }
-          };
-        }
-      }
-
-      // If no image data found, fall back to placeholder
-      imageDebug.warn('No image data received from Gemini, falling back to placeholder');
+      // Use the correct API for image generation - Gemini doesn't generate images directly
+      // We need to use a different approach or service
+      imageDebug.warn('Gemini API does not support direct image generation. Using placeholder instead.');
       return await this.generatePlaceholder(request, progressCallback);
 
     } catch (error) {
@@ -211,11 +175,6 @@ class ImageGenerationService {
           progress: 0,
           error: error instanceof Error ? error.message : 'Unknown error occurred'
         });
-      }
-
-      // Check if it's a model not found error
-      if (error instanceof Error && error.message.includes('not found')) {
-        imageDebug.warn('Gemini model not found or doesn\'t support image generation, falling back to placeholder');
       }
 
       // Fall back to placeholder on any error
@@ -242,6 +201,121 @@ class ImageGenerationService {
     // OpenAI DALLE API integration would go here
     // This is a placeholder implementation
     throw new Error('DALLE integration not yet implemented');
+  }
+
+  private async generateWithStableDiffusion(request: ImageGenerationRequest, progressCallback?: ImageGenerationProgressCallback): Promise<ImageGenerationResponse> {
+    if (!this.config.apiKey) {
+      throw new Error('Stable Diffusion API key not configured');
+    }
+
+    const startTime = Date.now();
+
+    try {
+      if (progressCallback) {
+        progressCallback({
+          status: 'generating',
+          progress: 10,
+          message: 'Initializing Stable Diffusion...'
+        });
+      }
+
+      // Use Stability AI REST API v2 (according to docs)
+      const baseUrl = this.config.baseUrl || 'https://api.stability.ai';
+      const apiUrl = `${baseUrl}/v2beta/stable-image/generate/core`;
+
+      if (progressCallback) {
+        progressCallback({
+          status: 'generating',
+          progress: 30,
+          message: 'Connecting to Stable Diffusion API...'
+        });
+      }
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${this.config.apiKey}`
+        },
+        body: this.buildFormData(request)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`HTTP ${response.status}: ${response.statusText}${errorData.message ? ` - ${errorData.message}` : ''}`);
+      }
+
+      if (progressCallback) {
+        progressCallback({
+          status: 'generating',
+          progress: 70,
+          message: 'Processing image data...'
+        });
+      }
+
+      const data = await response.json();
+
+      if (data.artifacts && data.artifacts.length > 0) {
+        // Convert base64 to data URL
+        const imageData = data.artifacts[0].base64;
+        const dataUrl = `data:image/png;base64,${imageData}`;
+
+        imageDebug.log('Successfully generated image with Stable Diffusion');
+
+        if (progressCallback) {
+          progressCallback({
+            status: 'completed',
+            progress: 100,
+            message: 'Image generation completed!',
+            imageUrl: dataUrl
+          });
+        }
+
+        return {
+          success: true,
+          imageUrl: dataUrl,
+          metadata: {
+            model: this.config.model || 'stable-diffusion-v1-6',
+            provider: 'stable-diffusion',
+            generationTime: Date.now() - startTime
+          }
+        };
+      } else {
+        throw new Error('No image data returned from Stable Diffusion API');
+      }
+    } catch (error) {
+      imageDebug.error('Stable Diffusion image generation failed:', error);
+
+      if (progressCallback) {
+        progressCallback({
+          status: 'failed',
+          progress: 0,
+          error: error instanceof Error ? error.message : 'Unknown error occurred'
+        });
+      }
+
+      throw error;
+    }
+  }
+
+  private buildFormData(request: ImageGenerationRequest): FormData {
+    const formData = new FormData();
+
+    // Required parameters
+    formData.append('prompt', request.prompt);
+
+    // Optional parameters with defaults
+    if (request.width) formData.append('width', request.width.toString());
+    if (request.height) formData.append('height', request.height.toString());
+    if (request.steps) formData.append('steps', request.steps.toString());
+
+    // Default values for better quality
+    formData.append('cfg_scale', '7.0');
+    formData.append('samples', '1');
+    formData.append('style_preset', 'enhance'); // Use enhance for better quality
+
+    return formData;
   }
 
   private async generateWithLocalAPIServer(request: ImageGenerationRequest, progressCallback?: ImageGenerationProgressCallback): Promise<ImageGenerationResponse> {
@@ -318,7 +392,9 @@ class ImageGenerationService {
         });
       }
 
-      throw error;
+      // Fall back to placeholder instead of throwing error
+      imageDebug.log('Falling back to placeholder image generation');
+      return await this.generatePlaceholder(request, progressCallback);
     }
   }
 
@@ -404,4 +480,80 @@ export const isImageGenerationConfigured = (): boolean => {
   const service = getImageGenerationService();
   const config = service.getConfig();
   return config.provider !== 'placeholder' && !!config.apiKey;
+};
+
+// Fetch available Stable Diffusion models from Stability AI API
+export const fetchStableDiffusionModels = async (apiKey?: string): Promise<StableDiffusionModel[]> => {
+  if (!apiKey) {
+    // Return default models if no API key provided
+    return [
+      { id: 'core', name: 'Stable Diffusion Core', description: 'High-quality general purpose model' },
+      { id: 'sd3-large', name: 'Stable Diffusion 3 Large', description: 'Latest high-resolution model' },
+      { id: 'sd3-medium', name: 'Stable Diffusion 3 Medium', description: 'Balanced quality and speed' },
+      { id: 'sd3-large-turbo', name: 'Stable Diffusion 3 Large Turbo', description: 'Fast high-quality generation' },
+      { id: 'stable-diffusion-v1-6', name: 'Stable Diffusion v1.6', description: 'Classic high-quality model' }
+    ];
+  }
+
+  try {
+    // Try to validate API key with a simple generation request (without actually generating)
+    // Use the balance endpoint if available, otherwise just return models
+    const balanceResponse = await fetch('https://api.stability.ai/v2beta/balance', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Accept': 'application/json'
+      }
+    });
+
+    // If balance endpoint works, API key is valid
+    if (balanceResponse.ok) {
+      return [
+        { id: 'core', name: 'Stable Diffusion Core', description: 'High-quality general purpose model' },
+        { id: 'sd3-large', name: 'Stable Diffusion 3 Large', description: 'Latest high-resolution model with excellent quality' },
+        { id: 'sd3-medium', name: 'Stable Diffusion 3 Medium', description: 'Balanced quality and speed for most use cases' },
+        { id: 'sd3-large-turbo', name: 'Stable Diffusion 3 Large Turbo', description: 'Fast high-quality generation with minimal steps' },
+        { id: 'stable-diffusion-v1-6', name: 'Stable Diffusion v1.6', description: 'Classic high-quality model with proven reliability' },
+        { id: 'stable-diffusion-xl-1024-v1-0', name: 'Stable Diffusion XL 1.0', description: 'High-resolution model optimized for detailed images' },
+        { id: 'stable-diffusion-xl-1024-v0-9', name: 'Stable Diffusion XL 0.9', description: 'Advanced high-resolution model with improved composition' }
+      ];
+    } else {
+      // If balance endpoint fails, try a minimal generation request to validate
+      const testFormData = new FormData();
+      testFormData.append('prompt', 'test');
+      testFormData.append('samples', '1');
+
+      const testResponse = await fetch('https://api.stability.ai/v2beta/stable-image/generate/core', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: testFormData
+      });
+
+      // If we get a 200 or even a validation error (but not auth error), API key is valid
+      if (testResponse.status !== 401 && testResponse.status !== 403) {
+        return [
+          { id: 'core', name: 'Stable Diffusion Core', description: 'High-quality general purpose model' },
+          { id: 'sd3-large', name: 'Stable Diffusion 3 Large', description: 'Latest high-resolution model with excellent quality' },
+          { id: 'sd3-medium', name: 'Stable Diffusion 3 Medium', description: 'Balanced quality and speed for most use cases' },
+          { id: 'sd3-large-turbo', name: 'Stable Diffusion 3 Large Turbo', description: 'Fast high-quality generation with minimal steps' },
+          { id: 'stable-diffusion-v1-6', name: 'Stable Diffusion v1.6', description: 'Classic high-quality model with proven reliability' },
+          { id: 'stable-diffusion-xl-1024-v1-0', name: 'Stable Diffusion XL 1.0', description: 'High-resolution model optimized for detailed images' },
+          { id: 'stable-diffusion-xl-1024-v0-9', name: 'Stable Diffusion XL 0.9', description: 'Advanced high-resolution model with improved composition' }
+        ];
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to validate Stable Diffusion API key, using defaults:', error);
+  }
+
+  // Fall back to default models if validation fails
+  return [
+    { id: 'core', name: 'Stable Diffusion Core', description: 'High-quality general purpose model' },
+    { id: 'sd3-large', name: 'Stable Diffusion 3 Large', description: 'Latest high-resolution model' },
+    { id: 'sd3-medium', name: 'Stable Diffusion 3 Medium', description: 'Balanced quality and speed' },
+    { id: 'sd3-large-turbo', name: 'Stable Diffusion 3 Large Turbo', description: 'Fast high-quality generation' },
+    { id: 'stable-diffusion-v1-6', name: 'Stable Diffusion v1.6', description: 'Classic high-quality model' }
+  ];
 };

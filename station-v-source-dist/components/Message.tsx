@@ -28,7 +28,7 @@ const getUserColor = (nickname: string, currentUserNickname: string) => {
 };
 
 export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickname, user }) => {
-  const { nickname, content, timestamp, type, command, images, links, botCommand, quotedMessage } = message;
+  const { nickname, content, timestamp, type, command, images, links, audio, botCommand, quotedMessage } = message;
   const time = new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   
   // Check if this is a bot message
@@ -37,7 +37,7 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
   // Helper function to render images from the extracted images array
   const renderImages = () => {
     if (!images || images.length === 0) return null;
-    
+
     return images.map((imageUrl, index) => (
       <div key={`image-${index}`} className="block w-full my-3">
         <img
@@ -63,6 +63,24 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
           loading="lazy"
           referrerPolicy="no-referrer"
         />
+      </div>
+    ));
+  };
+
+  // Helper function to render audio from the extracted audio array
+  const renderAudio = () => {
+    if (!audio || audio.length === 0) return null;
+
+    return audio.map((audioUrl, index) => (
+      <div key={`audio-${index}`} className="block w-full my-3">
+        <audio
+          src={audioUrl}
+          controls
+          className="w-full max-w-md"
+          preload="metadata"
+        >
+          Your browser does not support the audio element.
+        </audio>
       </div>
     ));
   };
@@ -275,6 +293,8 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
           </span>
           {/* Render extracted images */}
           {renderImages()}
+          {/* Render extracted audio */}
+          {renderAudio()}
           {/* Render extracted links */}
           {renderLinks()}
         </div>
@@ -358,7 +378,7 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
                 {botCommand.toUpperCase()}
               </span>
             )}
-            {message.botResponse?.status === 'generating' && (
+            {(message.botResponse?.status === 'generating' || message.progress?.status === 'generating') && (
               <span className="text-yellow-400 text-xs bg-yellow-900 px-2 py-0.5 rounded flex items-center gap-1">
                 <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
                 GENERATING
@@ -370,8 +390,28 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
           <div className="text-gray-200 break-words whitespace-pre-wrap bg-gray-800 p-2 rounded border-l-2 border-amber-500">
             {renderContent(content)}
           </div>
+          {/* Render progress bar for image generation */}
+          {message.progress && message.progress.status === 'generating' && typeof message.progress.progress === 'number' && (
+            <div className="mt-2">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs text-gray-400">Progress:</span>
+                <span className="text-xs text-gray-300">{Math.min(100, Math.max(0, message.progress.progress))}%</span>
+              </div>
+              <div className="w-full bg-gray-700 rounded-full h-2">
+                <div
+                  className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${Math.min(100, Math.max(0, message.progress.progress))}%` }}
+                ></div>
+              </div>
+              {message.progress.message && (
+                <div className="text-xs text-gray-400 mt-1">{message.progress.message}</div>
+              )}
+            </div>
+          )}
           {/* Render extracted images */}
           {renderImages()}
+          {/* Render extracted audio */}
+          {renderAudio()}
           {/* Render extracted links */}
           {renderLinks()}
         </div>
@@ -411,6 +451,8 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
         </div>
         {/* Render extracted images */}
         {renderImages()}
+        {/* Render extracted audio */}
+        {renderAudio()}
         {/* Render extracted links */}
         {renderLinks()}
       </div>
