@@ -1,6 +1,33 @@
 # Changelog
 
 
+## 1.19.3 - 2025-10-29
+
+### 🎵 Audio Attachment Support
+- **Audio Player Integration**: Added HTML5 audio player support for message attachments
+- **Embedded Audio Controls**: Play/pause, volume, and progress controls directly in chat messages
+- **Cross-Platform Compatibility**: Works in all modern browsers with fallback support
+- **Responsive Design**: Audio player adapts to different screen sizes and message layouts
+
+### 🎨 Image Generation Improvements
+- **Stable Diffusion API Update**: Updated to use official Stability AI v2beta REST API endpoints
+- **Dynamic Model Fetching**: Real-time model list fetching with API key validation
+- **Enhanced Error Handling**: Better fallback mechanisms and user feedback for API failures
+- **Multipart Form Data**: Proper form data handling for image generation requests
+- **Model Dropdown**: Settings modal now shows available Stable Diffusion models
+
+### 🤖 AI Response Parsing Fixes
+- **Gemini Thinking Mode**: Fixed response parsing for Gemini 2.5 Pro thinking mode responses
+- **Enhanced Text Extraction**: Improved handling of `<thinking>` tags and truncated responses
+- **Better Error Recovery**: More robust fallback mechanisms for API response parsing
+- **Multi-Part Response Handling**: Support for complex response structures with thinking content
+
+### 🔧 Technical Improvements
+- **API Compliance**: Updated all external API integrations to use current documentation
+- **Performance Optimization**: Reduced unnecessary API calls and improved caching
+- **Type Safety**: Enhanced TypeScript interfaces for better development experience
+- **Error Resilience**: Improved error handling across all API integrations
+
 ## 1.19.2 - 2025-10-28
 
 ### 🛠️ Bug Fixes & Improvements
@@ -12,6 +39,11 @@
 - **Windows Build Stability**: Improved Electron build scripts and fixed issues with node.exe packaging
 - **Server Reliability**: Enhanced WebSocket server startup logic and port conflict handling
 - **Documentation**: Updated guides and troubleshooting for new features and Windows compatibility
+
+### 🔧 Technical Improvements
+- **Git LFS Configuration**: Configured Git LFS for large binary files to improve repository performance
+- **Merge Conflict Resolution**: Resolved merge conflicts and updated documentation references
+- **Repository Maintenance**: Cleaned up repository structure and updated version references
 
 All notable changes to Station V - Virtual IRC Simulator will be documented in this file.
 
