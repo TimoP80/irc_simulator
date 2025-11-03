@@ -3,6 +3,7 @@ import { User, Channel, isPerLanguageFormat, isLegacyFormat, getAllLanguages } f
 import { AddUserModal } from './AddUserModal';
 import { BatchUserModal } from './BatchUserModal';
 import { ImportExportModal } from './ImportExportModal';
+import { generateRandomPersonality } from '../utils/personalityTemplates';
 
 interface UserManagementProps {
   users: User[];
@@ -131,6 +132,19 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onUsersCh
     onUsersChange([...users, ...importedUsers]);
   };
 
+  const handleRandomizeAllPersonalities = () => {
+    if (window.confirm(`Are you sure you want to randomize the personalities of all ${users.length} users? This action cannot be undone.`)) {
+      const updatedUsers = users.map(user => {
+        const newPersonality = generateRandomPersonality();
+        return {
+          ...user,
+          personality: newPersonality.description,
+        };
+      });
+      onUsersChange(updatedUsers);
+    }
+  };
+
   // Get channels where a user is assigned
   const getUserChannels = (user: User): Channel[] => {
     return channels.filter(channel => 
@@ -181,6 +195,15 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onUsersCh
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-white">Virtual Users</h3>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleRandomizeAllPersonalities}
+            className="bg-teal-600 text-white rounded-lg px-4 py-2 text-sm font-semibold hover:bg-teal-500 transition-colors flex items-center gap-2"
+            title="Randomize all user personalities"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 3h5v5M4 20L20 4M20 16v5h-5M4 4l5 5"></path></svg>
+            Randomize All Personalities
+          </button>
           {uniqueUsers.length > 0 && (
             <button
               type="button"

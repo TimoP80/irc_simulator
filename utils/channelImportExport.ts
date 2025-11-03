@@ -45,7 +45,8 @@ export const importChannelsFromCSV = (csvContent: string): Channel[] => {
       name: values[0] || `#channel${i}`,
       topic: values[1] || 'Imported channel',
       users: [],
-      messages: []
+      messages: [],
+      operators: []
     };
 
     // Validate channel name format
@@ -60,18 +61,9 @@ export const importChannelsFromCSV = (csvContent: string): Channel[] => {
 };
 
 export const exportChannelsToJSON = (channels: Channel[]): string => {
-  // Export only the essential channel data, not the full objects with messages
-  const exportData = channels.map(channel => ({
-    name: channel.name,
-    topic: channel.topic || '',
-    users: (channel.users || []).map(user => ({
-      nickname: user.nickname,
-      status: user.status
-    })),
-    messageCount: (channel.messages || []).length
-  }));
-
-  return JSON.stringify(exportData, null, 2);
+  // Full export of channel data, including users and messages.
+  // JSON.stringify will automatically convert Date objects to ISO 8601 strings.
+  return JSON.stringify(channels, null, 2);
 };
 
 export const importChannelsFromJSON = (jsonContent: string): Channel[] => {
@@ -80,11 +72,25 @@ export const importChannelsFromJSON = (jsonContent: string): Channel[] => {
     
     if (Array.isArray(data)) {
       return data.map((channelData: any) => {
+        // Reconstruct message objects with Date objects
+        const messages = (channelData.messages || []).map((msg: any) => ({
+          ...msg,
+          timestamp: new Date(msg.timestamp),
+          ...(msg.quotedMessage && {
+            quotedMessage: {
+              ...msg.quotedMessage,
+              timestamp: new Date(msg.quotedMessage.timestamp)
+            }
+          })
+        }));
+
         const channel: Channel = {
           name: channelData.name || `#channel${Math.random().toString(36).substr(2, 9)}`,
           topic: channelData.topic || 'Imported channel',
           users: channelData.users || [],
-          messages: [] // Always start with empty messages
+          messages: messages,
+          operators: channelData.operators || [],
+          dominantLanguage: channelData.dominantLanguage
         };
 
         // Validate channel name format
@@ -103,36 +109,100 @@ export const importChannelsFromJSON = (jsonContent: string): Channel[] => {
   }
 };
 
-export const downloadFile = (content: string, filename: string, mimeType: string) => {
-  try {
-    console.log('Creating download for file:', filename, 'size:', content.length, 'mimeType:', mimeType);
-    const blob = new Blob([content], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    console.log('Download completed successfully');
-  } catch (error) {
-    console.error('Error in downloadFile:', error);
-    throw error;
+const generateHTMLHeader = (title: string): string => `
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${title}</title>
+    <style>
+      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #121212; color: #e0e0e0; margin: 0; padding: 2rem; }
+      .container { max-width: 800px; margin: auto; background-color: #1e1e1e; border-radius: 8px; padding: 2rem; border: 1px solid #333; }
+      h1, h2, h3 { color: #fff; border-bottom: 2px solid #444; padding-bottom: 0.5rem; }
+      .message { margin-bottom: 1rem; padding: 1rem; border-radius: 6px; border: 1px solid #2c2c2c; background-color: #252525; }
+      .message.highlight { background-color: #3a3a3a; border-color: #555; }
+      .meta { font-size: 0.8rem; color: #888; margin-bottom: 0.5rem; }
+      .nick { font-weight: bold; }
+      .content { white-space: pre-wrap; word-wrap: break-word; }
+      .channel-section { margin-bottom: 3rem; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+`;
+
+const generateHTMLFooter = (): string => `
+    </div>
+  </body>
+  </html>
+`;
+
+export const exportChannelToHTML = (channel: Channel, currentUserNickname: string): string => {
+  let messagesHTML = (channel.messages || []).map(msg => {
+    const isCurrentUser = msg.nickname === currentUserNickname;
+    const timestamp = new Date(msg.timestamp).toLocaleString();
+    const textContent = msg.content.replace(/</g, "<").replace(/>/g, ">");
+    return `
+      <div class="message ${isCurrentUser ? 'highlight' : ''}">
+        <div class="meta">
+          <span class="nick">${msg.nickname.replace(/</g, "<").replace(/>/g, ">")}</span>
+          <span class="timestamp"> - ${timestamp}</span>
+        </div>
+        <div class="content">${textContent}</div>
+      </div>
+    `;
+  }).join('');
+
+  if (!messagesHTML) {
+    messagesHTML = '<p>No messages in this channel.</p>';
   }
+
+  const channelHTML = `
+    <div class="channel-section">
+      <h1>Channel: ${channel.name.replace(/</g, "<").replace(/>/g, ">")}</h1>
+      <h2>Topic: ${channel.topic ? channel.topic.replace(/</g, "<").replace(/>/g, ">") : 'No topic set'}</h2>
+      ${messagesHTML}
+    </div>
+  `;
+
+  return generateHTMLHeader(`Chat Log - ${channel.name}`) + channelHTML + generateHTMLFooter();
 };
 
-export const readFileAsText = (file: File): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      if (e.target?.result) {
-        resolve(e.target.result as string);
-      } else {
-        reject(new Error('Failed to read file'));
-      }
-    };
-    reader.onerror = () => reject(new Error('Failed to read file'));
-    reader.readAsText(file);
-  });
+export const exportAllChannelsToHTML = (channels: Channel[], currentUserNickname: string): string => {
+  const allChannelsHTML = channels.map(channel => {
+    let messagesHTML = (channel.messages || []).map(msg => {
+      const isCurrentUser = msg.nickname === currentUserNickname;
+      const timestamp = new Date(msg.timestamp).toLocaleString();
+      const textContent = msg.content.replace(/</g, "<").replace(/>/g, ">");
+      return `
+        <div class="message ${isCurrentUser ? 'highlight' : ''}">
+          <div class="meta">
+            <span class="nick">${msg.nickname.replace(/</g, "<").replace(/>/g, ">")}</span>
+            <span class="timestamp"> - ${timestamp}</span>
+          </div>
+          <div class="content">${textContent}</div>
+        </div>
+      `;
+    }).join('');
+
+    if (!messagesHTML) {
+      messagesHTML = '<p>No messages in this channel.</p>';
+    }
+
+    return `
+      <div class="channel-section">
+        <h2>Channel: ${channel.name.replace(/</g, "<").replace(/>/g, ">")}</h2>
+        <h3>Topic: ${channel.topic ? channel.topic.replace(/</g, "<").replace(/>/g, ">") : 'No topic set'}</h3>
+        ${messagesHTML}
+      </div>
+    `;
+  }).join('');
+
+  const mainHTML = `
+    <h1>All Channel Chat Logs</h1>
+    ${allChannelsHTML}
+  `;
+
+  return generateHTMLHeader('All Chat Logs') + mainHTML + generateHTMLFooter();
 };

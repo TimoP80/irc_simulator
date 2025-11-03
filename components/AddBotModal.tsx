@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Channel } from '../types';
 import { generateRandomWorldConfiguration } from '../services/geminiService';
+import { translateBotPersonality } from '../services/botService';
 
 interface AddBotModalProps {
   bot?: User | null;
@@ -69,6 +70,8 @@ export const AddBotModal: React.FC<AddBotModalProps> = ({
   const [selectedCapabilities, setSelectedCapabilities] = useState<string[]>(bot?.botCapabilities || []);
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [targetLanguage, setTargetLanguage] = useState('Finnish');
+  const [isTranslating, setIsTranslating] = useState(false);
 
   const handleTemplateSelect = (templateName: string) => {
     const template = BOT_TEMPLATES.find(t => t.name === templateName);
@@ -106,14 +109,7 @@ export const AddBotModal: React.FC<AddBotModalProps> = ({
 
     setIsGenerating(true);
     try {
-      const generatedBot = await generateRandomWorldConfiguration(aiModel, {
-        userCount: 1,
-        channelCount: 1,
-        includePersonalities: true,
-        includeWritingStyles: true,
-        includeLanguageSkills: true,
-        primaryLanguage: 'English'
-      });
+      const generatedBot = await generateRandomWorldConfiguration();
 
       if (generatedBot.users && generatedBot.users.length > 0) {
         const generatedUser = generatedBot.users[0];
@@ -125,6 +121,24 @@ export const AddBotModal: React.FC<AddBotModalProps> = ({
       alert('Failed to generate bot personality. Please try again.');
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleTranslatePersonality = async () => {
+    if (!personality.trim()) {
+      alert('Please enter a personality to translate.');
+      return;
+    }
+
+    setIsTranslating(true);
+    try {
+      const translatedPersonality = await translateBotPersonality(personality, targetLanguage);
+      setPersonality(translatedPersonality);
+    } catch (error) {
+      console.error('Failed to translate personality:', error);
+      alert('Failed to translate personality. Please try again.');
+    } finally {
+      setIsTranslating(false);
     }
   };
 
@@ -152,10 +166,10 @@ export const AddBotModal: React.FC<AddBotModalProps> = ({
         }]
       },
       writingStyle: {
-        formality: 'neutral',
-        verbosity: 'neutral',
+        formality: 'semi_formal',
+        verbosity: 'moderate',
         humor: 'none',
-        emojiUsage: 'medium',
+        emojiUsage: 'occasional',
         punctuation: 'standard'
       },
       botCommands: selectedCommands,
@@ -254,6 +268,25 @@ export const AddBotModal: React.FC<AddBotModalProps> = ({
                 className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 h-20 resize-none"
                 placeholder="Describe the bot's personality and behavior..."
               />
+              <div className="mt-2 flex items-center gap-2">
+                <select
+                  value={targetLanguage}
+                  onChange={(e) => setTargetLanguage(e.target.value)}
+                  className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="Finnish">Finnish</option>
+                  <option value="Spanish">Spanish</option>
+                  <option value="German">German</option>
+                  <option value="French">French</option>
+                </select>
+                <button
+                  onClick={handleTranslatePersonality}
+                  disabled={isTranslating}
+                  className="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                >
+                  {isTranslating ? 'Translating...' : 'Translate'}
+                </button>
+              </div>
             </div>
 
             {/* Bot Commands */}

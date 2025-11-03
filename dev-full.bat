@@ -6,7 +6,7 @@ start "Station V Server" cmd /k "npm run server"
 timeout /t 2 /nobreak >nul
 echo.
 echo Starting Vite development server...
-start "Station V Client" cmd /k "npm run dev"
+start "Station V Client" cmd /k "vite"
 echo.
 echo Both servers are starting in separate windows.
 echo WebSocket server: http://localhost:8080

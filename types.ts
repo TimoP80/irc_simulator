@@ -1,7 +1,7 @@
 export interface User {
   nickname: string;
   status: 'online' | 'away';
-  userType: 'virtual' | 'bot'; // Distinguish between virtual users and bots
+  userType: 'virtual' | 'bot' | 'network'; // Distinguish between virtual users, bots, and network users
   personality: string;
   languageSkills: {
     fluency: 'beginner' | 'intermediate' | 'advanced' | 'native';
@@ -75,6 +75,7 @@ export interface Message {
   target?: string; // For commands that target specific users or channels
   links?: string[]; // Array of URLs that were mentioned in the message
   images?: string[]; // Array of image URLs that were mentioned in the message
+  attachments?: Attachment[]; // For richer attachment data
   // Bot-specific message properties
   botCommand?: BotCommandType; // Type of bot command that generated this message
   botResponse?: any; // Bot response data (image URL, weather data, etc.)
@@ -86,6 +87,16 @@ export interface Message {
     timestamp: Date;
     type: MessageType;
   }; // Reference to the message being quoted/replied to
+  audioAnalysis?: {
+    transcript: string;
+  };
+  isTyping?: boolean;
+}
+
+export interface Attachment {
+  url: string;
+  type: 'image' | 'audio' | 'file';
+  fileName?: string;
 }
 
 export interface Channel {
@@ -147,6 +158,8 @@ export interface AppConfig {
     channel: string;
     ssl: boolean;
   };
+  theme?: 'dark' | 'light';
+  perspectives?: string[];
 }
 
 export interface GeminiModel {
@@ -276,10 +289,10 @@ export const canUserPerformAction = (channel: Channel, nickname: string, action:
 export const migrateWritingStyle = (oldStyle: any): User['writingStyle'] => {
   if (!oldStyle || typeof oldStyle !== 'object') {
     return {
-      formality: 'neutral',
+      formality: 'semi_formal',
       verbosity: 'moderate',
       humor: 'none',
-      emojiUsage: 'low',
+      emojiUsage: 'rare',
       punctuation: 'standard'
     };
   }
@@ -381,29 +394,4 @@ export interface ModelsListResponse {
 export interface RandomWorldConfig {
   users: User[];
   channels: { name: string; topic: string; }[];
-}
-
-// Electron API types
-export interface ElectronAPI {
-  toggleDevTools: () => void;
-  reload: () => void;
-  toggleFullscreen: () => void;
-  closeWindow: () => void;
-  onWindowStateChange: (callback: (state: 'maximized' | 'normal' | 'minimized') => void) => void;
-  minimizeWindow: () => void;
-  maximizeWindow: () => void;
-  restoreWindow: () => void;
-  setAlwaysOnTop: (alwaysOnTop: boolean) => void;
-  getVersion: () => string;
-  getPlatform: () => string;
-}
-
-// Extend Window interface to include Electron API
-declare global {
-  interface Window {
-    electronAPI?: ElectronAPI;
-    process?: {
-      type: 'renderer' | 'main';
-    };
-  }
 }

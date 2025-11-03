@@ -1,9 +1,9 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import type { Channel, Message, PrivateMessageConversation, RandomWorldConfig, GeminiModel, ModelsListResponse, User } from '../types';
-import { getLanguageFluency, getAllLanguages, getLanguageAccent, isChannelOperator, isPerLanguageFormat, isLegacyFormat, getWritingStyle } from '../types';
-import { withRateLimitAndRetries } from '../utils/config';
-import { aiDebug } from '../utils/debugLogger';
-import { getRelationshipContext } from './relationshipMemoryService';
+import type { Channel, Message, PrivateMessageConversation, RandomWorldConfig, GeminiModel, ModelsListResponse, User } from '../types.js';
+import { getLanguageFluency, getAllLanguages, getLanguageAccent, isChannelOperator, isPerLanguageFormat, isLegacyFormat, getWritingStyle } from '../types.js';
+import { withRateLimitAndRetries } from '../utils/config.js';
+import { aiDebug } from '../utils/debugLogger.js';
+import { getRelationshipContext } from './relationshipMemoryService.js';
 
 const API_KEY = process.env.GEMINI_API_KEY;
 
@@ -745,7 +745,15 @@ RESPONSE FORMAT:
 `;
 };
 
-export const generateChannelActivity = async (channel: Channel, currentUserNickname: string, model: string = 'gemini-2.5-flash'): Promise<string> => {
+export const generateChannelActivity = async (
+  channel: Channel,
+  currentUserNickname: string,
+  model: string = 'gemini-2.5-flash',
+  addMessageToContext?: (message: Message, context: any) => void,
+  updateMessageInContext?: (message: Message, context: any) => void,
+  generateUniqueMessageId?: () => number,
+  activeContext?: any
+): Promise<string> => {
   aiDebug.log(` generateChannelActivity called for channel: ${channel.name}`);
   aiDebug.log(` Model parameter: "${model}" (type: ${typeof model}, length: ${model.length})`);
   
@@ -902,9 +910,8 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
     candidateUsers = shuffledUsers;
   }
   
-  // Gentle user rotation: only avoid users who have spoken 4+ times in the last 6 messages
-  // This is much less aggressive to allow more natural conversation flow
-  const recentUserCounts = channel.messages.slice(-6)
+  // More aggressive user rotation to prevent spam: avoid users who have spoken 2+ times in the last 7 messages
+  const recentUserCounts = channel.messages.slice(-7)
     .filter(msg => msg.nickname !== currentUserNickname)
     .reduce((counts, msg) => {
       counts[msg.nickname] = (counts[msg.nickname] || 0) + 1;
@@ -912,7 +919,7 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
     }, {} as Record<string, number>);
   
   const overactiveUsers = Object.entries(recentUserCounts)
-    .filter(([_, count]) => count >= 4) // Increased threshold from 3 to 4
+    .filter(([_, count]) => (count as number) >= 2)
     .map(([nickname, _]) => nickname);
   
   if (overactiveUsers.length > 0) {
@@ -972,26 +979,26 @@ export const generateChannelActivity = async (channel: Channel, currentUserNickn
   const getTokenLimit = (verbosity: string, emojiUsage: string): number => {
     let baseLimit: number;
     switch (verbosity) {
-      case 'terse': baseLimit = 150;
-      case 'brief': baseLimit = 200;
-      case 'moderate': baseLimit = 300;
-      case 'detailed': baseLimit = 500;
-      case 'verbose': baseLimit = 600;
-      case 'extremely_verbose': baseLimit = 900;
-      case 'novel_length': baseLimit = 1200;
-      default: baseLimit = 300;
+      case 'terse': baseLimit = 400; break;
+      case 'brief': baseLimit = 600; break;
+      case 'moderate': baseLimit = 800; break;
+      case 'detailed': baseLimit = 1200; break;
+      case 'verbose': baseLimit = 1600; break;
+      case 'extremely_verbose': baseLimit = 2400; break;
+      case 'novel_length': baseLimit = 4000; break;
+      default: baseLimit = 800;
     }
     
     // Apply emoji usage multiplier
     let emojiMultiplier: number;
     switch (emojiUsage) {
-      case 'none': emojiMultiplier = 1.0;
-      case 'rare': emojiMultiplier = 1.1;
-      case 'occasional': emojiMultiplier = 1.2;
-      case 'moderate': emojiMultiplier = 1.5;
-      case 'frequent': emojiMultiplier = 2.0;
-      case 'excessive': emojiMultiplier = 2.5;
-      case 'emoji_only': emojiMultiplier = 3.0;
+      case 'none': emojiMultiplier = 1.0; break;
+      case 'rare': emojiMultiplier = 1.1; break;
+      case 'occasional': emojiMultiplier = 1.2; break;
+      case 'moderate': emojiMultiplier = 1.5; break;
+      case 'frequent': emojiMultiplier = 2.0; break;
+      case 'excessive': emojiMultiplier = 2.5; break;
+      case 'emoji_only': emojiMultiplier = 3.0; break;
       default: emojiMultiplier = 1.0;
     }
     
@@ -1242,11 +1249,27 @@ ${isChannelOperator(channel, randomUser.nickname) ? `- Role: Channel operator (c
     aiDebug.log(` Using model ID: "${validatedModel}" for API call`);
     // Add temperature variation for more diverse responses
     const baseTemperature = 0.9;
-    const temperatureVariation = Math.random() * 0.3; // Add 0-0.3 variation
+    const temperatureVariation = Math.random() * 0.4; // Add 0-0.4 variation for more creativity
     const finalTemperature = Math.min(1.0, baseTemperature + temperatureVariation);
     
     aiDebug.log(` Using temperature: ${finalTemperature.toFixed(2)} for ${randomUser.nickname}`);
     
+    // If callbacks are provided, manage the typing indicator
+    let typingMessageId: number | undefined;
+    if (addMessageToContext && updateMessageInContext && generateUniqueMessageId && activeContext) {
+      typingMessageId = generateUniqueMessageId();
+      const typingMessage: Message = {
+        id: typingMessageId,
+        nickname: randomUser.nickname,
+        content: '', // Content will be updated later
+        timestamp: new Date(),
+        type: 'ai',
+        isTyping: true
+      };
+      addMessageToContext(typingMessage, activeContext);
+    }
+
+    let result: string;
     try {
       // Configure thinking mode based on model requirements
       const config: any = {
@@ -1263,23 +1286,34 @@ ${isChannelOperator(channel, randomUser.nickname) ? `- Role: Channel operator (c
         aiDebug.log(` Adjusted maxOutputTokens to: ${config.maxOutputTokens}`);
       }
     
-    const response = await withRateLimitAndRetries(() => 
-      ai.models.generateContent({
-          model: validatedModel,
-          contents: prompt,
-            config: config,
-        }), `channel activity generation for ${randomUser.nickname}`
-    );
-    
-    const result = extractTextFromResponse(response);
-    aiDebug.log(` Successfully generated channel activity: "${result}"`);
-    return result;
+      const response = await withRateLimitAndRetries(() =>
+        ai.models.generateContent({
+            model: validatedModel,
+            contents: prompt,
+              config: config,
+          }), `channel activity generation for ${randomUser.nickname}`
+      );
+      
+      result = extractTextFromResponse(response);
+      aiDebug.log(` Successfully generated channel activity: "${result}"`);
     } catch (error) {
       aiDebug.warn(` API call failed, using fallback response for ${randomUser.nickname}:`, error);
-      const fallbackResponse = getFallbackResponse(randomUser, 'activity');
-      aiDebug.log(` Using fallback response: "${fallbackResponse}"`);
-      return fallbackResponse;
+      result = getFallbackResponse(randomUser, 'activity');
+      aiDebug.log(` Using fallback response: "${result}"`);
+    } finally {
+      // Update the typing message with the actual response or remove it
+      if (typingMessageId && updateMessageInContext && activeContext) {
+        updateMessageInContext({
+          id: typingMessageId,
+          nickname: randomUser.nickname,
+          content: result || '', // Use generated result or empty string
+          timestamp: new Date(),
+          type: 'ai',
+          isTyping: false
+        }, activeContext);
+      }
     }
+    return result;
   } catch (error) {
     aiDebug.error(` Error generating channel activity for ${channel.name}:`, {
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -1292,7 +1326,16 @@ ${isChannelOperator(channel, randomUser.nickname) ? `- Role: Channel operator (c
   }
 };
 
-export const generateReactionToMessage = async (channel: Channel, userMessage: Message, currentUserNickname: string, model: string = 'gemini-2.5-flash'): Promise<string> => {
+export const generateReactionToMessage = async (
+  channel: Channel,
+  userMessage: Message,
+  currentUserNickname: string,
+  model: string = 'gemini-2.5-flash',
+  addMessageToContext?: (message: Message, context: any) => void,
+  updateMessageInContext?: (message: Message, context: any) => void,
+  generateUniqueMessageId?: () => number,
+  activeContext?: any
+): Promise<string> => {
     aiDebug.log(` generateReactionToMessage called for channel: ${channel.name}, reacting to: ${userMessage.nickname}`);
     
     const validatedModel = validateModelId(model);
@@ -1436,26 +1479,26 @@ export const generateReactionToMessage = async (channel: Channel, userMessage: M
     const getTokenLimit = (verbosity: string, emojiUsage: string): number => {
       let baseLimit: number;
       switch (verbosity) {
-        case 'terse': baseLimit = 150;
-        case 'brief': baseLimit = 200;
-        case 'moderate': baseLimit = 300;
-        case 'detailed': baseLimit = 500;
-        case 'verbose': baseLimit = 600;
-        case 'extremely_verbose': baseLimit = 900;
-        case 'novel_length': baseLimit = 1200;
-        default: baseLimit = 300;
+        case 'terse': baseLimit = 400; break;
+        case 'brief': baseLimit = 600; break;
+        case 'moderate': baseLimit = 800; break;
+        case 'detailed': baseLimit = 1200; break;
+        case 'verbose': baseLimit = 1600; break;
+        case 'extremely_verbose': baseLimit = 2400; break;
+        case 'novel_length': baseLimit = 4000; break;
+        default: baseLimit = 800;
       }
       
       // Apply emoji usage multiplier
       let emojiMultiplier: number;
       switch (emojiUsage) {
-        case 'none': emojiMultiplier = 1.0;
-        case 'rare': emojiMultiplier = 1.1;
-        case 'occasional': emojiMultiplier = 1.2;
-        case 'moderate': emojiMultiplier = 1.5;
-        case 'frequent': emojiMultiplier = 2.0;
-        case 'excessive': emojiMultiplier = 2.5;
-        case 'emoji_only': emojiMultiplier = 3.0;
+        case 'none': emojiMultiplier = 1.0; break;
+        case 'rare': emojiMultiplier = 1.1; break;
+        case 'occasional': emojiMultiplier = 1.2; break;
+        case 'moderate': emojiMultiplier = 1.5; break;
+        case 'frequent': emojiMultiplier = 2.0; break;
+        case 'excessive': emojiMultiplier = 2.5; break;
+        case 'emoji_only': emojiMultiplier = 3.0; break;
         default: emojiMultiplier = 1.0;
       }
       
@@ -1548,6 +1591,22 @@ ${isChannelOperator(channel, randomUser.nickname) ? `- Role: Channel operator (c
         
         aiDebug.log(` Using temperature: ${finalTemperature.toFixed(2)} for reaction from ${randomUser.nickname}`);
         
+        // If callbacks are provided, manage the typing indicator
+        let typingMessageId: number | undefined;
+        if (addMessageToContext && updateMessageInContext && generateUniqueMessageId && activeContext) {
+          typingMessageId = generateUniqueMessageId();
+          const typingMessage: Message = {
+            id: typingMessageId,
+            nickname: randomUser.nickname,
+            content: '', // Content will be updated later
+            timestamp: new Date(),
+            type: 'ai',
+            isTyping: true
+          };
+          addMessageToContext(typingMessage, activeContext);
+        }
+
+        let result: string;
         try {
           // Configure thinking mode based on model requirements
           const config: any = {
@@ -1564,23 +1623,35 @@ ${isChannelOperator(channel, randomUser.nickname) ? `- Role: Channel operator (c
             aiDebug.log(` Adjusted maxOutputTokens to: ${config.maxOutputTokens}`);
           }
         
-        const response = await withRateLimitAndRetries(() => 
-            ai.models.generateContent({
-                model: validatedModel,
-                contents: prompt,
-                  config: config,
-              }), `reaction generation from ${randomUser.nickname}`
-        );
-        
-        const result = extractTextFromResponse(response);
-        aiDebug.log(` Successfully generated reaction: "${result}"`);
-        return result;
+          const response = await withRateLimitAndRetries(() =>
+              ai.models.generateContent({
+                  model: validatedModel,
+                  contents: prompt,
+                    config: config,
+                }), `reaction generation from ${randomUser.nickname}`
+          );
+          
+          result = extractTextFromResponse(response);
+          aiDebug.log(` Successfully generated reaction: "${result}"`);
         } catch (apiError) {
           aiDebug.warn(` API call failed, using fallback response for reaction from ${randomUser.nickname}:`, apiError);
-          const fallbackResponse = getFallbackResponse(randomUser, 'reaction', userMessage.content);
-          aiDebug.log(` Using fallback reaction: "${fallbackResponse}"`);
-          return fallbackResponse;
+          result = getFallbackResponse(randomUser, 'reaction', userMessage.content);
+          aiDebug.log(` Using fallback reaction: "${result}"`);
+        } finally {
+          // Update the typing message with the actual response or remove it
+          if (typingMessageId && updateMessageInContext && activeContext) {
+            updateMessageInContext({
+              ...userMessage, // Preserve original message properties
+              id: typingMessageId,
+              nickname: randomUser.nickname,
+              content: result || '', // Use generated result or empty string
+              timestamp: new Date(),
+              type: 'ai',
+              isTyping: false
+            }, activeContext);
+          }
         }
+        return result;
     } catch (error) {
         aiDebug.error(` Error generating reaction for ${channel.name}:`, {
             error: error instanceof Error ? error.message : 'Unknown error',
@@ -1788,7 +1859,16 @@ const analyzeConversationContext = (messages: Message[], currentUserNickname: st
     };
 };
 
-export const generatePrivateMessageResponse = async (conversation: PrivateMessageConversation, userMessage: Message, currentUserNickname: string, model: string = 'gemini-2.5-flash'): Promise<string> => {
+export const generatePrivateMessageResponse = async (
+  conversation: PrivateMessageConversation,
+  userMessage: Message | null,
+  currentUserNickname: string,
+  model: string = 'gemini-2.5-flash',
+  addMessageToContext?: (message: Message, context: any) => void,
+  updateMessageInContext?: (message: Message, context: any) => void,
+  generateUniqueMessageId?: () => number,
+  activeContext?: any
+): Promise<string> => {
     aiDebug.log(` generatePrivateMessageResponse called for user: ${conversation.user.nickname}`);
     
     const validatedModel = validateModelId(model);
@@ -1809,26 +1889,26 @@ export const generatePrivateMessageResponse = async (conversation: PrivateMessag
     const getTokenLimit = (verbosity: string, emojiUsage: string): number => {
       let baseLimit: number;
       switch (verbosity) {
-        case 'terse': baseLimit = 150;
-        case 'brief': baseLimit = 200;
-        case 'moderate': baseLimit = 300;
-        case 'detailed': baseLimit = 500;
-        case 'verbose': baseLimit = 600;
-        case 'extremely_verbose': baseLimit = 900;
-        case 'novel_length': baseLimit = 1200;
-        default: baseLimit = 300;
+        case 'terse': baseLimit = 400; break;
+        case 'brief': baseLimit = 600; break;
+        case 'moderate': baseLimit = 800; break;
+        case 'detailed': baseLimit = 1200; break;
+        case 'verbose': baseLimit = 1600; break;
+        case 'extremely_verbose': baseLimit = 2400; break;
+        case 'novel_length': baseLimit = 4000; break;
+        default: baseLimit = 800;
       }
       
       // Apply emoji usage multiplier
       let emojiMultiplier: number;
       switch (emojiUsage) {
-        case 'none': emojiMultiplier = 1.0;
-        case 'rare': emojiMultiplier = 1.1;
-        case 'occasional': emojiMultiplier = 1.2;
-        case 'moderate': emojiMultiplier = 1.5;
-        case 'frequent': emojiMultiplier = 2.0;
-        case 'excessive': emojiMultiplier = 2.5;
-        case 'emoji_only': emojiMultiplier = 3.0;
+        case 'none': emojiMultiplier = 1.0; break;
+        case 'rare': emojiMultiplier = 1.1; break;
+        case 'occasional': emojiMultiplier = 1.2; break;
+        case 'moderate': emojiMultiplier = 1.5; break;
+        case 'frequent': emojiMultiplier = 2.0; break;
+        case 'excessive': emojiMultiplier = 2.5; break;
+        case 'emoji_only': emojiMultiplier = 3.0; break;
         default: emojiMultiplier = 1.0;
       }
       
@@ -1870,15 +1950,15 @@ You are in a private message conversation with '${currentUserNickname}'.
 The conversation history (last 20 messages) is:
 ${formatEnhancedMessageHistory(conversation.messages)}
 
-'${currentUserNickname}' just sent you this message: "${userMessage.content}"
+${userMessage ? `'${currentUserNickname}' just sent you this message: "${userMessage.content}"` : 'You are initiating this conversation, or continuing it after a pause. Be proactive and engaging.'}
 
 IMPORTANT CONVERSATION GUIDELINES:
-- If this is a new conversation (few messages), be welcoming but not overly formal
-- If this is an ongoing conversation, continue naturally based on the previous topics and tone
-- Reference previous messages when appropriate to show you're paying attention
-- Don't repeat greetings if you've already exchanged them in this conversation
-- Build on what was previously discussed rather than starting completely new topics
-- Match the conversation energy - if it's been casual, stay casual; if it's been serious, stay serious
+- Be proactive: Ask questions, share personal anecdotes, and try to build a deeper connection. Don't just give passive responses.
+- If this is a new conversation, be welcoming and try to get to know the user.
+- If this is an ongoing conversation, continue naturally and reference past topics to show you remember.
+- Don't repeat greetings if you've already exchanged them.
+- Build on what was previously discussed.
+- Match the conversation's energy and tone.
 
 CRITICAL: Respond ONLY in ${primaryLanguage}. Do not use any other language.
 ${userLanguages.length > 1 ? `Available languages: ${userLanguages.join(', ')}. Use ${primaryLanguage} only.` : ''}
@@ -1903,31 +1983,72 @@ ${writingStyle.verbosity === 'extremely_verbose' || writingStyle.verbosity === '
     try {
         aiDebug.log(` Sending request to Gemini for private message response from ${aiUser.nickname}`);
         
-        // Configure thinking mode based on model requirements
-        const config: any = {
-          systemInstruction: getBaseSystemInstruction(currentUserNickname),
-          temperature: 0.75,
-          maxOutputTokens: tokenLimit,
-        };
-        
-        // Some models require thinking mode with a budget
-        if (validatedModel.includes('2.5') || validatedModel.includes('pro')) {
-          config.thinkingConfig = { thinkingBudget: 2000 }; // Increased budget for thinking mode
-          config.maxOutputTokens = Math.max(tokenLimit, 2000); // Ensure minimum output tokens
-          aiDebug.log(` Using thinking mode with budget 2000 for private message model: ${validatedModel}`);
-          aiDebug.log(` Adjusted maxOutputTokens to: ${config.maxOutputTokens}`);
+        // If callbacks are provided, manage the typing indicator
+        let typingMessageId: number | undefined;
+        if (addMessageToContext && updateMessageInContext && generateUniqueMessageId && activeContext) {
+          typingMessageId = generateUniqueMessageId();
+          const typingMessage: Message = {
+            id: typingMessageId,
+            nickname: aiUser.nickname,
+            content: '', // Content will be updated later
+            timestamp: new Date(),
+            type: 'pm',
+            isTyping: true
+          };
+          addMessageToContext(typingMessage, activeContext);
         }
-        
-        const response = await withRateLimitAndRetries(() => 
-            ai.models.generateContent({
-                model: validatedModel,
-                contents: prompt,
-                config: config,
-            }), `private message response from ${conversation.user.nickname}`
-        );
-        
-        const result = extractTextFromResponse(response);
-        aiDebug.log(` Successfully generated private message response: "${result}"`);
+
+        let result: string;
+        try {
+          // Configure thinking mode based on model requirements
+          const config: any = {
+            systemInstruction: getBaseSystemInstruction(currentUserNickname),
+            temperature: 0.8 + (Math.random() * 0.2), // Increased temperature for more engaging PMs
+            maxOutputTokens: tokenLimit,
+          };
+          
+          // Some models require thinking mode with a budget
+          if (validatedModel.includes('2.5') || validatedModel.includes('pro')) {
+            config.thinkingConfig = { thinkingBudget: 2000 }; // Increased budget for thinking mode
+            config.maxOutputTokens = Math.max(tokenLimit, 2000); // Ensure minimum output tokens
+            aiDebug.log(` Using thinking mode with budget 2000 for private message model: ${validatedModel}`);
+            aiDebug.log(` Adjusted maxOutputTokens to: ${config.maxOutputTokens}`);
+          }
+          
+          const response = await withRateLimitAndRetries(() =>
+              ai.models.generateContent({
+                  model: validatedModel,
+                  contents: prompt,
+                  config: config,
+              }), `private message response from ${conversation.user.nickname}`
+          );
+          
+          result = extractTextFromResponse(response);
+          aiDebug.log(` Successfully generated private message response: "${result}"`);
+        } catch (error) {
+          aiDebug.error(` Error generating private message response from ${aiUser.nickname}:`, {
+              error: error instanceof Error ? error.message : 'Unknown error',
+              stack: error instanceof Error ? error.stack : undefined,
+              aiUser: aiUser.nickname,
+              currentUser: currentUserNickname,
+              messageContent: userMessage?.content,
+              conversationLength: conversation.messages.length
+          });
+          result = getFallbackResponse(aiUser, 'activity'); // Fallback for PMs
+          aiDebug.log(` Using fallback response for PM: "${result}"`);
+        } finally {
+          // Update the typing message with the actual response or remove it
+          if (typingMessageId && updateMessageInContext && activeContext) {
+            updateMessageInContext({
+              id: typingMessageId,
+              nickname: aiUser.nickname,
+              content: result || '', // Use generated result or empty string
+              timestamp: new Date(),
+              type: 'pm',
+              isTyping: false
+            }, activeContext);
+          }
+        }
         return result;
     } catch (error) {
         aiDebug.error(` Error generating private message response from ${aiUser.nickname}:`, {
@@ -1935,7 +2056,7 @@ ${writingStyle.verbosity === 'extremely_verbose' || writingStyle.verbosity === '
             stack: error instanceof Error ? error.stack : undefined,
             aiUser: aiUser.nickname,
             currentUser: currentUserNickname,
-            messageContent: userMessage.content,
+            messageContent: userMessage?.content,
             conversationLength: conversation.messages.length
         });
         throw error;
@@ -1943,7 +2064,16 @@ ${writingStyle.verbosity === 'extremely_verbose' || writingStyle.verbosity === '
 };
 
 
-export const generateOperatorResponse = async (channel: Channel, requestingUser: string, operator: User, model: string = 'gemini-2.5-flash'): Promise<string> => {
+export const generateOperatorResponse = async (
+  channel: Channel,
+  requestingUser: string,
+  operator: User,
+  model: string = 'gemini-2.5-flash',
+  addMessageToContext?: (message: Message, context: any) => void,
+  updateMessageInContext?: (message: Message, context: any) => void,
+  generateUniqueMessageId?: () => number,
+  activeContext?: any
+): Promise<string> => {
   aiDebug.log(`generateOperatorResponse called for channel: ${channel.name}, operator: ${operator.nickname}, requesting: ${requestingUser}`);
   
   const validatedModel = validateModelId(model);
@@ -1955,7 +2085,7 @@ export const generateOperatorResponse = async (channel: Channel, requestingUser:
   
   // Get recent channel context
   const recentMessages = channel.messages.slice(-10);
-  const messageHistory = recentMessages.map(msg => 
+  const messageHistory = recentMessages.map(msg =>
     `${msg.nickname}: ${msg.content}`
   ).join('\n');
   
@@ -1972,27 +2102,27 @@ export const generateOperatorResponse = async (channel: Channel, requestingUser:
   
   const prompt = `
 ${timeContext}
-
-You are roleplaying as an IRC channel operator named '${operator.nickname}'. 
+ 
+You are roleplaying as an IRC channel operator named '${operator.nickname}'.
 Your personality is: ${operator.personality}.
-
+ 
 CHANNEL CONTEXT:
 - Channel: ${channel.name}
 - Topic: ${channel.topic || 'No topic set'}
 - Recent conversation:
 ${messageHistory}
-
+ 
 SITUATION:
 The user '${requestingUser}' has requested operator status using the /op command.
 As a channel operator, you need to decide whether to grant them operator privileges.
-
+ 
 DECISION FACTORS:
 - Consider the user's recent behavior in the channel
 - Think about whether they seem trustworthy and responsible
 - Consider if they've been helpful to the community
 - Think about whether they understand channel rules and etiquette
 - Consider if there are already too many operators
-
+ 
 RESPONSE GUIDELINES:
 - You can either grant or deny the request
 - If granting: Use phrases like "granting op", "giving you op", "making you op", or "+o"
@@ -2000,19 +2130,19 @@ RESPONSE GUIDELINES:
 - Keep your response brief and in character
 - Use your personality traits to influence your decision
 - Be consistent with your character's values and judgment
-
+ 
 Your writing style:
 - Formality: ${writingStyle?.formality || 'neutral'}
 - Verbosity: ${writingStyle?.verbosity || 'neutral'}
 - Humor: ${writingStyle?.humor || 'none'}
 - Emoji usage: ${writingStyle?.emojiUsage || 'low'}
-
+ 
 LANGUAGE CONFIGURATION:
 - Primary language: ${primaryLanguage}
 - Language accent: ${languageAccent}
 - Available languages: ${userLanguages.join(', ')}
 ${hasMultipleLanguages ? `- Multilingual support: You may occasionally use words or phrases from your other languages (${userLanguages.slice(1).join(', ')}), but should primarily communicate in ${primaryLanguage}. This adds authenticity to your multilingual personality.` : ''}
-
+ 
 LANGUAGE-SPECIFIC OPERATOR TERMINOLOGY:
 ${primaryLanguage === 'Spanish' ? '- Use Spanish IRC terms: "operador", "privilegios", "conceder", "denegar"' : ''}
 ${primaryLanguage === 'French' ? '- Use French IRC terms: "opérateur", "privilèges", "accorder", "refuser"' : ''}
@@ -2047,43 +2177,77 @@ ${primaryLanguage === 'Indonesian' ? '- Use Indonesian IRC terms: "operator", "h
 ${primaryLanguage === 'Malay' ? '- Use Malay IRC terms: "pengendali", "keistimewaan", "memberikan", "menolak"' : ''}
 ${primaryLanguage === 'Tagalog' ? '- Use Tagalog IRC terms: "operator", "pribilehiyo", "ibigay", "tanggihan"' : ''}
 ${primaryLanguage === 'English' ? '- Use standard English IRC terms: "operator", "privileges", "grant", "deny"' : ''}
-
+ 
 CRITICAL: Respond ONLY in ${primaryLanguage}. Do not use any other language.
 ${userLanguages.length > 1 ? `Available languages: ${userLanguages.join(', ')}. Use ${primaryLanguage} only.` : ''}
-
+ 
 LANGUAGE INSTRUCTION: The operator's primary language is ${primaryLanguage} based on their language skills. Ignore the language of their personality description - use ${primaryLanguage} for all communication regardless of what language their personality description is written in.
-
+ 
 Format your response as: ${operator.nickname}: [your response]
-
+ 
 Make your decision and respond as ${operator.nickname}:
 `;
-
+ 
   try {
     aiDebug.log(`Sending request to Gemini for operator response from ${operator.nickname}`);
     
-    const config: any = {
-      systemInstruction: getOperatorSystemInstruction(requestingUser, operator),
-      temperature: 0.8, // Higher temperature for more varied responses
-      maxOutputTokens: tokenLimit,
-    };
-    
-    // Some models require thinking mode with a budget
-    if (validatedModel.includes('2.5') || validatedModel.includes('pro')) {
-      config.thinkingConfig = { thinkingBudget: 1000 };
-      config.maxOutputTokens = Math.max(tokenLimit, 1000);
-      aiDebug.log(`Using thinking mode with budget 1000 for operator response model: ${validatedModel}`);
+    // If callbacks are provided, manage the typing indicator
+    let typingMessageId: number | undefined;
+    if (addMessageToContext && updateMessageInContext && generateUniqueMessageId && activeContext) {
+      typingMessageId = generateUniqueMessageId();
+      const typingMessage: Message = {
+        id: typingMessageId,
+        nickname: operator.nickname,
+        content: '', // Content will be updated later
+        timestamp: new Date(),
+        type: 'ai', // Operator responses are also AI-generated
+        isTyping: true
+      };
+      addMessageToContext(typingMessage, activeContext);
     }
-    
-    const response = await withRateLimitAndRetries(() => 
-      ai.models.generateContent({
-        model: validatedModel,
-        contents: prompt,
-        config: config,
-      }), `operator response from ${operator.nickname}`
-    );
-    
-    const result = extractTextFromResponse(response);
-    aiDebug.log(`Successfully generated operator response: "${result}"`);
+
+    let result: string;
+    try {
+      const config: any = {
+        systemInstruction: getOperatorSystemInstruction(requestingUser, operator),
+        temperature: 0.8, // Higher temperature for more varied responses
+        maxOutputTokens: tokenLimit,
+      };
+      
+      // Some models require thinking mode with a budget
+      if (validatedModel.includes('2.5') || validatedModel.includes('pro')) {
+        config.thinkingConfig = { thinkingBudget: 1000 };
+        config.maxOutputTokens = Math.max(tokenLimit, 1000);
+        aiDebug.log(`Using thinking mode with budget 1000 for operator response model: ${validatedModel}`);
+      }
+      
+      const response = await withRateLimitAndRetries(() =>
+        ai.models.generateContent({
+          model: validatedModel,
+          contents: prompt,
+          config: config,
+        }), `operator response from ${operator.nickname}`
+      );
+      
+      result = extractTextFromResponse(response);
+      aiDebug.log(`Successfully generated operator response: "${result}"`);
+    } catch (apiError) {
+      aiDebug.warn(`API call failed, using fallback response for operator response from ${operator.nickname}:`, apiError);
+      result = `${operator.nickname}: I'm unable to process that request right now. Please try again later.`; // Fallback for operator
+      aiDebug.log(`Using fallback operator response: "${result}"`);
+    } finally {
+      // Update the typing message with the actual response or remove it
+      if (typingMessageId && updateMessageInContext && activeContext) {
+        updateMessageInContext({
+          id: typingMessageId,
+          nickname: operator.nickname,
+          content: result || '', // Use generated result or empty string
+          timestamp: new Date(),
+          type: 'ai',
+          isTyping: false
+        }, activeContext);
+      }
+    }
     return result;
   } catch (error) {
     aiDebug.error(`Error generating operator response from ${operator.nickname}:`, {
@@ -2264,7 +2428,8 @@ Provide the output in JSON format.
             model: validatedModel,
             contents: prompt,
             config: config,
-          }), `batch user generation (${count} users)`
+          }), `batch user generation (${count} users)`,
+          { maxRetries: 1, initialBackoffMs: 500 }
     );
 
     aiDebug.log(` Successfully received response from Gemini for batch user generation`);
@@ -2427,7 +2592,8 @@ Provide the output in JSON format.
                     model: validatedModel,
                     contents: prompt,
                     config: config,
-                }), `world configuration generation`
+                }), `world configuration generation`,
+                { maxRetries: 1, initialBackoffMs: 500 }
     );
 
     const jsonString = extractTextFromResponse(response);
@@ -2706,4 +2872,158 @@ export const getModelInfo = async (modelId: string): Promise<GeminiModel> => {
         aiDebug.error(`❌ Error fetching model info for ${modelId}:`, error);
         throw new Error(`Failed to fetch model info: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+};
+
+/**
+ * Generates a single, unique username based on a given style.
+ * @param style The style of the username (e.g., 'tech', 'gaming').
+ * @param avoidDuplicates A list of existing usernames to avoid.
+ * @returns A promise that resolves to a unique username.
+ */
+export const generateUsername = async (
+  style: string,
+  avoidDuplicates: string[] = []
+): Promise<string> => {
+  aiDebug.log(`generateUsername called with style: ${style}`);
+  const prompt = `Generate a single, unique, creative, lowercase username for an IRC chat.
+  Style: ${style}.
+  Avoid these names: ${avoidDuplicates.join(', ')}.
+  Respond with only the username.`;
+
+  try {
+    const response = await withRateLimitAndRetries(() =>
+      ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+          maxOutputTokens: 20,
+          temperature: 1.0,
+        }
+      }), `username generation for style ${style}`
+    );
+    const username = extractTextFromResponse(response).trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+    aiDebug.log(`Successfully generated username: "${username}"`);
+    return username;
+  } catch (error) {
+    aiDebug.error(`Error generating username for style ${style}:`, error);
+    // Fallback to a simple random generator
+    const prefixes = ['user', 'nick', 'chat', 'bot'];
+    const randomPart = Math.random().toString(36).substring(2, 8);
+    return `${prefixes[Math.floor(Math.random() * prefixes.length)]}_${randomPart}`;
+  }
+};
+
+/**
+ * Translates a personality description into a target language using the Gemini AI model.
+ * @param personality The personality description to translate.
+ * @param language The target language for the translation.
+ * @returns A promise that resolves to the translated personality description.
+ */
+export async function generateTranslatedPersonality(personality: string, language: string): Promise<string> {
+  aiDebug.log(`generateTranslatedPersonality called for language: ${language}`);
+
+  const prompt = `Translate the following personality description into ${language}, keeping the core traits and nuances intact: ${personality}`;
+
+  try {
+    const response = await withRateLimitAndRetries(() =>
+      ai.models.generateContent({
+        model: 'gemini-2.5-flash', // Using a fast model for translation
+        contents: prompt,
+      }), `personality translation to ${language}`
+    );
+
+    const translatedText = extractTextFromResponse(response);
+    aiDebug.log(`Successfully translated personality to ${language}: "${translatedText}"`);
+    return translatedText;
+  } catch (error) {
+    aiDebug.error(`Error translating personality to ${language}:`, {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      language: language,
+      personality: personality
+    });
+    // Fallback to original personality if translation fails
+    return personality;
+  }
+}
+
+export const generatePersonalityFromTraits = async (
+  traits: string[],
+  language: string,
+  model: string = 'gemini-2.5-flash'
+): Promise<string> => {
+  aiDebug.log(`generatePersonalityFromTraits called for language: ${language}`);
+  const validatedModel = validateModelId(model);
+
+  const prompt = `Generate a detailed, 500-character personality description in ${language} based on these traits: ${traits.join(', ')}.
+  The description should be rich, nuanced, and feel like a real person.
+  Include cultural context, hobbies, quirks, and communication style.
+  CRITICAL: Respond ONLY in ${language}.`;
+
+  try {
+    const response = await withRateLimitAndRetries(() =>
+      ai.models.generateContent({
+        model: validatedModel,
+        contents: prompt,
+      }), `personality generation from traits in ${language}`
+    );
+
+    const personality = extractTextFromResponse(response);
+    aiDebug.log(`Successfully generated personality from traits in ${language}: "${personality}"`);
+    return personality;
+  } catch (error) {
+    aiDebug.error(`Error generating personality from traits in ${language}:`, {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      language: language,
+      traits: traits
+    });
+    // Fallback to a simple combination of traits
+    return `A person who is ${traits.join(', ')}.`;
+  }
+};
+
+export const generateInCharacterComment = async (
+  user: User,
+  analysis: string,
+  model: string = 'gemini-2.5-flash'
+): Promise<string> => {
+  const validatedModel = validateModelId(model);
+  const writingStyle = safeGetUserProperty(user, 'writingStyle');
+  const userLanguages = getAllLanguages(user.languageSkills);
+  const primaryLanguage = userLanguages[0] || 'English';
+
+  const prompt = `
+You are roleplaying as an IRC user named '${user.nickname}'.
+Your personality is: ${user.personality}.
+
+You have just analyzed an image or audio file and the result of the analysis is:
+"${analysis}"
+
+Based on this analysis, generate a natural, in-character comment.
+The comment must be a single line containing ONLY the message content.
+
+CRITICAL: Respond ONLY in ${primaryLanguage}.
+
+Your writing style:
+- Formality: ${writingStyle.formality}
+- Verbosity: ${writingStyle.verbosity}
+- Humor: ${writingStyle.humor}
+- Emoji usage: ${writingStyle.emojiUsage}
+- Punctuation: ${writingStyle.punctuation}
+`;
+
+  try {
+    const response = await withRateLimitAndRetries(() =>
+      ai.models.generateContent({
+        model: validatedModel,
+        contents: prompt,
+      }), `in-character comment from ${user.nickname}`
+    );
+    const result = extractTextFromResponse(response);
+    return result;
+  } catch (error) {
+    aiDebug.error(`Error generating in-character comment from ${user.nickname}:`, error);
+    return getFallbackResponse(user, 'reaction', analysis);
+  }
 };

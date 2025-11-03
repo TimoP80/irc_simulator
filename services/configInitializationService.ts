@@ -1,5 +1,5 @@
-import { AppConfig } from '../types';
-import { DEFAULT_NICKNAME, DEFAULT_TYPING_DELAY, DEFAULT_TYPING_INDICATOR } from '../constants';
+import { AppConfig } from '../types.js';
+import { DEFAULT_NICKNAME, DEFAULT_TYPING_DELAY, DEFAULT_TYPING_INDICATOR } from '../constants.js';
 
 /**
  * Configuration initialization service for executable builds

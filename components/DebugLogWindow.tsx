@@ -33,19 +33,6 @@ export const DebugLogWindow: React.FC<DebugLogWindowProps> = ({ isOpen, onClose 
     debug: typeof console.debug;
   } | null>(null);
 
-  // Process queued logs to avoid setState during render
-  useEffect(() => {
-    if (logQueueRef.current.length > 0) {
-      const newLogs = [...logQueueRef.current];
-      logQueueRef.current = [];
-      
-      setLogs(prev => {
-        const combined = [...prev, ...newLogs];
-        return combined.slice(-maxLogs); // Keep only the last maxLogs entries
-      });
-    }
-  }, [maxLogs]);
-
   // Capture console logs using a more React-friendly approach
   useEffect(() => {
     if (!isOpen) return;
@@ -60,7 +47,7 @@ export const DebugLogWindow: React.FC<DebugLogWindowProps> = ({ isOpen, onClose 
     };
 
     const captureLog = (level: 'debug' | 'info' | 'warn' | 'error', args: any[]) => {
-      const message = args.map(arg => 
+      const message = args.map(arg =>
         typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
       ).join(' ');
 
@@ -120,24 +107,20 @@ export const DebugLogWindow: React.FC<DebugLogWindowProps> = ({ isOpen, onClose 
     };
   }, [isOpen, maxLogs]);
 
-  // Process queued logs asynchronously to avoid setState during render
+  // Process queued logs periodically to ensure they appear in the UI
   useEffect(() => {
-    const processLogs = () => {
+    const intervalId = setInterval(() => {
       if (logQueueRef.current.length > 0) {
         const newLogs = [...logQueueRef.current];
         logQueueRef.current = [];
-        
         setLogs(prev => {
           const combined = [...prev, ...newLogs];
           return combined.slice(-maxLogs);
         });
       }
-    };
+    }, 300); // Process logs every 300ms
 
-    // Process logs on next tick to avoid setState during render
-    const timeoutId = setTimeout(processLogs, 0);
-    
-    return () => clearTimeout(timeoutId);
+    return () => clearInterval(intervalId);
   }, [maxLogs]);
 
   // Auto-scroll to bottom
@@ -284,7 +267,7 @@ export const DebugLogWindow: React.FC<DebugLogWindowProps> = ({ isOpen, onClose 
           </div>
         </div>
 
-        {/* Logs */}
+        {/* Log Entries */}
         <div className="flex-1 overflow-y-auto p-4 font-mono text-sm">
           {filteredLogs.length === 0 ? (
             <div className="text-gray-500 text-center py-8">No logs to display</div>

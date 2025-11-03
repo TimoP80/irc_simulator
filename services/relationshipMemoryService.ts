@@ -1,5 +1,5 @@
-import type { User, UserRelationship, UserRelationshipMemory, InteractionRecord, Message } from '../types';
-import { aiDebug } from '../utils/debugLogger';
+import type { User, UserRelationship, UserRelationshipMemory, InteractionRecord, Message } from '../types.js';
+import { aiDebug } from '../utils/debugLogger.js';
 
 /**
  * Service for managing AI user relationship memory across channels
@@ -141,9 +141,12 @@ export const updateRelationshipMemory = (
 const calculateRelationshipLevel = (relationship: UserRelationship): UserRelationship['relationshipLevel'] => {
   const { interactionCount, lastInteraction, firstMet } = relationship;
   
+  // Debugging: Log the type and value of firstMet
+  aiDebug.log(`[calculateRelationshipLevel] firstMet value: ${firstMet}, type: ${typeof firstMet}`);
+
   // Ensure dates are Date objects (they might be strings from storage)
-  const firstMetDate = firstMet instanceof Date ? firstMet : new Date(firstMet);
-  const lastInteractionDate = lastInteraction instanceof Date ? lastInteraction : new Date(lastInteraction);
+  const firstMetDate = new Date(firstMet);
+  const lastInteractionDate = new Date(lastInteraction);
   
   // Calculate days since first meeting
   const daysSinceFirstMet = Math.floor((Date.now() - firstMetDate.getTime()) / (1000 * 60 * 60 * 24));
@@ -262,11 +265,12 @@ export const getRelationshipContext = (
   
   // Time context
   // Ensure lastInteraction is a Date object before calling getTime()
-  const lastInteractionDate = relationship.lastInteraction instanceof Date 
-    ? relationship.lastInteraction 
-    : new Date(relationship.lastInteraction);
+  // Ensure lastInteraction is a valid Date object before calling getTime()
+  if (typeof relationship.lastInteraction === 'string') {
+    relationship.lastInteraction = new Date(relationship.lastInteraction);
+  }
   
-  const daysSinceLastInteraction = Math.floor((Date.now() - lastInteractionDate.getTime()) / (1000 * 60 * 60 * 24));
+  const daysSinceLastInteraction = Math.floor((Date.now() - relationship.lastInteraction.getTime()) / (1000 * 60 * 60 * 24));
   if (daysSinceLastInteraction > 0) {
     context.push(`Last interaction: ${daysSinceLastInteraction} day${daysSinceLastInteraction > 1 ? 's' : ''} ago`);
   } else {
@@ -301,7 +305,7 @@ export const getRelationshipSummary = (user: User): string => {
 
   const relationships = Object.values(memory.relationships);
   const summary = relationships.map(rel => 
-    `${rel.nickname}: ${rel.relationshipLevel} (${rel.interactionCount} interactions)`
+    `${(rel as UserRelationship).nickname}: ${(rel as UserRelationship).relationshipLevel} (${(rel as UserRelationship).interactionCount} interactions)`
   ).join(', ');
 
   return summary || 'No relationships tracked';

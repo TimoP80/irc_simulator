@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, isLegacyFormat } from '../types';
 import { PERSONALITY_TEMPLATES, generateRandomUser, generateRandomUserAsync, TRAIT_POOLS } from '../utils/personalityTemplates';
-import { generateBatchUsers } from '../services/geminiService';
+import { generateBatchUsers, generateTranslatedPersonality, generatePersonalityFromTraits, generateUsername } from '../services/geminiService';
 // usernameGeneration functions are imported dynamically to avoid mixed import warnings
 
 // Local username categories to avoid dynamic import issues
@@ -168,8 +168,8 @@ export const BatchUserModal: React.FC<BatchUserModalProps> = ({
               languageSkills = {
                 languages: template.baseUser.languageSkills.languages.map(lang => ({
                   language: lang,
-                  fluency: template.baseUser.languageSkills!.fluency,
-                  accent: template.baseUser.languageSkills!.accent || ''
+                  fluency: 'native',
+                  accent: ''
                 }))
               };
             } else {
@@ -186,13 +186,14 @@ export const BatchUserModal: React.FC<BatchUserModalProps> = ({
           user = {
             nickname: aiUsernames[i] || generateUniqueNickname(usedNicknames),
             status: 'online',
+            userType: 'virtual',
             personality: template.baseUser.personality || '',
             languageSkills,
             writingStyle: template.baseUser.writingStyle || {
               formality: 'casual',
               verbosity: 'moderate',
-              humor: 'light',
-              emojiUsage: 'minimal',
+              humor: 'mild',
+              emojiUsage: 'rare',
               punctuation: 'standard'
             }
           };
@@ -210,15 +211,31 @@ export const BatchUserModal: React.FC<BatchUserModalProps> = ({
       if (randomizationSettings.randomizePersonality) {
         const randomPersonality = TRAIT_POOLS.personalities[Math.floor(Math.random() * TRAIT_POOLS.personalities.length)];
         const randomInterest = TRAIT_POOLS.interests[Math.floor(Math.random() * TRAIT_POOLS.interests.length)];
-        user.personality = `${randomPersonality}, interested in ${randomInterest}`;
+        let basePersonality = `${randomPersonality}, interested in ${randomInterest}`;
+
+        // Generate multilingual personality if enabled
+        if (multilingualPersonalities && personalityLanguage) {
+          try {
+            basePersonality = await generatePersonalityFromTraits(
+              [randomPersonality, randomInterest],
+              personalityLanguage,
+              aiModel
+            );
+          } catch (error) {
+            console.error('Failed to generate multilingual personality:', error);
+            // Fallback to English
+            basePersonality = `${randomPersonality}, interested in ${randomInterest}`;
+          }
+        }
+        user.personality = basePersonality;
       }
 
       if (randomizationSettings.randomizeWritingStyle) {
-        const formalityLevels = ['casual', 'formal', 'mixed'] as const;
-        const verbosityLevels = ['concise', 'moderate', 'verbose'] as const;
-        const humorLevels = ['none', 'light', 'heavy'] as const;
-        const emojiLevels = ['none', 'minimal', 'frequent'] as const;
-        const punctuationLevels = ['minimal', 'standard', 'excessive'] as const;
+        const formalityLevels = ['casual', 'formal', 'semi_formal'] as const;
+        const verbosityLevels = ['brief', 'moderate', 'verbose'] as const;
+        const humorLevels = ['none', 'mild', 'moderate'] as const;
+        const emojiLevels = ['none', 'rare', 'frequent'] as const;
+        const punctuationLevels = ['minimal', 'standard', 'expressive'] as const;
 
         user.writingStyle = {
           formality: formalityLevels[Math.floor(Math.random() * formalityLevels.length)],
@@ -257,7 +274,9 @@ export const BatchUserModal: React.FC<BatchUserModalProps> = ({
         const randomAccent = TRAIT_POOLS.accents[Math.floor(Math.random() * TRAIT_POOLS.accents.length)];
         // Apply accent to the first language
         if (user.languageSkills.languages.length > 0) {
-          user.languageSkills.languages[0].accent = randomAccent;
+          if (user.languageSkills && 'languages' in user.languageSkills && typeof user.languageSkills.languages[0] === 'object') {
+            user.languageSkills.languages[0].accent = randomAccent;
+          }
         }
       }
 
@@ -595,14 +614,14 @@ export const BatchUserModal: React.FC<BatchUserModalProps> = ({
                     <div className="flex items-center gap-2 mb-2">
                       <span className="font-semibold text-white">{user.nickname}</span>
                       <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-900 text-blue-200">
-                        {user.languageSkills.fluency}
+                        {user.languageSkills && 'fluency' in user.languageSkills ? user.languageSkills.fluency : 'native'}
                       </span>
                     </div>
                     <p className="text-gray-300 text-sm mb-2">{user.personality}</p>
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <div>
                         <span className="text-gray-400">Languages:</span>
-                        <p className="text-gray-300">{user.languageSkills.languages.join(', ')}</p>
+                        <p className="text-gray-300">{(user.languageSkills && 'languages' in user.languageSkills && Array.isArray(user.languageSkills.languages)) ? (user.languageSkills.languages as any[]).map(l => typeof l === 'string' ? l : l.language).join(', ') : 'English'}</p>
                       </div>
                       <div>
                         <span className="text-gray-400">Style:</span>

@@ -1,40 +1,71 @@
-const { spawn } = require('child_process');
-const path = require('path');
+import { spawn } from 'child_process';
+import { fileURLToPath } from 'url';
+import path from 'path';
 
 // Build script for Electron
-async function buildElectron() {
+export async function buildElectron() {
   console.log('🔨 Building Electron application...');
   
-  // Step 1: Build the React app
-  console.log('📦 Building React application...');
-  await runCommand('npm', ['run', 'build']);
+  // The Vite app and Electron main process are expected to be built already
+  // by the 'npm run build' command. This script handles the packaging.
+  console.log('📦 Packaging with electron-builder...');
+  await runCommand('npx', ['electron-builder']);
   
-  // Step 2: Compile Electron main process
-  console.log('⚡ Compiling Electron main process...');
-  await runCommand('npx', ['tsc', '-p', 'tsconfig.electron.json']);
-  
-  console.log('✅ Electron build complete!');
+  console.log('✅ Electron packaging complete!');
 }
 
 function runCommand(command, args) {
   return new Promise((resolve, reject) => {
-    const process = spawn(command, args, {
-      stdio: 'inherit',
+    console.log(`🚀 Running command: ${command} ${args.join(' ')}`);
+    
+    const childProcess = spawn(command, args, {
+      stdio: 'pipe', // Changed to pipe to capture output
       shell: true
     });
+
+    let stdout = '';
+    let stderr = '';
+
+    childProcess.stdout.on('data', (data) => {
+      const output = data.toString();
+      console.log(output);
+      stdout += output;
+    });
+
+    childProcess.stderr.on('data', (data) => {
+      const output = data.toString();
+      console.error(output); // Log stderr immediately
+      stderr += output;
+    });
     
-    process.on('close', (code) => {
+    childProcess.on('close', (code) => {
+      console.log(`🎉 Command finished with code ${code}`);
       if (code === 0) {
-        resolve();
+        resolve(stdout);
       } else {
-        reject(new Error(`Command failed with code ${code}`));
+        const error = new Error(`Command failed with code ${code}\n\nStderr:\n${stderr}\n\nStdout:\n${stdout}`);
+        reject(error);
       }
+    });
+
+    childProcess.on('error', (err) => {
+      console.error('‼️ Spawn error:', err);
+      reject(err);
     });
   });
 }
 
-if (require.main === module) {
-  buildElectron().catch(console.error);
-}
+// This allows the script to be run directly
+// This allows the script to be run directly
+const currentFile = fileURLToPath(import.meta.url);
+const scriptPath = path.resolve(process.argv[1]);
 
-module.exports = { buildElectron };
+// A more robust check for direct execution
+const isRunningDirectly = currentFile.toLowerCase() === scriptPath.toLowerCase();
+
+if (isRunningDirectly) {
+  buildElectron().catch(error => {
+    console.error('‼️ Build failed:', error);
+    process.exit(1);
+  });
+}

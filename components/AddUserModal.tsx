@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Channel, isPerLanguageFormat, isLegacyFormat, getWritingStyle, migrateWritingStyle } from '../types';
-import { generateRandomNicknameAsync } from '../utils/personalityTemplates';
+import { generateRandomNicknameAsync, generateRandomPersonality, PERSONALITY_TEMPLATES } from '../utils/personalityTemplates';
+import { generateTranslatedPersonality, generatePersonalityFromTraits } from '../services/geminiService';
 
 interface AddUserModalProps {
   isOpen: boolean;
@@ -43,6 +44,10 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
   });
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [isRandomizing, setIsRandomizing] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [isGeneratingFromTraits, setIsGeneratingFromTraits] = useState(false);
+  const [showTraitModal, setShowTraitModal] = useState(false);
+  const [traits, setTraits] = useState('');
   const [assignedChannels, setAssignedChannels] = useState<string[]>([]);
   const [pmProbability, setPmProbability] = useState<number>(25);
   const [profilePicture, setProfilePicture] = useState<string>('');
@@ -251,6 +256,50 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
     }
   };
 
+  const handleRandomizePersonality = () => {
+    const randomPersonality = generateRandomPersonality();
+    setPersonality(randomPersonality.description);
+    setErrors(prev => ({ ...prev, personality: '' }));
+  };
+
+  const handleTranslatePersonality = async () => {
+    if (!personality.trim()) {
+      setErrors(prev => ({ ...prev, personality: 'Cannot translate an empty personality.' }));
+      return;
+    }
+    setIsTranslating(true);
+    try {
+      const targetLanguage = languageSkills[0]?.language || 'English';
+      const translatedPersonality = await generateTranslatedPersonality(personality, targetLanguage);
+      setPersonality(translatedPersonality);
+      setErrors(prev => ({ ...prev, personality: '' }));
+    } catch (error) {
+      console.error('Failed to translate personality:', error);
+      setErrors(prev => ({ ...prev, personality: 'Translation failed. Please try again.' }));
+    } finally {
+      setIsTranslating(false);
+    }
+  };
+
+  const handleGenerateFromTraits = async () => {
+    if (!traits.trim()) {
+      return;
+    }
+    setIsGeneratingFromTraits(true);
+    try {
+      const targetLanguage = languageSkills[0]?.language || 'English';
+      const generatedPersonality = await generatePersonalityFromTraits(traits.split(',').map(t => t.trim()), targetLanguage);
+      setPersonality(generatedPersonality);
+      setShowTraitModal(false);
+      setTraits('');
+      setErrors(prev => ({ ...prev, personality: '' }));
+    } catch (error) {
+      console.error('Failed to generate personality from traits:', error);
+    } finally {
+      setIsGeneratingFromTraits(false);
+    }
+  };
+
   const handleCancel = () => {
     setNickname('');
     setPersonality('');
@@ -394,6 +443,69 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
                 placeholder="Describe this user's personality, interests, and how they should behave in chat. You can write in any language - the AI will understand multilingual descriptions..."
                 maxLength={500}
               />
+              <div className="flex justify-end gap-2 mt-2">
+                <select
+                  onChange={(e) => {
+                    const template = PERSONALITY_TEMPLATES.find(t => t.id === e.target.value);
+                    if (template) {
+                      setPersonality(template.baseUser.personality || '');
+                    }
+                  }}
+                  className="bg-gray-600 text-white rounded-lg px-4 py-2 text-sm font-semibold hover:bg-gray-500 transition-colors"
+                >
+                  <option value="">Select a personality template...</option>
+                  {PERSONALITY_TEMPLATES.map(template => (
+                    <option key={template.id} value={template.id}>
+                      {template.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={handleTranslatePersonality}
+                  disabled={isTranslating}
+                  className="bg-blue-600 hover:bg-blue-500 disabled:bg-blue-700 disabled:cursor-not-allowed text-white rounded-lg px-4 py-2 text-sm font-semibold transition-colors flex items-center gap-2"
+                  title="Translate the personality description into the user's primary language"
+                >
+                  {isTranslating ? (
+                    <>
+                      <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Translating...
+                    </>
+                  ) : (
+                    <>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m4 13-4-4-4 4M1 19h12a2 2 0 002-2V7a2 2 0 00-2-2H3a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                      Translate
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowTraitModal(true)}
+                  className="bg-teal-600 hover:bg-teal-500 text-white rounded-lg px-4 py-2 text-sm font-semibold transition-colors flex items-center gap-2"
+                  title="Generate a personality from a few traits"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.636-6.364l-.707-.707M12 21v-1m0-18a9 9 0 019 9h-1a8 8 0 00-8-8V3z" />
+                  </svg>
+                  Generate
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRandomizePersonality}
+                  className="bg-purple-600 hover:bg-purple-500 text-white rounded-lg px-4 py-2 text-sm font-semibold transition-colors flex items-center gap-2"
+                  title="Generate a random personality description"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Randomize
+                </button>
+              </div>
               {errors.personality && (
                 <p className="text-red-400 text-xs mt-1">{errors.personality}</p>
               )}
@@ -797,6 +909,31 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
             </button>
           </div>
         </form>
+        {showTraitModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70]">
+            <div className="bg-gray-700 rounded-lg p-6 w-full max-w-md">
+              <h4 className="text-lg font-bold text-white mb-4">Generate from Traits</h4>
+              <p className="text-gray-300 mb-4">Enter a few comma-separated traits (e.g., "shy, loves books, from Finland")</p>
+              <input
+                type="text"
+                value={traits}
+                onChange={(e) => setTraits(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-2 text-gray-200 mb-4"
+                placeholder="e.g., shy, loves books, from Finland"
+              />
+              <div className="flex justify-end gap-3">
+                <button onClick={() => setShowTraitModal(false)} className="bg-gray-600 text-white rounded-lg px-4 py-2">Cancel</button>
+                <button
+                  onClick={handleGenerateFromTraits}
+                  disabled={isGeneratingFromTraits}
+                  className="bg-teal-600 hover:bg-teal-500 disabled:bg-teal-700 text-white rounded-lg px-4 py-2 flex items-center gap-2"
+                >
+                  {isGeneratingFromTraits ? 'Generating...' : 'Generate'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

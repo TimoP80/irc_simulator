@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IRC Simulator Documentation</title>
+    <link rel="stylesheet" href="documentation_styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/default.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script>mermaid.initialize({startOnLoad:true});</script>
+</head>
+<body>
+    <h1>IRC Simulator Documentation</h1>
+
+    <div class="container">
+        <div class="section">
+            <h2>Introduction and Setup</h2>
+            
+            <h3>High-Level Overview</h3>
+            <p>The IRC Simulator is a powerful application designed to create realistic, AI-driven chat environments. It serves as a versatile tool for developers, researchers, and content creators to simulate dynamic conversations, test chatbot interactions, and generate training data. Key features include comprehensive user and channel management, AI-powered content generation using advanced models like Google's Gemini, and flexible data import/export capabilities.</p>
+
+            <h3>Getting Started</h3>
+            <p>Follow these steps to get the IRC Simulator up and running:</p>
+            <ol>
+                <li><strong>Download:</strong> Obtain the latest release of the application from the official repository or distribution channel.</li>
+                <li><strong>Installation:</strong> Run the installer for your operating system (e.g., Windows, macOS, Linux) and follow the on-screen instructions.</li>
+                <li><strong>Launch:</strong> Once installed, launch the IRC Simulator. The main interface will appear, ready for you to configure your first simulation.</li>
+                <li><strong>Basic Configuration:</strong> Use the settings panel to configure essential parameters, such as server details and initial user profiles.</li>
+            </ol>
+
+            <h3>Development Setup</h3>
+            <p>For developers who wish to contribute to the project or customize it, here is how to set up a local development environment:</p>
+            <ol>
+                <li><strong>Prerequisites:</strong> Ensure you have Node.js (which includes npm) and Git installed on your system.</li>
+                <li><strong>Clone the Repository:</strong>
+                    <pre><code class="language-bash">git clone https://github.com/your-repository/irc-simulator.git
+cd irc-simulator</code></pre>
+                </li>
+                <li><strong>Install Dependencies:</strong> Run the following command to install all the necessary project dependencies:
+                    <pre><code class="language-bash">npm install</code></pre>
+                </li>
+                <li><strong>Run the Development Server:</strong> To start the application in development mode with hot-reloading, use:
+                    <pre><code class="language-bash">npm run dev</code></pre>
+                </li>
+                <li><strong>Build the Application:</strong> To create a production build, run:
+                    <pre><code class="language-bash">npm run build</code></pre>
+                </li>
+            </ol>
+        </div>
+
+        <div class="section">
+            <h2>Core Features</h2>
+            <p>This document provides an overview of the features and components of the IRC Simulator, a powerful tool for simulating chat environments with AI-powered content generation.</p>
+        </div>
+
+        <div class="section">
+            <h2>User and Channel Management</h2>
+            <p>The simulator provides comprehensive tools for managing users and channels, allowing for the creation of realistic and dynamic chat environments.</p>
+            <ul>
+                <li><strong>User Management:</strong> Add, remove, and manage individual users with the <code>AddUserModal.tsx</code> and <code>UserList.tsx</code> components. Batch user operations are supported via <code>BatchUserModal.tsx</code>.</li>
+                <li><strong>Channel Management:</strong> Create and manage channels using <code>AddChannelModal.tsx</code> and <code>ChannelList.tsx</code>.</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>AI-Powered Content Generation</h2>
+            <p>The simulator leverages advanced AI services to generate dynamic and context-aware content, including text, images, and vision analysis.</p>
+            <ul>
+                <li><strong>Gemini Service:</strong> Integrates with Google's Gemini for sophisticated text and content generation (<code>geminiService.ts</code>).</li>
+                <li><strong>Image Generation:</strong> Dynamically generates images based on prompts or context (<code>imageGenerationService.ts</code>).</li>
+                <li><strong>Vision and Audio Analysis:</strong> Provides capabilities for analyzing visual and audio content within the simulation (<code>visionService.ts</code>, <code>audioService.ts</code>).</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>Chat Functionality</h2>
+            <p>The core of the application is a robust chat interface that supports real-time messaging and interaction.</p>
+            <ul>
+                <li><strong>Chat Window:</strong> The main chat interface is managed by the <code>ChatWindow.tsx</code> component, which displays messages and user interactions.</li>
+                <li><strong>Message Handling:</strong> Individual messages are rendered and managed by the <code>Message.tsx</code> component.</li>
+                <li><strong>Chat Logging:</strong> The <code>chatLogService.ts</code> handles the logging and retrieval of chat histories.</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>Data Import and Export</h2>
+            <p>The simulator supports flexible data management with options for importing and exporting chat logs, user data, and channel configurations.</p>
+            <ul>
+                <li><strong>Import/Export Modals:</strong> The <code>ImportExportModal.tsx</code> and <code>DataExportModal.tsx</code> components provide a user-friendly interface for managing data.</li>
+                <li><strong>IRC Export:</strong> Specific functionality for exporting data in IRC-compatible formats is available through <code>IRCExportSettings.tsx</code> and <code>ircExportService.ts</code>.</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>Network and Connection Management</h2>
+            <p>The application includes features for managing network connections and monitoring network users.</p>
+            <ul>
+                <li><strong>Network Connection:</strong> The <code>NetworkConnection.tsx</code> component handles the connection to the IRC server.</li>
+                <li><strong>Network Users:</strong> The <code>NetworkUsers.tsx</code> component displays a list of users currently connected to the network.</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>Settings and Configuration</h2>
+            <p>The simulator's behavior can be customized through a dedicated settings modal.</p>
+            <ul>
+                <li><strong>Settings Modal:</strong> The <code>SettingsModal.tsx</code> component allows users to configure various aspects of the application.</li>
+                <li><strong>Configuration Service:</strong> The <code>configInitializationService.ts</code> manages the loading and initialization of the application's configuration.</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>Component Documentation</h2>
+            <p>This section provides detailed documentation for each of the key components in the IRC Simulator.</p>
+
+            <h3>ChatWindow</h3>
+            <p><strong>Purpose:</strong> The main interface for displaying chat messages and user interactions.</p>
+            <p><strong>Props:</strong></p>
+            <ul>
+                <li><code>channel</code>: The currently active channel.</li>
+                <li><code>messages</code>: An array of message objects to be displayed.</li>
+                <li><code>users</code>: A list of users in the channel.</li>
+            </ul>
+            <p><strong>State:</strong></p>
+            <ul>
+                <li>Manages the input field for sending new messages.</li>
+            </ul>
+            <p><strong>Usage Example:</strong></p>
+            <pre><code class="language-jsx"><ChatWindow channel={activeChannel} messages={messageHistory} users={userList} /></code></pre>
+
+            <h3>UserList</h3>
+            <p><strong>Purpose:</strong> Displays a list of users in the current channel.</p>
+            <p><strong>Props:</strong></p>
+            <ul>
+                <li><code>users</code>: An array of user objects.</li>
+            </ul>
+            <p><strong>State:</strong></p>
+            <ul>
+                <li>None. This is primarily a display component.</li>
+            </ul>
+            <p><strong>Usage Example:</strong></p>
+            <pre><code class="language-jsx"><UserList users={channelUsers} /></code></pre>
+
+            <h3>BotManagement</h3>
+            <p><strong>Purpose:</strong> Provides an interface for managing AI bots in the simulation.</p>
+            <p><strong>Props:</strong></p>
+            <ul>
+                <li><code>bots</code>: A list of available bot profiles.</li>
+                <li><code>onAddBot</code>: A function to handle adding a new bot.</li>
+                <li><code>onRemoveBot</code>: A function to handle removing a bot.</li>
+            </ul>
+            <p><strong>State:</strong></p>
+            <ul>
+                <li>Manages the form for configuring and adding new bots.</li>
+            </ul>
+            <p><strong>Usage Example:</strong></p>
+            <pre><code class="language-jsx"><BotManagement bots={botList} onAddBot={handleAddBot} onRemoveBot={handleRemoveBot} /></code></pre>
+        </div>
+        <div class="section">
+            <h2>Advanced Guides</h2>
+            <p>This section provides advanced guides for extending and customizing the IRC Simulator.</p>
+
+            <h3>Adding New AI Services</h3>
+            <p>A guide on extending the application with new AI-powered services.</p>
+            <ol>
+                <li><strong>Create a new service file:</strong> Under the <code>/services</code> directory, create a new TypeScript file for your service (e.g., <code>newAIService.ts</code>).</li>
+                <li><strong>Define the service logic:</strong> Implement the core logic for interacting with the new AI API, including methods for sending requests and handling responses.</li>
+                <li><strong>Integrate with the application:</strong> Import and use your new service in the relevant components or other services where it's needed. For example, you might call it from <code>botService.ts</code> to add a new bot command.</li>
+            </ol>
+
+            <h3>UI Customization</h3>
+            <p>A tutorial on how to customize the user interface and application behavior.</p>
+            <ol>
+                <li><strong>Modify CSS styles:</strong> Adjust the styles in <code>src/index.css</code> to change the application's appearance. For more significant changes, you can modify the Tailwind CSS configuration in <code>tailwind.config.js</code>.</li>
+                <li><strong>Customize components:</strong> Edit the React components in the <code>/components</code> directory to change the layout and behavior of the UI.</li>
+                <li><strong>Add new themes:</strong> Implement a theme switcher by creating different CSS files and a mechanism to toggle between them.</li>
+            </ol>
+
+            <h3>Data Formats</h3>
+            <p>A reference for the data import/export formats, with examples.</p>
+            <p><strong>JSON Format:</strong></p>
+            <pre><code class="language-json">
+[
+  {
+    "channelName": "#example",
+    "topic": "Example channel topic",
+    "messages": [
+      {
+        "user": "user1",
+        "text": "Hello, world!",
+        "timestamp": "2023-10-27T10:00:00Z"
+      }
+    ]
+  }
+]
+            </code></pre>
+            <p><strong>CSV Format:</strong></p>
+            <pre><code class="language-csv">
+channelName,topic,userCount,messageCount
+#example,"Example channel topic",1,1
+            </code></pre>
+        </div>
+        <div class="section" id="system-architecture">
+            <h2>System Architecture Overview</h2>
+            <p>
+                This section provides an overview of the system architecture, including the project structure, data flow, and a visual diagram of the components and their interactions.
+            </p>
+
+            <h3>Architecture Description</h3>
+            <p>The project is organized into three main directories, each with a distinct role:</p>
+            <ul>
+                <li><strong><code>/components</code>:</strong> This directory contains all the UI components of the application. These are reusable React components responsible for rendering the user interface and capturing user interactions. Examples include the chat window, user management panels, and settings modals.</li>
+                <li><strong><code>/services</code>:</strong> This directory holds the core application logic. Services are responsible for handling business logic, managing application state, and interacting with external APIs or data sources. For instance, the <code>botService</code> manages bot interactions, while the <code>geminiService</code> interfaces with the Gemini API.</li>
+                <li><strong><code>/utils</code>:</strong> This directory contains utility functions and helper modules that are used across the application. These utilities provide common functionalities such as configuration management (<code>config.ts</code>), logging (<code>debugLogger.ts</code>), and data formatting (<code>textFormatter.ts</code>).</li>
+            </ul>
+
+            <h3>Data Flow</h3>
+            <p>
+                Data flows through the application in a structured manner, ensuring a clear separation of concerns:
+            </p>
+            <ol>
+                <li><strong>User Input:</strong> The process begins when a user interacts with a UI component in the <code>/components</code> directory (e.g., sending a message in the <code>ChatWindow</code>).</li>
+                <li><strong>Service Processing:</strong> The component calls a relevant service from the <code>/services</code> directory to handle the interaction. For example, the <code>botService</code> is invoked to process a user's message, which may in turn call other services like <code>geminiService</code> or <code>visionService</code> for more complex tasks.</li>
+                <li><strong>Utility Functions:</strong> Throughout the process, services may use functions from the <code>/utils</code> directory for tasks like logging, configuration access, or text formatting.</li>
+                <li><strong>UI Update:</strong> After the service has processed the data and updated the application state, the UI components re-render to reflect the changes, providing feedback to the user.</li>
+            </ol>
+
+            <h3>Architecture Diagram</h3>
+            <p>The following diagram illustrates the relationships between the different parts of the system.</p>
+            <div class="mermaid">
+                graph TD
+                    subgraph "UI Components"
+                        ChatWindow
+                        UserManagement
+                        BotManagement
+                        SettingsModal
+                    end
+
+                    subgraph "Application Services"
+                        botService
+                        geminiService
+                        visionService
+                        audioService
+                        configInitializationService
+                        chatLogService
+                    end
+
+                    subgraph "Core Utilities"
+                        config
+                        debugLogger
+                        importExport
+                        textFormatter
+                    end
+
+                    ChatWindow --> chatLogService
+                    UserManagement --> botService
+                    BotManagement --> botService
+                    SettingsModal --> configInitializationService
+
+                    botService --> geminiService
+                    botService --> visionService
+                    botService --> audioService
+
+                    configInitializationService --> config
+                    chatLogService --> importExport
+                    botService --> debugLogger
+                    geminiService --> textFormatter
+            </div>
+        </div>
+        <div class="section">
+            <h2>Service Documentation</h2>
+            <p>This section provides a complete reference for all services, explaining their public methods, parameters, and return values.</p>
+
+            <h3>botService</h3>
+            <p><strong>Purpose:</strong> Manages all bot-related functionalities, including command handling and response generation.</p>
+            <p><strong>Public Methods:</strong></p>
+            <ul>
+                <li><code>handleBotCommand(command, user, channelName, model, imageConfig)</code>: The core function for processing bot commands. It takes a command string and user details, and returns a message object with the bot's response. It can handle various commands like <code>!image</code>, <code>!weather</code>, <code>!info</code>, etc.</li>
+                <li><code>isBotCommand(content)</code>: A utility function that checks if a given message content is a bot command (i.e., starts with "!"). Returns a boolean.</li>
+                <li><code>getAvailableBotCommands()</code>: Returns an array of strings listing all available bot commands.</li>
+            </ul>
+
+            <h3>geminiService</h3>
+            <p><strong>Purpose:</strong> Handles all interactions with the Google Gemini API for AI-powered content generation.</p>
+            <p><strong>Public Methods:</strong></p>
+            <ul>
+                <li><code>generateChannelActivity(channel, currentUserNickname, model)</code>: Generates ambient, in-character chat messages for a given channel to create a lively environment.</li>
+                <li><code>generateReactionToMessage(channel, userMessage, currentUserNickname, model)</code>: Generates a realistic, in-character reaction from a virtual user to a specific message.</li>
+                <li><code>generatePrivateMessageResponse(conversation, userMessage, currentUserNickname, model)</code>: Generates a response for a private message conversation, maintaining context and character personality.</li>
+                <li><code>generateBatchUsers(count, model, options)</code>: Generates a specified number of unique virtual users with detailed personalities and writing styles.</li>
+                <li><code>listAvailableModels()</code>: Fetches and returns a list of all available Gemini models from the API.</li>
+            </ul>
+
+            <h3>configInitializationService</h3>
+            <p><strong>Purpose:</strong> Manages the loading, initialization, and saving of the application's configuration.</p>
+            <p><strong>Public Methods:</strong></p>
+            <ul>
+                <li><code>loadDefaultConfig(configPath)</code>: Loads the default application configuration from a JSON file.</li>
+                <li><code>createFallbackConfig()</code>: Creates a minimal, fallback configuration if no other configuration is available.</li>
+                <li><code>initializeConfig(savedConfig, configPath)</code>: The main entry point for configuration. It determines the best available configuration (saved, default, or fallback) and returns it.</li>
+                <li><code>saveConfig(config)</code>: Saves the provided configuration object to the user's local storage.</li>
+                <li><code>loadSavedConfig()</code>: Loads the configuration from the user's local storage, if available.</li>
+            </ul>
+        </div>
+        <div class="section">
+            <h2>Utilities Documentation</h2>
+            <p>This section provides an overview of the utility functions available in the IRC Simulator. These utilities offer a range of helper functions for common tasks such as data handling, text formatting, and logging.</p>
+
+            <h3>channelImportExport</h3>
+            <p><strong>Purpose:</strong> Manages the import and export of channel data in various formats, including CSV, JSON, and HTML. This utility is essential for backing up, restoring, and sharing channel configurations and chat logs.</p>
+            <p><strong>Key Functions:</strong></p>
+            <ul>
+                <li><code>exportChannelsToCSV(channels)</code>: Exports an array of channels to a CSV string, including basic information like name, topic, and user/message counts.</li>
+                <li><code>importChannelsFromCSV(csvContent)</code>: Imports channels from a CSV string, creating new channel objects based on the data.</li>
+                <li><code>exportChannelsToJSON(channels)</code>: Performs a full export of channel data, including all messages and user information, to a JSON string.</li>
+                <li><code>importChannelsFromJSON(jsonContent)</code>: Imports channels from a JSON string, reconstructing the full channel state, including message timestamps.</li>
+                <li><code>exportChannelToHTML(channel, currentUserNickname)</code>: Exports a single channel's chat log to a styled HTML file, highlighting messages from the current user.</li>
+                <li><code>exportAllChannelsToHTML(channels, currentUserNickname)</code>: Exports all channels' chat logs into a single, comprehensive HTML file.</li>
+            </ul>
+
+            <h3>textFormatter</h3>
+            <p><strong>Purpose:</strong> Provides functions for parsing and rendering IRC-style formatted text within the React application. It supports various formatting options, including bold, italics, underline, strikethrough, and colors.</p>
+            <p><strong>Key Functions:</strong></p>
+            <ul>
+                <li><code>parseFormattedText(text)</code>: Takes a string with IRC-style formatting and returns an array of React nodes, correctly styled for display.</li>
+                <li><code>hasFormatting(text)</code>: A helper function that checks if a given string contains any supported formatting codes.</li>
+                <li><code>stripFormatting(text)</code>: Removes all formatting markers from a string, returning plain text.</li>
+            </ul>
+
+            <h3>debugLogger</h3>
+            <p><strong>Purpose:</strong> A flexible and configurable logging utility for debugging the application. It allows for categorized logging with different log levels and can be enabled or disabled on the fly.</p>
+            <p><strong>Key Functions:</strong></p>
+            <ul>
+                <li><code>createDebugger(namespace)</code>: Creates a new logger instance with a specific namespace (e.g., 'station-v:main'). The returned object has methods for <code>log</code>, <code>warn</code>, <code>error</code>, and <code>debug</code>.</li>
+                <li><code>getDebugConfig()</code>: Returns the current logging configuration object.</li>
+                <li><code>updateDebugConfig(newConfig)</code>: Updates the logging configuration with new settings.</li>
+                <li><code>enableAllDebugLogging()</code> / <code>disableAllDebugLogging()</code>: Globally enables or disables all debug logging across the application.</li>
+            </ul>
+        </div>
+    </div>
+    <div class="footer">
+        <p>&copy; 2023 IRC Simulator. All rights reserved.</p>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script>hljs.highlightAll();</script>
+</body>
+</html>

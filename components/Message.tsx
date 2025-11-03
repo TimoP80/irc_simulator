@@ -28,7 +28,8 @@ const getUserColor = (nickname: string, currentUserNickname: string) => {
 };
 
 export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickname, user }) => {
-  const { nickname, content, timestamp, type, command, images, links, botCommand, quotedMessage } = message;
+  console.log(`[MessageEntry] Rendering message:`, message);
+  const { nickname, content, timestamp, type, command, images, links, botCommand, quotedMessage, attachments, audioAnalysis } = message;
   const time = new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   
   // Check if this is a bot message
@@ -77,6 +78,45 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
         {linkUrl}
       </a>
     ));
+  };
+
+  const renderAttachments = () => {
+    if (!attachments || attachments.length === 0) return null;
+
+    return (
+      <div className="my-2 flex flex-wrap gap-4">
+        {attachments.map((att, index) => (
+          <div key={`attachment-${index}`}>
+            {att.type === 'image' && (
+              <img
+                src={att.url}
+                alt={att.fileName || 'attached image'}
+                className="max-w-xs h-auto rounded border border-gray-600 cursor-pointer hover:opacity-80 transition-opacity"
+                onClick={() => window.open(att.url, '_blank')}
+                loading="lazy"
+              />
+            )}
+            {att.type === 'audio' && (
+              <div className="p-2 bg-gray-700 rounded">
+                <audio controls src={att.url} className="w-full" />
+                {att.fileName && <p className="text-xs text-gray-400 mt-1">{att.fileName}</p>}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const renderAudioAnalysis = () => {
+    if (!audioAnalysis) return null;
+
+    return (
+      <div className="my-2 p-2 bg-gray-700 border-l-2 border-blue-500 rounded">
+        <p className="text-xs text-gray-400 italic">Audio Analysis:</p>
+        <p className="text-sm text-gray-300">{audioAnalysis.transcript}</p>
+      </div>
+    );
   };
 
   // Helper function to render content with links, images, and text formatting
@@ -278,6 +318,7 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
           {renderImages()}
           {/* Render extracted links */}
           {renderLinks()}
+          {renderAttachments()}
         </div>
       </div>
     );
@@ -359,11 +400,15 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
                 {botCommand.toUpperCase()}
               </span>
             )}
-            {message.botResponse?.status === 'generating' && (
-              <span className="text-yellow-400 text-xs bg-yellow-900 px-2 py-0.5 rounded flex items-center gap-1">
-                <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
-                GENERATING
-              </span>
+            {message.isTyping && (
+              <div className="flex items-center gap-2">
+                <div className="flex space-x-1">
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                </div>
+                <span className="text-gray-400 italic text-sm">is typing...</span>
+              </div>
             )}
           </div>
           {/* Render quoted message if present */}
@@ -375,6 +420,7 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
           {renderImages()}
           {/* Render extracted links */}
           {renderLinks()}
+          {renderAttachments()}
         </div>
       </div>
     );
@@ -414,6 +460,8 @@ export const MessageEntry: React.FC<MessageProps> = ({ message, currentUserNickn
         {renderImages()}
         {/* Render extracted links */}
         {renderLinks()}
+        {renderAttachments()}
+        {renderAudioAnalysis()}
       </div>
     </div>
   );

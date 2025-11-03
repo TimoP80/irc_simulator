@@ -1,0 +1,791 @@
+{
+  "src/fallback.css": [
+    {
+      "selector": "*, *::before, *::after",
+      "properties": {
+        "box-sizing": "border-box",
+        "margin": "0",
+        "padding": "0"
+      }
+    },
+    {
+      "selector": "html, body",
+      "properties": {
+        "height": "100%",
+        "font-family": "'JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', \"Liberation Mono\", \"Courier New\", monospace",
+        "background-color": "#111827",
+        "color": "#e5e7eb",
+        "overflow-x": "hidden",
+        "-webkit-text-size-adjust": "100%",
+        "-webkit-tap-highlight-color": "transparent"
+      }
+    },
+    {
+      "selector": "#root",
+      "properties": {
+        "height": "100vh",
+        "width": "100vw",
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    },
+    {
+      "selector": ".flex",
+      "properties": {
+        "display": "flex"
+      }
+    },
+    {
+      "selector": ".flex-col",
+      "properties": {
+        "flex-direction": "column"
+      }
+    },
+    {
+      "selector": ".flex-row",
+      "properties": {
+        "flex-direction": "row"
+      }
+    },
+    {
+      "selector": ".flex-1",
+      "properties": {
+        "flex": "1"
+      }
+    },
+    {
+      "selector": ".flex-shrink-0",
+      "properties": {
+        "flex-shrink": "0"
+      }
+    },
+    {
+      "selector": ".items-center",
+      "properties": {
+        "align-items": "center"
+      }
+    },
+    {
+      "selector": ".items-start",
+      "properties": {
+        "align-items": "flex-start"
+      }
+    },
+    {
+      "selector": ".justify-between",
+      "properties": {
+        "justify-content": "space-between"
+      }
+    },
+    {
+      "selector": ".justify-center",
+      "properties": {
+        "justify-content": "center"
+      }
+    },
+    {
+      "selector": ".gap-2",
+      "properties": {
+        "gap": "0.5rem"
+      }
+    },
+    {
+      "selector": ".gap-3",
+      "properties": {
+        "gap": "0.75rem"
+      }
+    },
+    {
+      "selector": ".gap-4",
+      "properties": {
+        "gap": "1rem"
+      }
+    },
+    {
+      "selector": ".p-2",
+      "properties": {
+        "padding": "0.5rem"
+      }
+    },
+    {
+      "selector": ".p-3",
+      "properties": {
+        "padding": "0.75rem"
+      }
+    },
+    {
+      "selector": ".p-4",
+      "properties": {
+        "padding": "1rem"
+      }
+    },
+    {
+      "selector": ".px-3",
+      "properties": {
+        "padding-left": "0.75rem",
+        "padding-right": "0.75rem"
+      }
+    },
+    {
+      "selector": ".px-4",
+      "properties": {
+        "padding-left": "1rem",
+        "padding-right": "1rem"
+      }
+    },
+    {
+      "selector": ".py-2",
+      "properties": {
+        "padding-top": "0.5rem",
+        "padding-bottom": "0.5rem"
+      }
+    },
+    {
+      "selector": ".py-3",
+      "properties": {
+        "padding-top": "0.75rem",
+        "padding-bottom": "0.75rem"
+      }
+    },
+    {
+      "selector": ".mb-2",
+      "properties": {
+        "margin-bottom": "0.5rem"
+      }
+    },
+    {
+      "selector": ".mb-4",
+      "properties": {
+        "margin-bottom": "1rem"
+      }
+    },
+    {
+      "selector": ".ml-2",
+      "properties": {
+        "margin-left": "0.5rem"
+      }
+    },
+    {
+      "selector": ".mr-2",
+      "properties": {
+        "margin-right": "0.5rem"
+      }
+    },
+    {
+      "selector": ".w-full",
+      "properties": {
+        "width": "100%"
+      }
+    },
+    {
+      "selector": ".h-full",
+      "properties": {
+        "height": "100%"
+      }
+    },
+    {
+      "selector": ".min-h-0",
+      "properties": {
+        "min-height": "0"
+      }
+    },
+    {
+      "selector": ".max-w-md",
+      "properties": {
+        "max-width": "28rem"
+      }
+    },
+    {
+      "selector": ".text-white",
+      "properties": {
+        "color": "#ffffff"
+      }
+    },
+    {
+      "selector": ".text-gray-200",
+      "properties": {
+        "color": "#e5e7eb"
+      }
+    },
+    {
+      "selector": ".text-gray-300",
+      "properties": {
+        "color": "#d1d5db"
+      }
+    },
+    {
+      "selector": ".text-gray-400",
+      "properties": {
+        "color": "#9ca3af"
+      }
+    },
+    {
+      "selector": ".text-gray-500",
+      "properties": {
+        "color": "#6b7280"
+      }
+    },
+    {
+      "selector": ".text-blue-400",
+      "properties": {
+        "color": "#60a5fa"
+      }
+    },
+    {
+      "selector": ".text-green-400",
+      "properties": {
+        "color": "#4ade80"
+      }
+    },
+    {
+      "selector": ".text-red-400",
+      "properties": {
+        "color": "#f87171"
+      }
+    },
+    {
+      "selector": ".bg-gray-800",
+      "properties": {
+        "background-color": "#1f2937"
+      }
+    },
+    {
+      "selector": ".bg-gray-900",
+      "properties": {
+        "background-color": "#111827"
+      }
+    },
+    {
+      "selector": ".bg-blue-600",
+      "properties": {
+        "background-color": "#2563eb"
+      }
+    },
+    {
+      "selector": ".bg-blue-700",
+      "properties": {
+        "background-color": "#1d4ed8"
+      }
+    },
+    {
+      "selector": ".border",
+      "properties": {
+        "border-width": "1px"
+      }
+    },
+    {
+      "selector": ".border-gray-700",
+      "properties": {
+        "border-color": "#374151"
+      }
+    },
+    {
+      "selector": ".border-b",
+      "properties": {
+        "border-bottom-width": "1px"
+      }
+    },
+    {
+      "selector": ".rounded",
+      "properties": {
+        "border-radius": "0.25rem"
+      }
+    },
+    {
+      "selector": ".rounded-lg",
+      "properties": {
+        "border-radius": "0.5rem"
+      }
+    },
+    {
+      "selector": ".text-lg",
+      "properties": {
+        "font-size": "1.125rem",
+        "line-height": "1.75rem"
+      }
+    },
+    {
+      "selector": ".text-sm",
+      "properties": {
+        "font-size": "0.875rem",
+        "line-height": "1.25rem"
+      }
+    },
+    {
+      "selector": ".text-xs",
+      "properties": {
+        "font-size": "0.75rem",
+        "line-height": "1rem"
+      }
+    },
+    {
+      "selector": ".font-semibold",
+      "properties": {
+        "font-weight": "600"
+      }
+    },
+    {
+      "selector": ".font-medium",
+      "properties": {
+        "font-weight": "500"
+      }
+    },
+    {
+      "selector": ".truncate",
+      "properties": {
+        "overflow": "hidden",
+        "text-overflow": "ellipsis",
+        "white-space": "nowrap"
+      }
+    },
+    {
+      "selector": ".overflow-hidden",
+      "properties": {
+        "overflow": "hidden"
+      }
+    },
+    {
+      "selector": ".overflow-y-auto",
+      "properties": {
+        "overflow-y": "auto"
+      }
+    },
+    {
+      "selector": ".transition-colors",
+      "properties": {
+        "transition-property": "color, background-color, border-color",
+        "transition-timing-function": "cubic-bezier(0.4, 0, 0.2, 1)",
+        "transition-duration": "150ms"
+      }
+    },
+    {
+      "selector": ".hover\\:bg-gray-700:hover",
+      "properties": {
+        "background-color": "#374151"
+      }
+    },
+    {
+      "selector": ".hover\\:bg-blue-700:hover",
+      "properties": {
+        "background-color": "#1d4ed8"
+      }
+    },
+    {
+      "selector": ".hover\\:text-white:hover",
+      "properties": {
+        "color": "#ffffff"
+      }
+    },
+    {
+      "selector": ".focus\\:outline-none:focus",
+      "properties": {
+        "outline": "2px solid transparent",
+        "outline-offset": "2px"
+      }
+    },
+    {
+      "selector": ".focus\\:border-blue-500:focus",
+      "properties": {
+        "border-color": "#3b82f6"
+      }
+    },
+    {
+      "selector": ".placeholder-gray-400::placeholder",
+      "properties": {
+        "color": "#9ca3af"
+      }
+    },
+    {
+      "selector": ".irc-channel",
+      "properties": {
+        "background-color": "#1f2937",
+        "border": "1px solid #374151",
+        "border-radius": "0.5rem",
+        "padding": "1rem",
+        "margin-bottom": "0.5rem"
+      }
+    },
+    {
+      "selector": ".irc-channel-header",
+      "properties": {
+        "display": "flex",
+        "align-items": "center",
+        "justify-content": "space-between",
+        "padding": "0.75rem",
+        "border-bottom": "1px solid #374151",
+        "background-color": "#111827"
+      }
+    },
+    {
+      "selector": ".irc-channel-title",
+      "properties": {
+        "font-size": "1.125rem",
+        "font-weight": "600",
+        "color": "#ffffff",
+        "overflow": "hidden",
+        "text-overflow": "ellipsis",
+        "white-space": "nowrap"
+      }
+    },
+    {
+      "selector": ".irc-status-dot",
+      "properties": {
+        "width": "0.375rem",
+        "height": "0.375rem",
+        "background-color": "#4ade80",
+        "border-radius": "50%"
+      }
+    },
+    {
+      "selector": ".irc-message",
+      "properties": {
+        "padding": "0.5rem",
+        "border-bottom": "1px solid #374151"
+      }
+    },
+    {
+      "selector": ".irc-message:last-child",
+      "properties": {
+        "border-bottom": "none"
+      }
+    },
+    {
+      "selector": ".irc-message-nick",
+      "properties": {
+        "font-weight": "600",
+        "color": "#60a5fa"
+      }
+    },
+    {
+      "selector": ".irc-message-time",
+      "properties": {
+        "font-size": "0.75rem",
+        "color": "#6b7280"
+      }
+    },
+    {
+      "selector": ".irc-input",
+      "properties": {
+        "width": "100%",
+        "background-color": "#1f2937",
+        "border": "1px solid #374151",
+        "border-radius": "0.25rem",
+        "padding": "0.75rem",
+        "color": "#ffffff",
+        "font-family": "inherit"
+      }
+    },
+    {
+      "selector": ".irc-input:focus",
+      "properties": {
+        "outline": "none",
+        "border-color": "#3b82f6",
+        "box-shadow": "0 0 0 1px #3b82f6"
+      }
+    },
+    {
+      "selector": ".irc-input::placeholder",
+      "properties": {
+        "color": "#9ca3af"
+      }
+    },
+    {
+      "selector": ".irc-button",
+      "properties": {
+        "background-color": "#2563eb",
+        "color": "#ffffff",
+        "font-weight": "500",
+        "padding": "0.5rem 1rem",
+        "border-radius": "0.25rem",
+        "border": "none",
+        "cursor": "pointer",
+        "transition": "background-color 150ms"
+      }
+    },
+    {
+      "selector": ".irc-button:hover",
+      "properties": {
+        "background-color": "#1d4ed8"
+      }
+    },
+    {
+      "selector": ".irc-button-secondary",
+      "properties": {
+        "background-color": "#4b5563",
+        "color": "#ffffff",
+        "font-weight": "500",
+        "padding": "0.5rem 1rem",
+        "border-radius": "0.25rem",
+        "border": "none",
+        "cursor": "pointer",
+        "transition": "background-color 150ms"
+      }
+    },
+    {
+      "selector": ".irc-button-secondary:hover",
+      "properties": {
+        "background-color": "#374151"
+      }
+    },
+    {
+      "selector": ".irc-modal",
+      "properties": {
+        "position": "fixed",
+        "top": "0",
+        "left": "0",
+        "right": "0",
+        "bottom": "0",
+        "background-color": "rgba(0, 0, 0, 0.5)",
+        "display": "flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "z-index": "50"
+      }
+    },
+    {
+      "selector": ".irc-modal-content",
+      "properties": {
+        "background-color": "#1f2937",
+        "border": "1px solid #374151",
+        "border-radius": "0.5rem",
+        "padding": "1.5rem",
+        "max-width": "28rem",
+        "width": "100%",
+        "margin": "1rem"
+      }
+    },
+    {
+      "selector": ".irc-modal-title",
+      "properties": {
+        "font-size": "1.25rem",
+        "font-weight": "600",
+        "color": "#ffffff",
+        "margin-bottom": "1rem"
+      }
+    },
+    {
+      "selector": ".irc-form-group",
+      "properties": {
+        "margin-bottom": "1rem"
+      }
+    },
+    {
+      "selector": ".irc-form-label",
+      "properties": {
+        "display": "block",
+        "font-size": "0.875rem",
+        "font-weight": "500",
+        "color": "#d1d5db",
+        "margin-bottom": "0.5rem"
+      }
+    },
+    {
+      "selector": ".irc-form-input",
+      "properties": {
+        "width": "100%",
+        "background-color": "#374151",
+        "border": "1px solid #4b5563",
+        "border-radius": "0.25rem",
+        "padding": "0.75rem",
+        "color": "#ffffff",
+        "font-family": "inherit"
+      }
+    },
+    {
+      "selector": ".irc-form-input:focus",
+      "properties": {
+        "outline": "none",
+        "border-color": "#3b82f6",
+        "box-shadow": "0 0 0 1px #3b82f6"
+      }
+    },
+    {
+      "selector": ".irc-form-input::placeholder",
+      "properties": {
+        "color": "#9ca3af"
+      }
+    },
+    {
+      "selector": "@media (max-width: 768px)",
+      "rules": [
+        {
+          "selector": ".irc-input, .irc-form-input",
+          "properties": {
+            "font-size": "16px"
+          }
+        },
+        {
+          "selector": ".irc-button, .irc-button-secondary",
+          "properties": {
+            "min-height": "44px",
+            "min-width": "44px"
+          }
+        },
+        {
+          "selector": ".overflow-y-auto",
+          "properties": {
+            "-webkit-overflow-scrolling": "touch"
+          }
+        }
+      ]
+    },
+    {
+      "selector": ".irc-scrollbar",
+      "properties": {
+        "scrollbar-width": "thin",
+        "scrollbar-color": "#4b5563 #1f2937"
+      }
+    },
+    {
+      "selector": ".irc-scrollbar::-webkit-scrollbar",
+      "properties": {
+        "width": "6px"
+      }
+    },
+    {
+      "selector": ".irc-scrollbar::-webkit-scrollbar-track",
+      "properties": {
+        "background": "#1f2937"
+      }
+    },
+    {
+      "selector": ".irc-scrollbar::-webkit-scrollbar-thumb",
+      "properties": {
+        "background": "#4b5563",
+        "border-radius": "3px"
+      }
+    },
+    {
+      "selector": ".irc-scrollbar::-webkit-scrollbar-thumb:hover",
+      "properties": {
+        "background": "#6b7280"
+      }
+    },
+    {
+      "selector": ".electron-app",
+      "properties": {
+        "-webkit-app-region": "no-drag",
+        "user-select": "none"
+      }
+    },
+    {
+      "selector": ".electron-title-bar",
+      "properties": {
+        "-webkit-app-region": "drag",
+        "height": "32px",
+        "min-height": "32px"
+      }
+    },
+    {
+      "selector": ".electron-title-bar button,\r\n       .electron-title-bar div[onclick]",
+      "properties": {
+        "-webkit-app-region": "no-drag"
+      }
+    },
+    {
+      "selector": ".electron-menu",
+      "properties": {
+        "-webkit-app-region": "no-drag",
+        "height": "40px",
+        "min-height": "40px"
+      }
+    },
+    {
+      "selector": ".electron-title-bar .w-3",
+      "properties": {
+        "transition": "all 0.2s ease"
+      }
+    },
+    {
+      "selector": ".electron-title-bar .w-3:hover",
+      "properties": {
+        "transform": "scale(1.1)"
+      }
+    },
+    {
+      "selector": ".electron-app .flex-1",
+      "properties": {
+        "height": "calc(100vh - 32px)"
+      }
+    },
+    {
+      "selector": ".electron-app .electron-menu + .flex-1",
+      "properties": {
+        "height": "calc(100vh - 72px)"
+      }
+    },
+    {
+      "selector": ".electron-app .lg\\:flex",
+      "properties": {
+        "display": "flex !important"
+      }
+    },
+    {
+      "selector": ".electron-app .lg\\:block",
+      "properties": {
+        "display": "block !important"
+      }
+    },
+    {
+      "selector": ".electron-app .lg\\:hidden",
+      "properties": {
+        "display": "none !important"
+      }
+    },
+    {
+      "selector": ".electron-app .hover\\:bg-gray-700:hover",
+      "properties": {
+        "background-color": "#374151"
+      }
+    },
+    {
+      "selector": ".electron-app .hover\\:bg-blue-700:hover",
+      "properties": {
+        "background-color": "#1d4ed8"
+      }
+    },
+    {
+      "selector": ".electron-app .hover\\:text-white:hover",
+      "properties": {
+        "color": "#ffffff"
+      }
+    }
+  ],
+  "src/index.css": [
+    {
+      "selector": "@tailwind base;\r\n@tailwind components;\r\n@tailwind utilities;\r\n\r\n\r\n@layer base",
+      "properties": {
+        "@apply": "html, body {\r\n    bg-irc-bg text-irc-text font-mono;\r\n    overflow-x: hidden;\r\n  }\r\n  \r\n  #root {\r\n    @apply h-screen w-screen;\r\n  }"
+      }
+    },
+    {
+      "selector": "@layer components",
+      "properties": {
+        "@apply": ".irc-channel {\r\n    bg-gray-800 border border-gray-700 rounded-lg p-4 mb-2;\r\n  }\r\n  \r\n  .irc-channel-header {\r\n    @apply flex items-center justify-between p-3 border-b border-gray-700 bg-gray-900;\r\n  }\r\n  \r\n  .irc-channel-title {\r\n    @apply text-lg font-semibold text-white truncate;\r\n  }\r\n  \r\n  .irc-channel-status {\r\n    @apply flex items-center gap-2 text-xs text-gray-400;\r\n  }\r\n  \r\n  .irc-status-dot {\r\n    @apply w-1.5 h-1.5 bg-green-500 rounded-full;\r\n  }\r\n  \r\n  \r\n  .irc-message {\r\n    @apply p-2 border-b border-gray-700 last:border-b-0;\r\n  }\r\n  \r\n  .irc-message-header {\r\n    @apply flex items-center gap-2 mb-1;\r\n  }\r\n  \r\n  .irc-message-nick {\r\n    @apply font-semibold text-blue-400;\r\n  }\r\n  \r\n  .irc-message-time {\r\n    @apply text-xs text-gray-500;\r\n  }\r\n  \r\n  .irc-message-content {\r\n    @apply text-gray-200 break-words;\r\n  }\r\n  \r\n  \r\n  .irc-input {\r\n    @apply w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500;\r\n  }\r\n  \r\n  .irc-input:focus {\r\n    @apply ring-1 ring-blue-500;\r\n  }\r\n  \r\n  \r\n  .irc-button {\r\n    @apply bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded transition-colors duration-200;\r\n  }\r\n  \r\n  .irc-button-secondary {\r\n    @apply bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded transition-colors duration-200;\r\n  }\r\n  \r\n  .irc-button-danger {\r\n    @apply bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded transition-colors duration-200;\r\n  }\r\n  \r\n  \r\n  .irc-modal {\r\n    @apply fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50;\r\n  }\r\n  \r\n  .irc-modal-content {\r\n    @apply bg-gray-800 border border-gray-700 rounded-lg p-6 max-w-md w-full mx-4;\r\n  }\r\n  \r\n  .irc-modal-header {\r\n    @apply flex items-center justify-between mb-4;\r\n  }\r\n  \r\n  .irc-modal-title {\r\n    @apply text-xl font-semibold text-white;\r\n  }\r\n  \r\n  .irc-modal-close {\r\n    @apply text-gray-400 hover:text-white transition-colors;\r\n  }\r\n  \r\n  \r\n  .irc-form-group {\r\n    @apply mb-4;\r\n  }\r\n  \r\n  .irc-form-label {\r\n    @apply block text-sm font-medium text-gray-300 mb-2;\r\n  }\r\n  \r\n  .irc-form-input {\r\n    @apply w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500;\r\n  }\r\n  \r\n  .irc-form-select {\r\n    @apply w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500;\r\n  }\r\n  \r\n  .irc-form-textarea {\r\n    @apply w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 resize-none;\r\n  }\r\n  \r\n  \r\n  .irc-list {\r\n    @apply bg-gray-800 border border-gray-700 rounded-lg overflow-hidden;\r\n  }\r\n  \r\n  .irc-list-item {\r\n    @apply p-3 border-b border-gray-700 last:border-b-0 hover:bg-gray-700 transition-colors;\r\n  }\r\n  \r\n  .irc-list-item:last-child {\r\n    @apply border-b-0;\r\n  }\r\n  \r\n  \r\n  .irc-nav {\r\n    @apply bg-gray-900 border-b border-gray-700 p-4;\r\n  }\r\n  \r\n  .irc-nav-item {\r\n    @apply text-gray-300 hover:text-white transition-colors px-3 py-2 rounded;\r\n  }\r\n  \r\n  .irc-nav-item.active {\r\n    @apply bg-gray-700 text-white;\r\n  }\r\n  \r\n  \r\n  .irc-status-online {\r\n    @apply text-green-400;\r\n  }\r\n  \r\n  .irc-status-away {\r\n    @apply text-yellow-400;\r\n  }\r\n  \r\n  .irc-status-busy {\r\n    @apply text-red-400;\r\n  }\r\n  \r\n  .irc-status-offline {\r\n    @apply text-gray-400;\r\n  }\r\n  \r\n  \r\n  .irc-scrollbar {\r\n    scrollbar-width: thin;\r\n    scrollbar-color: #4b5563 #1f2937;\r\n  }\r\n  \r\n  .irc-scrollbar::-webkit-scrollbar {\r\n    width: 6px;\r\n  }\r\n  \r\n  .irc-scrollbar::-webkit-scrollbar-track {\r\n    background: #1f2937;\r\n  }\r\n  \r\n  .irc-scrollbar::-webkit-scrollbar-thumb {\r\n    background: #4b5563;\r\n    border-radius: 3px;\r\n  }\r\n  \r\n  .irc-scrollbar::-webkit-scrollbar-thumb:hover {\r\n    background: #6b7280;\r\n  }"
+      }
+    },
+    {
+      "selector": "@keyframes bounce-dot",
+      "steps": "0%, 80%, 100% { transform: translateY(0); }\r\n  40% { transform: translateY(-4px); }"
+    },
+    {
+      "selector": ".animate-bounce-dot",
+      "properties": {
+        "animation": "bounce-dot 1.4s infinite ease-in-out both"
+      }
+    },
+    {
+      "selector": "@layer utilities",
+      "properties": {
+        ".text-shadow {\r\n    text-shadow": "0 1px 2px rgba(0, 0, 0, 0.5)",
+        "}\r\n  \r\n  .bg-gradient-irc {\r\n    background": "linear-gradient(135deg, #111827 0%, #1f2937 100%)",
+        "}\r\n  \r\n  \r\n  @media (max-width": "768px) {\r\n    .irc-input, .irc-form-input, .irc-form-textarea {\r\n      font-size: 16px",
+        "}\r\n    \r\n    .irc-button, .irc-button-secondary, .irc-button-danger {\r\n      min-height": "44px",
+        "min-width": "44px",
+        "}\r\n    \r\n    .irc-scrollbar {\r\n      -webkit-overflow-scrolling": "touch",
+        "}\r\n  }\r\n  \r\n  \r\n  .electron-window {\r\n    -webkit-app-region": "no-drag",
+        "}\r\n  \r\n  .electron-drag {\r\n    -webkit-app-region": "drag"
+      }
+    }
+  ]
+}

@@ -23,7 +23,7 @@ interface ChannelListProps {
   recentlyAutoOpenedPM?: string | null;
 }
 
-export const ChannelList: React.FC<ChannelListProps> = ({ channels, privateMessageUsers, activeContext, onSelectContext, onChannelClick, onPMClick, onOpenSettings, onOpenChatLogs, onOpenChannelList, onResetSpeakers, onJoinChannel, onLeaveChannel, unreadChannels, unreadPMUsers, currentUserNickname, recentlyAutoOpenedPM }) => {
+export const ChannelList: React.FC<ChannelListProps> = ({ channels, privateMessageUsers, activeContext, onSelectContext, onChannelClick, onPMClick, onOpenSettings, onOpenChatLogs, onOpenChannelList, onResetSpeakers, onJoinChannel, onLeaveChannel, unreadChannels, unreadPMUsers, currentUserNickname, recentlyAutoOpenedPM, onOpenDocumentation }) => {
   const getButtonClass = (isActive: boolean) => 
     `w-full text-left px-4 py-2 text-sm truncate flex items-center gap-2 rounded-md transition-colors duration-150 ${
       isActive ? 'bg-indigo-500 text-white' : 'text-gray-300 hover:bg-gray-700'
@@ -173,8 +173,8 @@ export const ChannelList: React.FC<ChannelListProps> = ({ channels, privateMessa
           <span>Configure Simulation</span>
         </button>
         {onOpenChatLogs && (
-          <button 
-            onClick={onOpenChatLogs} 
+          <button
+            onClick={onOpenChatLogs}
             className="w-full flex items-center justify-center gap-2 px-4 py-3 lg:py-2 text-sm rounded-md transition-colors duration-150 bg-blue-700 text-blue-300 hover:bg-blue-600 active:bg-blue-500 touch-manipulation"
             aria-label="Open chat logs to view message history"
           >
@@ -182,6 +182,18 @@ export const ChannelList: React.FC<ChannelListProps> = ({ channels, privateMessa
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
             <span>Chat Logs</span>
+          </button>
+        )}
+        {onOpenDocumentation && (
+          <button
+            onClick={onOpenDocumentation}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 lg:py-2 text-sm rounded-md transition-colors duration-150 bg-green-700 text-green-300 hover:bg-green-600 active:bg-green-500 touch-manipulation"
+            aria-label="Open live documentation"
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v11.494m-9-5.747h18" />
+            </svg>
+            <span>Live Docs</span>
           </button>
         )}
         {onResetSpeakers && (

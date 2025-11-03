@@ -1,0 +1,469 @@
+{
+  "html": [
+    "lang"
+  ],
+  "head": [],
+  "meta": [
+    "charset",
+    "name",
+    "content",
+    "width",
+    "initial-scale"
+  ],
+  "title": [],
+  "style": [],
+  "body": [
+    "class"
+  ],
+  "h1": [
+    "style",
+    "className"
+  ],
+  "div": [
+    "class",
+    "id",
+    "style",
+    "className",
+    "onClick",
+    "key",
+    "data-message-id",
+    "data-index",
+    "ref",
+    "onMouseDown",
+    "title"
+  ],
+  "h2": [
+    "className"
+  ],
+  "p": [
+    "style",
+    "className"
+  ],
+  "ul": [
+    "className"
+  ],
+  "li": [
+    "key",
+    "onClick",
+    "className"
+  ],
+  "strong": [
+    "className"
+  ],
+  "code": [
+    "className"
+  ],
+  "link": [
+    "rel",
+    "href"
+  ],
+  "script": [
+    "type",
+    "src"
+  ],
+  "string": [],
+  "boolean": [],
+  "BroadcastChannel": [],
+  "Set": [],
+  "number": [],
+  "Record": [],
+  "AppConfig": [],
+  "any": [],
+  "message": [],
+  "action": [],
+  "channel": [],
+  "newnickname": [],
+  "username": [],
+  "img": [
+    "src",
+    "alt",
+    "style",
+    "className",
+    "onError",
+    "class",
+    "onclick",
+    "onerror",
+    "display",
+    "onClick",
+    "key"
+  ],
+  "span": [
+    "className",
+    "key",
+    "class",
+    "style"
+  ],
+  "button": [
+    "onClick",
+    "className",
+    "key",
+    "disabled",
+    "type",
+    "title",
+    "aria-label"
+  ],
+  "SettingsModal": [
+    "onSave",
+    "onCancel",
+    "currentChannels",
+    "onChannelsChange",
+    "currentUsers",
+    "onUsersChange",
+    "isBatchUserModalOpen",
+    "openModal",
+    "onImport"
+  ],
+  "ChatLogManager": [
+    "isOpen",
+    "onClose",
+    "currentChannel"
+  ],
+  "DebugLogWindow": [
+    "isOpen",
+    "onClose"
+  ],
+  "ChannelListModal": [
+    "isOpen",
+    "onClose"
+  ],
+  "AudioAnalysis": [
+    "onClose"
+  ],
+  "VisionAnalysis": [
+    "onClose"
+  ],
+  "MobileNavigation": [
+    "activePanel",
+    "onPanelChange",
+    "isMenuOpen",
+    "onMenuToggle"
+  ],
+  "ChannelList": [
+    "channels",
+    "privateMessageUsers",
+    "activeContext",
+    "onSelectContext",
+    "onChannelClick",
+    "onPMClick",
+    "onOpenSettings",
+    "onOpenChannelList"
+  ],
+  "UserList": [
+    "users",
+    "onUserClick",
+    "currentUserNickname",
+    "channel",
+    "onToggleOperator",
+    "unreadPMUsers",
+    "networkNickname",
+    "isNetworkConnected"
+  ],
+  "NetworkConnection": [
+    "onConnected",
+    "onUsersUpdate"
+  ],
+  "NetworkUsers": [
+    "users",
+    "currentChannel"
+  ],
+  "main": [
+    "className"
+  ],
+  "ChatWindow": [
+    "title",
+    "messages",
+    "onSendMessage",
+    "isLoading",
+    "currentUserNickname",
+    "typingUsers",
+    "channel",
+    "users",
+    "onClose",
+    "showCloseButton",
+    "typingIndicatorMode",
+    "isPrivateMessage",
+    "onQuoteMessage",
+    "onClearChat",
+    "virtualUsers"
+  ],
+  "h3": [
+    "className"
+  ],
+  "AddBotModalProps": [],
+  "label": [
+    "className",
+    "key",
+    "htmlFor"
+  ],
+  "input": [
+    "type",
+    "value",
+    "onChange",
+    "checked",
+    "id",
+    "min",
+    "max",
+    "ref",
+    "className",
+    "accept",
+    "placeholder",
+    "name",
+    "step"
+  ],
+  "textarea": [
+    "value",
+    "onChange",
+    "id",
+    "ref",
+    "onPaste",
+    "onKeyDown",
+    "placeholder",
+    "className",
+    "disabled",
+    "rows",
+    "style",
+    "onInput"
+  ],
+  "AddChannelModalProps": [],
+  "form": [
+    "onSubmit",
+    "className"
+  ],
+  "select": [
+    "id",
+    "value",
+    "onChange",
+    "name",
+    "className",
+    "disabled"
+  ],
+  "option": [
+    "value",
+    "key"
+  ],
+  "AddUserModalProps": [],
+  "Array": [],
+  "h4": [
+    "className"
+  ],
+  "svg": [
+    "className",
+    "fill",
+    "stroke",
+    "viewBox",
+    "xmlns",
+    "strokeWidth"
+  ],
+  "path": [
+    "strokeLinecap",
+    "strokeLinejoin",
+    "strokeWidth",
+    "d",
+    "fillRule",
+    "clipRule",
+    "className",
+    "fill"
+  ],
+  "h5": [
+    "className"
+  ],
+  "AudioAnalysisProps": [],
+  "User": [],
+  "MediaRecorder": [],
+  "Blob": [],
+  "audio": [
+    "src",
+    "className"
+  ],
+  "BatchUserModalProps": [],
+  "BotManagementProps": [],
+  "AddBotModal": [
+    "bot",
+    "onSave",
+    "onCancel"
+  ],
+  "ChannelImportExportModalProps": [],
+  "HTMLInputElement": [],
+  "ChannelListProps": [],
+  "aside": [
+    "className"
+  ],
+  "HashtagIcon": [
+    "className"
+  ],
+  "ProfilePicture": [
+    "user",
+    "size",
+    "className"
+  ],
+  "SettingsIcon": [
+    "className"
+  ],
+  "ChannelListModalProps": [],
+  "Channel": [],
+  "UserIcon": [
+    "className"
+  ],
+  "ChannelManagementProps": [],
+  "AddChannelModal": [
+    "isOpen",
+    "onClose",
+    "onAddChannel",
+    "onUpdateChannel",
+    "existingChannelNames"
+  ],
+  "ChannelImportExportModal": [
+    "isOpen",
+    "onClose",
+    "channels",
+    "onImportChannels"
+  ],
+  "ChatLogManagerProps": [],
+  "ChannelLog": [],
+  "ChatLogEntry": [],
+  "LogStats": [],
+  "a": [
+    "href",
+    "target",
+    "class",
+    "style",
+    "key",
+    "rel",
+    "className"
+  ],
+  "iframe": [
+    "srcDoc",
+    "className",
+    "title",
+    "sandbox"
+  ],
+  "ChatWindowProps": [],
+  "HTMLTextAreaElement": [],
+  "Message": [],
+  "Attachment": [],
+  "HTMLDivElement": [],
+  "File": [],
+  "header": [
+    "className"
+  ],
+  "XCircleIcon": [
+    "className"
+  ],
+  "MessageEntry": [
+    "message",
+    "currentUserNickname",
+    "user"
+  ],
+  "footer": [
+    "className"
+  ],
+  "EyeIcon": [
+    "className"
+  ],
+  "em": [
+    "className"
+  ],
+  "PaperclipIcon": [
+    "className"
+  ],
+  "SendIcon": [
+    "className"
+  ],
+  "DataExportModalProps": [],
+  "DebugLogWindowProps": [],
+  "DebugLogEntry": [],
+  "details": [
+    "className"
+  ],
+  "summary": [
+    "className"
+  ],
+  "pre": [
+    "className"
+  ],
+  "React": [],
+  "ImportExportModalProps": [],
+  "void": [],
+  "IRCExportSettingsProps": [],
+  "br": [],
+  "circle": [
+    "className",
+    "cx",
+    "cy",
+    "r",
+    "stroke",
+    "strokeWidth"
+  ],
+  "ol": [
+    "className"
+  ],
+  "MessageProps": [],
+  "MobileNavigationProps": [],
+  "XIcon": [
+    "className"
+  ],
+  "MenuIcon": [
+    "className"
+  ],
+  "Icon": [
+    "className"
+  ],
+  "WifiIcon": [
+    "className"
+  ],
+  "NetworkConnectionProps": [],
+  "NetworkConfig": [],
+  "NetworkUsersProps": [],
+  "ProfilePictureProps": [],
+  "SettingsModalProps": [],
+  "GeminiModel": [],
+  "typeof": [],
+  "UserManagement": [
+    "users",
+    "onUsersChange",
+    "aiModel",
+    "channels",
+    "currentUserNickname",
+    "onChannelsChange"
+  ],
+  "BotManagement": [
+    "users",
+    "onUsersChange",
+    "aiModel",
+    "channels",
+    "currentUserNickname",
+    "onChannelsChange"
+  ],
+  "ChannelManagement": [
+    "channels",
+    "onChannelsChange"
+  ],
+  "DataExportModal": [
+    "isOpen",
+    "onClose"
+  ],
+  "UserListProps": [],
+  "UserManagementProps": [],
+  "AddUserModal": [
+    "isOpen",
+    "onClose",
+    "onAddUser",
+    "onUpdateUser",
+    "existingNicknames"
+  ],
+  "BatchUserModal": [
+    "isOpen",
+    "onClose",
+    "onAddUsers",
+    "existingNicknames"
+  ],
+  "ImportExportModal": [
+    "isOpen",
+    "onClose",
+    "users",
+    "channels",
+    "currentUserNickname",
+    "onImportUsers"
+  ],
+  "VisionAnalysisProps": []
+}

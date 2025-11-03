@@ -14,7 +14,8 @@
     "server/",
     "node_modules/",
     "!node_modules/electron/dist/",
-    "default-config.json"
+    "default-config.json",
+    "electron-starter.cjs"
   ],
   "extraFiles": [
     {

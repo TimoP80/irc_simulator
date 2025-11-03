@@ -1,8 +1,9 @@
-
+e
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './src/index.css';
+import { ChatProvider } from './context/ChatProvider';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -11,4 +12,8 @@ if (!rootElement) {
 
 const root = ReactDOM.createRoot(rootElement);
 // Disable StrictMode for Electron to prevent double rendering issues
-root.render(<App />);
+root.render(
+  <ChatProvider>
+    <App />
+  </ChatProvider>
+);

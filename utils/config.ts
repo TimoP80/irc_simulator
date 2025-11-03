@@ -1,6 +1,6 @@
-import type { AppConfig, User, Channel } from '../types';
-import { DEFAULT_NICKNAME, DEFAULT_VIRTUAL_USERS, DEFAULT_CHANNELS, DEFAULT_TYPING_DELAY, DEFAULT_TYPING_INDICATOR } from '../constants';
-import { configInitService } from '../services/configInitializationService';
+import type { AppConfig, User, Channel } from '../types.js';
+import { DEFAULT_NICKNAME, DEFAULT_VIRTUAL_USERS, DEFAULT_CHANNELS, DEFAULT_TYPING_DELAY, DEFAULT_TYPING_INDICATOR } from '../constants.js';
+import { configInitService } from '../services/configInitializationService.js';
 
 const CONFIG_STORAGE_KEY = 'gemini-irc-simulator-config';
 const CHANNEL_LOGS_STORAGE_KEY = 'station-v-channel-logs';
@@ -153,27 +153,32 @@ const isNetworkError = (error: unknown): boolean => {
  * @returns The result of the API call.
  * @throws Throws an error if retries are exhausted or a non-rate-limit error occurs.
  */
-export const withRateLimitAndRetries = async <T>(apiCall: () => Promise<T>, context?: string): Promise<T> => {
+export const withRateLimitAndRetries = async <T>(
+  apiCall: () => Promise<T>,
+  context?: string,
+  options?: { maxRetries?: number; initialBackoffMs?: number }
+): Promise<T> => {
+  const maxRetries = options?.maxRetries ?? MAX_RETRIES;
+  const initialBackoffMs = options?.initialBackoffMs ?? INITIAL_BACKOFF_MS;
+
   let attempt = 0;
-  while (attempt <= MAX_RETRIES) {
+  while (attempt <= maxRetries) {
     try {
       return await apiCall();
     } catch (error) {
-      console.error(`[API Error] Attempt ${attempt + 1}/${MAX_RETRIES + 1} failed${context ? ` for ${context}` : ''}:`, error);
+      console.error(`[API Error] Attempt ${attempt + 1}/${maxRetries + 1} failed${context ? ` for ${context}` : ''}:`, error);
       
       if (isNetworkError(error)) {
         console.warn(`[API Error] Network/CORS error detected. This may be due to browser security policies.`);
-        // For network errors, we don't retry as they're likely persistent
         throw new Error(`Network error: Unable to connect to AI service. This may be due to CORS restrictions or network issues. Please check your internet connection and try again.`);
       }
       
-      if (isRateLimitError(error) && attempt < MAX_RETRIES) {
+      if (isRateLimitError(error) && attempt < maxRetries) {
         attempt++;
-        const delay = INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1) + Math.random() * 1000; // Add jitter
-        console.warn(`Rate limit hit. Retrying in ${Math.round(delay / 1000)}s... (Attempt ${attempt}/${MAX_RETRIES})`);
+        const delay = initialBackoffMs * Math.pow(2, attempt - 1) + Math.random() * 1000; // Add jitter
+        console.warn(`Rate limit hit. Retrying in ${Math.round(delay / 1000)}s... (Attempt ${attempt}/${maxRetries})`);
         await new Promise(resolve => setTimeout(resolve, delay));
       } else {
-        // Provide specific error messages for different types of errors
         if (error instanceof Error) {
           if (error.message.includes("RESOURCE_EXHAUSTED")) {
             throw new Error(`AI service quota exhausted. Please try again later or check your API key limits.`);
@@ -306,13 +311,13 @@ export const initializeStateFromConfig = (config: AppConfig) => {
         // Use saved channel objects to preserve user assignments
         channels = config.channelObjects.map(c => ({
             ...c,
-            users: c.users.map(user => 
+            users: c.users.map(user =>
                 user.nickname === DEFAULT_NICKNAME ? {
-                    nickname, 
+                    nickname,
                     status: 'online' as const,
                     personality: 'The human user',
                     userType: 'virtual' as const,
-                    languageSkills: { 
+                    languageSkills: {
                         languages: [{
                             language: 'English',
                             fluency: 'native' as const,
@@ -323,7 +328,27 @@ export const initializeStateFromConfig = (config: AppConfig) => {
                 } : user
             )
         }));
-    } else if (config.channels && config.channels.trim()) {
+    } else if (Array.isArray(config.channels)) { // Handle legacy format where channels might be an array
+        channels = config.channels.map(c => ({
+            ...c,
+            users: c.users.map(user =>
+                user.nickname === DEFAULT_NICKNAME ? {
+                    nickname,
+                    status: 'online' as const,
+                    personality: 'The human user',
+                    userType: 'virtual' as const,
+                    languageSkills: {
+                        languages: [{
+                            language: 'English',
+                            fluency: 'native' as const,
+                            accent: ''
+                        }]
+                    },
+                    writingStyle: { formality: 'casual' as const, verbosity: 'moderate' as const, humor: 'none' as const, emojiUsage: 'rare' as const, punctuation: 'standard' as const }
+                } : user
+            )
+        }));
+    } else if (typeof config.channels === 'string' && config.channels.trim()) {
         channels = parseChannels(config.channels, virtualUsers, nickname);
     } else {
         // Use default channels but ensure they have the correct current user nickname
@@ -353,8 +378,23 @@ export const initializeStateFromConfig = (config: AppConfig) => {
     const aiModel = config.aiModel || 'gemini-2.5-flash';
     const typingDelay = config.typingDelay || DEFAULT_TYPING_DELAY;
     const typingIndicator = config.typingIndicator || DEFAULT_TYPING_INDICATOR;
+    const ircExport = config.ircExport || {
+        enabled: false,
+        server: 'irc.libera.chat',
+        port: 6697,
+        nickname: 'station-v-user',
+        realname: 'Station V User',
+        channel: '#station-v-testing',
+        ssl: true
+    };
+    const imageGeneration = config.imageGeneration || {
+        provider: 'placeholder',
+        apiKey: '',
+        model: 'stable-diffusion-xl',
+        baseUrl: 'https://api.nanobanana.ai'
+    };
 
-    return { nickname, virtualUsers, channels, simulationSpeed, aiModel, typingDelay, typingIndicator };
+    return { nickname, virtualUsers, channels, simulationSpeed, aiModel, typingDelay, typingIndicator, ircExport, imageGeneration };
 };
 
 /**

@@ -33,6 +33,9 @@ export interface NetworkConfig {
   autoJoinChannels: string[];
 }
 
+/**
+ * Service for handling network connections to the Station V server.
+ */
 class NetworkService {
   private ws: WebSocket | null = null;
   private config: NetworkConfig | null = null;
@@ -43,10 +46,15 @@ class NetworkService {
   private connectionHandlers: ((connected: boolean) => void)[] = [];
   private userHandlers: ((users: NetworkUser[]) => void)[] = [];
   private channelDataHandlers: ((channelData: any) => void)[] = [];
+  private channelJoinedHandlers: ((channelData: any) => void)[] = [];
+  private channelJoinFailedHandlers: ((errorData: any) => void)[] = [];
   private broadcastChannel: BroadcastChannel | null = null;
   private receivedMessageIds: Set<number> = new Set();
   private maxStoredMessageIds: number = 1000;
 
+  /**
+   * Creates an instance of NetworkService.
+   */
   constructor() {
     this.setupEventListeners();
     this.setupBroadcastChannel();
@@ -113,6 +121,11 @@ class NetworkService {
     }
   }
 
+  /**
+   * Connects to the Station V server.
+   * @param {NetworkConfig} config - The network configuration.
+   * @returns {Promise<boolean>} A promise that resolves to true if the connection is successful.
+   */
   async connect(config: NetworkConfig): Promise<boolean> {
     try {
       this.config = config;
@@ -199,6 +212,9 @@ class NetworkService {
     }
   }
 
+  /**
+   * Disconnects from the Station V server.
+   */
   disconnect(): void {
     if (this.ws) {
       this.ws.close();
@@ -249,6 +265,9 @@ class NetworkService {
       case 'error':
         networkDebug.error('Server error:', message.message);
         break;
+      case 'join_failed':
+        this.handleJoinFailed(message);
+        break;
       default:
         networkDebug.log('Unknown message type:', message.type);
     }
@@ -261,54 +280,65 @@ class NetworkService {
     if (message.channelData) {
       networkDebug.log(`Received channel data for ${message.channel}:`, message.channelData);
       
-      // Update channel with received data
-      const channel = this.channels.get(message.channel);
-      if (channel) {
-        // Update users
-        if (message.channelData.users) {
-          message.channelData.users.forEach((user: any) => {
-            // Ensure channels is an array, not a Set
-            const normalizedUser: NetworkUser = {
-              ...user,
-              channels: Array.isArray(user.channels) ? user.channels : Array.from(user.channels || [])
-            };
-            this.users.set(user.nickname, normalizedUser);
-          });
-        }
-        
-        // Update messages
-        if (message.channelData.messages) {
-          channel.messages = message.channelData.messages;
-        }
-        
-        // Update topic
-        if (message.channelData.topic !== undefined) {
-          channel.topic = message.channelData.topic;
-        }
-        
-        networkDebug.log(`Updated channel ${message.channel} with ${message.channelData.users?.length || 0} users and ${message.channelData.messages?.length || 0} messages`);
-        
-        // Notify handlers about the updated channel state
-        this.notifyUserHandlers(Array.from(this.users.values()));
-        
-        // Notify channel data handlers about the initial channel data
-        this.notifyChannelDataHandlers({
-          channel: message.channel,
-          users: message.channelData.users || [],
-          messages: message.channelData.messages || [],
-          topic: message.channelData.topic || ''
+      // Create or update channel with received data
+      if (!this.channels.has(message.channel)) {
+        this.channels.set(message.channel, {
+          name: message.channel,
+          users: [],
+          messages: []
         });
-        
-        // Notify about any messages that were loaded
-        if (message.channelData.messages && message.channelData.messages.length > 0) {
-          networkDebug.log(`Notifying about ${message.channelData.messages.length} loaded messages`);
-          message.channelData.messages.forEach((msg: any) => {
-            this.notifyMessageHandlers({
-              ...msg,
-              channel: message.channel
-            });
+      }
+      const channel = this.channels.get(message.channel)!;
+
+      // Update users
+      if (message.channelData.users) {
+        message.channelData.users.forEach((user: any) => {
+          // Ensure channels is an array, not a Set
+          const normalizedUser: NetworkUser = {
+            ...user,
+            channels: Array.isArray(user.channels) ? user.channels : Array.from(user.channels || [])
+          };
+          this.users.set(user.nickname, normalizedUser);
+        });
+      }
+      
+      // Update messages
+      if (message.channelData.messages) {
+        channel.messages = message.channelData.messages;
+      }
+      
+      // Update topic
+      if (message.channelData.topic !== undefined) {
+        channel.topic = message.channelData.topic;
+      }
+      
+      networkDebug.log(`Updated channel ${message.channel} with ${message.channelData.users?.length || 0} users and ${message.channelData.messages?.length || 0} messages`);
+      
+      // Notify handlers about the updated channel state
+      this.notifyUserHandlers(Array.from(this.users.values()));
+      
+      const channelData = {
+        channel: message.channel,
+        users: message.channelData.users || [],
+        messages: message.channelData.messages || [],
+        topic: message.channelData.topic || ''
+      };
+
+      // Notify channel data handlers about the initial channel data
+      this.notifyChannelDataHandlers(channelData);
+      
+      // Notify that the channel has been joined
+      this.notifyChannelJoinedHandlers(channelData);
+
+      // Notify about any messages that were loaded
+      if (message.channelData.messages && message.channelData.messages.length > 0) {
+        networkDebug.log(`Notifying about ${message.channelData.messages.length} loaded messages`);
+        message.channelData.messages.forEach((msg: any) => {
+          this.notifyMessageHandlers({
+            ...msg,
+            channel: message.channel
           });
-        }
+        });
       }
     }
   }
@@ -485,9 +515,21 @@ class NetworkService {
     this.notifyUserHandlers(Array.from(this.users.values()));
   }
 
+  private handleJoinFailed(message: any): void {
+    networkDebug.error(`Failed to join channel: ${message.channel}`, message.reason);
+    this.notifyChannelJoinFailedHandlers({
+      channel: message.channel,
+      reason: message.reason
+    });
+  }
+
   // Public methods
+  /**
+   * Joins a channel.
+   * @param {string} channelName - The name of the channel to join.
+   */
   joinChannel(channelName: string): void {
-    if (!this.connected || !this.ws) {
+    if (!this.connected || !this.ws || this.ws.readyState !== 1) {
       networkDebug.error('Not connected to server');
       return;
     }
@@ -500,18 +542,14 @@ class NetworkService {
       channel: channelName
     }));
 
-    // Create channel if it doesn't exist
-    if (!this.channels.has(channelName)) {
-      this.channels.set(channelName, {
-        name: channelName,
-        users: [],
-        messages: []
-      });
-    }
   }
 
+  /**
+   * Parts a channel.
+   * @param {string} channelName - The name of the channel to part.
+   */
   partChannel(channelName: string): void {
-    if (!this.connected || !this.ws) {
+    if (!this.connected || !this.ws || this.ws.readyState !== 1) {
       networkDebug.error('Not connected to server');
       return;
     }
@@ -524,8 +562,13 @@ class NetworkService {
     }));
   }
 
+  /**
+   * Sends a message to a channel.
+   * @param {string} channelName - The name of the channel.
+   * @param {string} content - The message content.
+   */
   sendMessage(channelName: string, content: string): void {
-    if (!this.connected || !this.ws) {
+    if (!this.connected || !this.ws || this.ws.readyState !== 1) {
       networkDebug.error('Not connected to server');
       return;
     }
@@ -539,8 +582,14 @@ class NetworkService {
     }));
   }
 
+  /**
+   * Sends an AI message to a channel.
+   * @param {string} channelName - The name of the channel.
+   * @param {string} content - The message content.
+   * @param {string} nickname - The nickname of the AI.
+   */
   sendAIMessage(channelName: string, content: string, nickname: string): void {
-    if (!this.connected || !this.ws) {
+    if (!this.connected || !this.ws || this.ws.readyState !== 1) {
       networkDebug.error('Not connected to server');
       return;
     }
@@ -555,8 +604,12 @@ class NetworkService {
     }));
   }
 
+  /**
+   * Changes the user's nickname.
+   * @param {string} newNickname - The new nickname.
+   */
   changeNickname(newNickname: string): void {
-    if (!this.connected || !this.ws) {
+    if (!this.connected || !this.ws || this.ws.readyState !== 1) {
       networkDebug.error('Not connected to server');
       return;
     }
@@ -640,6 +693,28 @@ class NetworkService {
     }
   }
 
+  onChannelJoined(handler: (channelData: any) => void): void {
+    this.channelJoinedHandlers.push(handler);
+  }
+
+  offChannelJoined(handler: (channelData: any) => void): void {
+    const index = this.channelJoinedHandlers.indexOf(handler);
+    if (index > -1) {
+      this.channelJoinedHandlers.splice(index, 1);
+    }
+  }
+
+  onChannelJoinFailed(handler: (errorData: any) => void): void {
+    this.channelJoinFailedHandlers.push(handler);
+  }
+
+  offChannelJoinFailed(handler: (errorData: any) => void): void {
+    const index = this.channelJoinFailedHandlers.indexOf(handler);
+    if (index > -1) {
+      this.channelJoinFailedHandlers.splice(index, 1);
+    }
+  }
+
   private notifyMessageHandlers(message: NetworkMessage): void {
     // Check if we've already processed this message
     if (this.receivedMessageIds.has(message.id)) {
@@ -687,6 +762,14 @@ class NetworkService {
 
   private notifyChannelDataHandlers(channelData: any): void {
     this.channelDataHandlers.forEach(handler => handler(channelData));
+  }
+
+  private notifyChannelJoinedHandlers(channelData: any): void {
+    this.channelJoinedHandlers.forEach(handler => handler(channelData));
+  }
+
+  private notifyChannelJoinFailedHandlers(errorData: any): void {
+    this.channelJoinFailedHandlers.forEach(handler => handler(errorData));
   }
 
   private broadcastUserUpdate(users: NetworkUser[]): void {

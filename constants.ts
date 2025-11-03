@@ -1,5 +1,5 @@
 
-import type { User, Channel } from './types';
+import type { User, Channel } from './types.js';
 
 // Default nickname for the user if not configured.
 export const DEFAULT_NICKNAME = "YourNickname";

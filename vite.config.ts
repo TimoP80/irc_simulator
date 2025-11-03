@@ -31,18 +31,11 @@ export default defineConfig(({ mode }) => {
       build: {
         // Use different HTML template for Electron
         rollupOptions: {
-          input: isElectron ? 'index-electron.html' : 'index.html',
+          input: path.resolve(__dirname, isElectron ? 'index-electron.html' : 'index.html'),
           output: {
             // Simplified chunking for better Electron compatibility
             manualChunks: (id) => {
-              // Only chunk node_modules for Electron
               if (id.includes('node_modules')) {
-                if (id.includes('react') || id.includes('react-dom')) {
-                  return 'react-vendor';
-                }
-                if (id.includes('@google')) {
-                  return 'google-ai';
-                }
                 return 'vendor';
               }
             }

@@ -1,0 +1,469 @@
+[{
+  "commit": "6202abc9ee4f5b91a09ea42376b7e5af70dcf972",
+  "author": "TimoP80",
+  "date": "Wed Oct 29 10:10:46 2025 +0200",
+  "message": "docs: Update changelog for v1.19.3 with audio support and image generation improvements"
+},
+{
+  "commit": "c97fa51f5b93f6797dccc2a1db6fc27d69d93793",
+  "author": "TimoP80",
+  "date": "Wed Oct 29 10:10:02 2025 +0200",
+  "message": "feat: Add audio attachment support and improve image generation"
+},
+{
+  "commit": "356aa2cd4b1aab04d1efbe8ca1880a99477cf618",
+  "author": "TimoP80",
+  "date": "Tue Oct 28 19:16:43 2025 +0200",
+  "message": "Configure Git LFS for large binary files"
+},
+{
+  "commit": "2714013c34db97b3b25fafcef37fd51e34ea3686",
+  "author": "TimoP80",
+  "date": "Tue Oct 28 18:26:36 2025 +0200",
+  "message": "Resolve merge conflicts: keep incoming DOCUMENTATION_UPDATE_SUMMARY.md, update README.md version"
+},
+{
+  "commit": "bbaf441d2b410a2144c82ec22232698eb3bcb3b5",
+  "author": "TimoP80",
+  "date": "Tue Oct 28 17:58:38 2025 +0200",
+  "message": "Fix main.ts: remove all node.exe logic, clean up HTML loading, fix try/catch, declare htmlPath"
+},
+{
+  "commit": "3e98601a74cdcbb5d06a29a34cdd18542dfdefcc",
+  "author": "TimoP80",
+  "date": "Tue Oct 28 17:49:20 2025 +0200",
+  "message": "Remove all node.exe logic; always use process.execPath for server; bump version to 1.19.2"
+},
+{
+  "commit": "b7b974f2d7f7bde9ff662b8d176bac135a049649",
+  "author": "TimoP80",
+  "date": "Tue Oct 28 16:08:03 2025 +0200",
+  "message": "Rebuild with latest fixed code: attachment support and recent updates"
+},
+{
+  "commit": "d528250c79c85b3765e4ee3e9c919d073d79ecc4",
+  "author": "TimoP80",
+  "date": "Mon Oct 27 16:57:28 2025 +0200",
+  "message": "New build"
+},
+{
+  "commit": "3129206c7e60b96110621ae348a8b28886703ed4",
+  "author": "TimoP80",
+  "date": "Mon Oct 27 04:09:34 2025 +0200",
+  "message": "new fixes"
+},
+{
+  "commit": "385914add4ec2b40b111ba6cddee8804875fe41a",
+  "author": "TimoP80",
+  "date": "Sun Oct 26 18:42:17 2025 +0200",
+  "message": "test"
+},
+{
+  "commit": "3dc09f1bc3456fd809af3292857d780ce9bd73cb",
+  "author": "TimoP80",
+  "date": "Sun Oct 26 18:40:32 2025 +0200",
+  "message": "Commit"
+},
+{
+  "commit": "f8eddd72bac59e70c719af60665965ce112b22cd",
+  "author": "TimoP80",
+  "date": "Sun Oct 26 18:33:59 2025 +0200",
+  "message": "Initial commmit"
+},
+{
+  "commit": "8ccee698b3e64ef8bdbaad4f305cc98d30f7c166",
+  "author": "TimoP80",
+  "date": "Sun Oct 26 17:11:54 2025 +0200",
+  "message": "Initial commit, exe compatbile"
+},
+{
+  "commit": "afb410703d460ea5407f1e287f5277606a773445",
+  "author": "TimoP80",
+  "date": "Sun Oct 26 16:01:33 2025 +0200",
+  "message": "Initial commit, now with EXE building capabilties"
+},
+{
+  "commit": "e66da0d736d07f227257956ef56a9ca741e225dd",
+  "author": "TimoP80",
+  "date": "Sun Oct 26 15:26:14 2025 +0200",
+  "message": "documents for Electron EXE compatibility"
+},
+{
+  "commit": "4cf877d01b97ca33481437101a3a638350c8bf7c",
+  "author": "TimoP80",
+  "date": "Sun Oct 26 14:59:26 2025 +0200",
+  "message": "Update README.MD"
+},
+{
+  "commit": "5eb63fb5693cc292cb55c2e5375e28d9a74c1f8f",
+  "author": "TimoP80",
+  "date": "Sun Oct 26 14:43:21 2025 +0200",
+  "message": "Electron debugging info"
+},
+{
+  "commit": "9b22eac505fddbad9644325a36be62b5815bb91e",
+  "author": "TimoP80",
+  "date": "Sun Oct 26 03:14:49 2025 +0200",
+  "message": "1.19.0 update"
+},
+{
+  "commit": "8702e4feb54876317cdc8dec593ff9c4fcee4ede",
+  "author": "TimoP80",
+  "date": "Sat Oct 25 22:04:26 2025 +0300",
+  "message": "Personality attributes update"
+},
+{
+  "commit": "66976f1d702cd81a0524ca9db1fb35820cbcb190",
+  "author": "TimoP80",
+  "date": "Sat Oct 25 21:47:22 2025 +0300",
+  "message": "1.18.0 update"
+},
+{
+  "commit": "c4ed7251ad6150ac63b8e374a599bb50a052e45c",
+  "author": "TimoP80",
+  "date": "Sat Oct 25 18:54:34 2025 +0300",
+  "message": "Compacting documentation, other changes"
+},
+{
+  "commit": "dae0b39398609dc54162a142851ea85ad1669ef3",
+  "author": "TimoP80",
+  "date": "Sat Oct 25 15:03:38 2025 +0300",
+  "message": "V 1.17.0"
+},
+{
+  "commit": "4c0fee12bab844baaaaccd53980ac817b099055f",
+  "author": "TimoP80",
+  "date": "Sat Oct 25 14:22:09 2025 +0300",
+  "message": "debug logging changes"
+},
+{
+  "commit": "40b60643db53da4e82917f43c973d8aebf40b3be",
+  "author": "TimoP80",
+  "date": "Sat Oct 25 12:21:34 2025 +0300",
+  "message": "Enhancements"
+},
+{
+  "commit": "7f769a38a6525cba3d7e6819fe0294fa98a5a2c0",
+  "author": "TimoP80",
+  "date": "Sat Oct 25 10:55:29 2025 +0300",
+  "message": "network issues fixed"
+},
+{
+  "commit": "930e4caf5ded4d1aa6b32fc9b8f8863709339015",
+  "author": "TimoP80",
+  "date": "Sat Oct 25 00:33:47 2025 +0300",
+  "message": "Network support"
+},
+{
+  "commit": "06432850a56d5691dc58e5cac0407958b944332c",
+  "author": "TimoP80",
+  "date": "Fri Oct 24 17:59:30 2025 +0300",
+  "message": "24.10. updates"
+},
+{
+  "commit": "a3e0a1d44707e435d85bc5aa44eae11092e65610",
+  "author": "TimoP80",
+  "date": "Fri Oct 24 07:08:17 2025 +0300",
+  "message": "1.16.1 - 2025-01-24"
+},
+{
+  "commit": "938a993aec7252fc3b601cb911e2b556e802a45f",
+  "author": "TimoP80",
+  "date": "Thu Oct 23 16:41:58 2025 +0300",
+  "message": "even more bugfixes"
+},
+{
+  "commit": "7fc4d1ffd5407489f1e514273958ece3b4646b9c",
+  "author": "TimoP80",
+  "date": "Thu Oct 23 12:58:14 2025 +0300",
+  "message": "large batchof fixes"
+},
+{
+  "commit": "fb745ac468169af13fcc278ad77a212ad716377e",
+  "author": "TimoP80",
+  "date": "Thu Oct 23 08:41:21 2025 +0300",
+  "message": "Major fixes"
+},
+{
+  "commit": "c38cd0ab93801bb69123cd21ea171ef7ed57594a",
+  "author": "TimoP80",
+  "date": "Thu Oct 23 07:12:31 2025 +0300",
+  "message": "bugfixes"
+},
+{
+  "commit": "778f4c5624419f45b659171097288dc4ead79eb4",
+  "author": "TimoP80",
+  "date": "Thu Oct 23 00:56:29 2025 +0300",
+  "message": "versiionupdate to  1.13.16"
+},
+{
+  "commit": "889e1f38c757ee0c5352f9e4c287e0fd26c7c153",
+  "author": "TimoP80",
+  "date": "Wed Oct 22 16:19:36 2025 +0300",
+  "message": "Bugfixes"
+},
+{
+  "commit": "cb09fddcfdb7b450a31d279f5ee84d14446c2714",
+  "author": "TimoP80",
+  "date": "Wed Oct 22 14:32:10 2025 +0300",
+  "message": "new features and fixes"
+},
+{
+  "commit": "584ab4b43d4bd2f5b1292f673b36525ff4b8ec5b",
+  "author": "TimoP80",
+  "date": "Tue Oct 21 15:55:42 2025 +0300",
+  "message": "conversation reset update"
+},
+{
+  "commit": "05b6a5c1de2a909a679fb9a699e06ebac87ad33c",
+  "author": "TimoP80",
+  "date": "Tue Oct 21 15:10:25 2025 +0300",
+  "message": "Documentation update"
+},
+{
+  "commit": "ab4c1c677e6470bc5aef0db8892c7b07b2826976",
+  "author": "TimoP80",
+  "date": "Tue Oct 21 14:50:10 2025 +0300",
+  "message": "Time synv"
+},
+{
+  "commit": "b2ce08ff43263365187b56bcb0922ad3cdc2609b",
+  "author": "TimoP80",
+  "date": "Tue Oct 21 13:49:26 2025 +0300",
+  "message": "readme update"
+},
+{
+  "commit": "06fdf3067ab77e72f3c2a314e9e954ef29fe60c4",
+  "author": "TimoP80",
+  "date": "Tue Oct 21 13:34:25 2025 +0300",
+  "message": "More bugfixes"
+},
+{
+  "commit": "a384cc8c11f9465c143265513e4a591ed02b66dc",
+  "author": "TimoP80",
+  "date": "Tue Oct 21 12:44:29 2025 +0300",
+  "message": "Language simulation updates"
+},
+{
+  "commit": "ac008572d864b91c3b72591aaaefaaab45277d14",
+  "author": "TimoP80",
+  "date": "Tue Oct 21 12:13:03 2025 +0300",
+  "message": "Language restriction bugfix"
+},
+{
+  "commit": "81baddac1173e0f3c3a5b52822190a01f97c898a",
+  "author": "TimoP80",
+  "date": "Tue Oct 21 08:53:27 2025 +0300",
+  "message": "fixes for randomize world button"
+},
+{
+  "commit": "d9afb9bdfda5322641886f970d5ac9745f115e66",
+  "author": "TimoP80",
+  "date": "Tue Oct 21 04:25:32 2025 +0300",
+  "message": "Code updates"
+},
+{
+  "commit": "5731176eb443682ff5f39bcb38a73073873137d2",
+  "author": "TimoP80",
+  "date": "Tue Oct 21 03:47:03 2025 +0300",
+  "message": "Channel operator support"
+},
+{
+  "commit": "6a6305c5266ebb55a1d3ca0354a771e4535bdd7b",
+  "author": "TimoP80",
+  "date": "Tue Oct 21 03:41:10 2025 +0300",
+  "message": "User editor enhancements"
+},
+{
+  "commit": "fd9551dca52a754ca84208ea0681d60f8677404c",
+  "author": "TimoP80",
+  "date": "Tue Oct 21 03:27:51 2025 +0300",
+  "message": "Editor changes"
+},
+{
+  "commit": "a8f9c5d822c25e035f0e5e96cf2c798d7b6ab2be",
+  "author": "TimoP80",
+  "date": "Tue Oct 21 01:57:21 2025 +0300",
+  "message": "Channel import functionality"
+},
+{
+  "commit": "8576ee8750da41b788b7a9e9c0d225cce4c7b2a4",
+  "author": "TimoP80",
+  "date": "Tue Oct 21 01:00:58 2025 +0300",
+  "message": "HTML export final fix"
+},
+{
+  "commit": "27cd90f8203746e5e03ea73041db0597d7aec9d2",
+  "author": "TimoP80",
+  "date": "Mon Oct 20 21:59:40 2025 +0300",
+  "message": "doc update"
+},
+{
+  "commit": "58bdf900fd687de479645801c54c2d70c94232eb",
+  "author": "TimoP80",
+  "date": "Mon Oct 20 21:40:20 2025 +0300",
+  "message": "update README"
+},
+{
+  "commit": "f622c3fcbb6c96651041cf3564ed457196df918e",
+  "author": "TimoP80",
+  "date": "Mon Oct 20 21:36:46 2025 +0300",
+  "message": "Clean build bugfixes"
+},
+{
+  "commit": "84766ba4a6c0c29dd29e48d33e8cbfbb429b7873",
+  "author": "TimoP80",
+  "date": "Mon Oct 20 21:31:49 2025 +0300",
+  "message": "Update CHANGELOG"
+},
+{
+  "commit": "cfacdd508d74f46260c0a0a093083a03d25bb7ca",
+  "author": "TimoP80",
+  "date": "Mon Oct 20 21:31:30 2025 +0300",
+  "message": "HTML bugfixes"
+},
+{
+  "commit": "85e6484e1359c978747c9ccddab27c90f315e87f",
+  "author": "TimoP80",
+  "date": "Mon Oct 20 21:09:44 2025 +0300",
+  "message": "HTML export problems"
+},
+{
+  "commit": "26315af12aec37b2d3fe057455b8da52d4711806",
+  "author": "TimoP80",
+  "date": "Mon Oct 20 21:02:12 2025 +0300",
+  "message": "Bugfix for HTML export"
+},
+{
+  "commit": "fab10fcd393c11aed2d71266d518371c9f5d7f98",
+  "author": "TimoP80",
+  "date": "Mon Oct 20 20:54:26 2025 +0300",
+  "message": "HTML Export"
+},
+{
+  "commit": "89aaab93ecee15c31a3ba86a8f4da01df5168ead",
+  "author": "TimoP80",
+  "date": "Mon Oct 20 20:35:41 2025 +0300",
+  "message": "Personality customization plans"
+},
+{
+  "commit": "483def55be39c543c3b5a516c572ee01ef29d138",
+  "author": "TimoP80",
+  "date": "Mon Oct 20 20:26:48 2025 +0300",
+  "message": "Future roadmap updates"
+},
+{
+  "commit": "5dfd9b215855b1e3194e76258eac8d576b9bb7d7",
+  "author": "TimoP80",
+  "date": "Mon Oct 20 20:14:54 2025 +0300",
+  "message": "TODO list"
+},
+{
+  "commit": "70578578596ed8f6a3d34fb0f37fb3b9210312e3",
+  "author": "TimoP80",
+  "date": "Mon Oct 20 19:39:22 2025 +0300",
+  "message": "Doc update + minor fixes"
+},
+{
+  "commit": "a53080681e516ee8b257bd672c07b8950732572d",
+  "author": "TimoP80",
+  "date": "Mon Oct 20 11:09:41 2025 +0300",
+  "message": "doc updatr"
+},
+{
+  "commit": "711ceb80d05b0e1c910fbfdd247e9debdf8a3371",
+  "author": "TimoP80",
+  "date": "Mon Oct 20 10:36:25 2025 +0300",
+  "message": "1.10.2 bugfix"
+},
+{
+  "commit": "39ed717c91933416d7bb1354220ceb906cd4202b",
+  "author": "TimoP80",
+  "date": "Mon Oct 20 09:42:17 2025 +0300",
+  "message": "1.10.0"
+},
+{
+  "commit": "1769051a8a9eb1b1c42b8c2fb91a685d314a0381",
+  "author": "TimoP80",
+  "date": "Mon Oct 20 08:33:58 2025 +0300",
+  "message": "minor update"
+},
+{
+  "commit": "f43315d40b82a8c0a91532a987acdc2eaf5721d7",
+  "author": "TimoP80",
+  "date": "Mon Oct 20 05:51:08 2025 +0300",
+  "message": "1.9.0"
+},
+{
+  "commit": "ca306e6ee93f4007b3472a6b9b0044e52d541be1",
+  "author": "TimoP80",
+  "date": "Mon Oct 20 05:21:11 2025 +0300",
+  "message": "Readme updated with FAQ"
+},
+{
+  "commit": "a62416905e4f321704b2d9daad74844b1ff840fe",
+  "author": "TimoP80",
+  "date": "Mon Oct 20 05:09:56 2025 +0300",
+  "message": "1.8.0"
+},
+{
+  "commit": "3d4faf93706d05c5744d58a25af727d9f1ef56ae",
+  "author": "TimoP80",
+  "date": "Mon Oct 20 04:34:27 2025 +0300",
+  "message": "Bugfixes and improvements"
+},
+{
+  "commit": "2efcb16e350c382158a813ce0910562ee85f1c0c",
+  "author": "TimoP80",
+  "date": "Mon Oct 20 04:03:37 2025 +0300",
+  "message": "1.7.0 additions"
+},
+{
+  "commit": "b5894c4b009054d5d0c503680d1acae4f039f5ed",
+  "author": "TimoP80",
+  "date": "Mon Oct 20 03:50:56 2025 +0300",
+  "message": "1.7.0"
+},
+{
+  "commit": "e013ba994f82b211abbd3ae9dcfd22f92b744c60",
+  "author": "TimoP80",
+  "date": "Mon Oct 20 03:27:11 2025 +0300",
+  "message": "1.6.0"
+},
+{
+  "commit": "f5b6e7ef6fccd275227939d2ba427c1eef106867",
+  "author": "TimoP80",
+  "date": "Mon Oct 20 02:01:20 2025 +0300",
+  "message": "1.5.0"
+},
+{
+  "commit": "b99929bc31aa8567a2ea7b273f00fd6cd3c88b48",
+  "author": "TimoP80",
+  "date": "Mon Oct 20 01:51:50 2025 +0300",
+  "message": "1.4.1 update"
+},
+{
+  "commit": "af0e417b078722214c24713df28016fb8cf571b1",
+  "author": "TimoP80",
+  "date": "Mon Oct 20 01:21:56 2025 +0300",
+  "message": "Update readme"
+},
+{
+  "commit": "68ad52d20b9b3ac873c05eae051177f70b55e788",
+  "author": "TimoP80",
+  "date": "Mon Oct 20 01:16:48 2025 +0300",
+  "message": "1.4.0 update"
+},
+{
+  "commit": "16a26ecaf9f1dbdf58ef789e9c4eea94e082591f",
+  "author": "TimoP80",
+  "date": "Sun Oct 19 23:54:49 2025 +0300",
+  "message": "Code update"
+},
+{
+  "commit": "b7fd01aea97ba8f5e8fb4a81988e2335298b2218",
+  "author": "TimoP80",
+  "date": "Sun Oct 19 23:22:13 2025 +0300",
+  "message": "Initial commit"
+}
+]

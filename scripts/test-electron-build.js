@@ -15,16 +15,26 @@ async function testElectronBuild() {
       stdio: 'pipe',
       cwd: process.cwd()
     });
-    
-    // Wait 3 seconds then kill the process
-    setTimeout(() => {
-      electronProcess.kill();
-      console.log('✅ Electron test completed successfully!');
-      process.exit(0);
-    }, 3000);
+
+    electronProcess.stdout.on('data', (data) => {
+      console.log(`[Electron stdout]: ${data.toString()}`);
+    });
+
+    electronProcess.stderr.on('data', (data) => {
+      console.error(`[Electron stderr]: ${data.toString()}`);
+    });
+
+    electronProcess.on('close', (code) => {
+      if (code === 0) {
+        console.log('✅ Electron test completed successfully!');
+      } else {
+        console.error(`❌ Electron process exited with code ${code}`);
+      }
+      process.exit(code);
+    });
     
     electronProcess.on('error', (error) => {
-      console.error('❌ Electron test failed:', error.message);
+      console.error('❌ Failed to start Electron process:', error.message);
       process.exit(1);
     });
     

@@ -8,7 +8,8 @@ import { BotManagement } from './BotManagement';
 import { ChannelManagement } from './ChannelManagement';
 import { getDebugConfig, updateDebugConfig, setDebugEnabled, setLogLevel, toggleCategory } from '../utils/debugLogger';
 import { DataExportModal } from './DataExportModal';
-import { DebugLogWindow } from './DebugLogWindow';
+import { ChannelImportExportModal } from './ChannelImportExportModal';
+import { getAvailableImageModels } from '../services/imageGenerationService';
 
 interface SettingsModalProps {
   onSave: (config: AppConfig) => void;
@@ -17,6 +18,8 @@ interface SettingsModalProps {
   onChannelsChange?: (channels: Channel[]) => void;
   currentUsers?: User[];
   onUsersChange?: (users: User[]) => void;
+  onImport: (config: Partial<AppConfig>) => void;
+  onThemeChange?: (theme: string) => void;
 }
 
 const DEFAULT_USERS_TEXT = `nova, A curious tech-savvy individual who loves gadgets.
@@ -96,13 +99,15 @@ const formatChannelsToText = (channels: { name: string; topic: string; dominantL
   }).join('\n');
 };
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({ 
-  onSave, 
-  onCancel, 
-  currentChannels, 
-  onChannelsChange, 
+export const SettingsModal: React.FC<SettingsModalProps> = ({
+  onSave,
+  onCancel,
+  currentChannels,
+  onChannelsChange,
   currentUsers,
-  onUsersChange
+  onUsersChange,
+  onImport,
+  onThemeChange
 }) => {
   const [config, setConfig] = useState<AppConfig>(() => {
     const savedConfig = loadConfig();
@@ -119,11 +124,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       imageGeneration: savedConfig?.imageGeneration || {
         provider: 'placeholder',
         apiKey: '',
-        model: 'stable-diffusion-xl',
+        model: 'gemini-1.5-pro',
         baseUrl: 'https://api.nanobanana.ai'
       },
+      theme: savedConfig?.theme || 'dark',
+      ircExport: savedConfig?.ircExport || {
+        enabled: false,
+        server: 'irc.libera.chat',
+        port: 6697,
+        nickname: 'station-v-user',
+        realname: 'Station V User',
+        channel: '#station-v-testing',
+        ssl: true
+      },
+      perspectives: savedConfig?.perspectives || ['First Person', 'Third Person'],
     };
   });
+
+  const [perspectives, setPerspectives] = useState<string[]>(config.perspectives || ['First Person', 'Third Person']);
+  const [selectedPerspective, setSelectedPerspective] = useState<string | null>(null);
+  const [editingPerspective, setEditingPerspective] = useState<string>('');
+
   const [users, setUsers] = useState<User[]>(() => {
     // Use currentUsers if available (from main app state), otherwise use userObjects, otherwise parse from text
     return currentUsers || config.userObjects || parseUsersFromText(config.virtualUsers);
@@ -137,14 +158,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   }, [currentUsers]);
   const [channels, setChannels] = useState(() => currentChannels || parseChannelsFromText(config.channels));
   const [isRandomizing, setIsRandomizing] = useState(false);
-  const [debugConfig, setDebugConfig] = useState(getDebugConfig());
+  const [debugConfig, setDebugConfig] = useState(() => {
+    const initialConfig = getDebugConfig();
+    return {
+      ...initialConfig,
+      categories: initialConfig.categories || {},
+    };
+  });
   const [availableModels, setAvailableModels] = useState<GeminiModel[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [modelsError, setModelsError] = useState<string | null>(null);
   const [showDataExportModal, setShowDataExportModal] = useState(false);
-  const [showDebugLogWindow, setShowDebugLogWindow] = useState(false);
-  
-
+  const [showChannelImportExportModal, setShowChannelImportExportModal] = useState(false);
+  const [imageModels, setImageModels] = useState<string[]>([]);
+  const [isLoadingImageModels, setIsLoadingImageModels] = useState(false);
   // Handle Escape key to close modal
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -196,6 +223,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     };
 
     fetchModels();
+
+    const fetchImageModels = async () => {
+      setIsLoadingImageModels(true);
+      const models = await getAvailableImageModels();
+      setImageModels(models);
+      setIsLoadingImageModels(false);
+    };
+    fetchImageModels();
   }, []);
 
   // Ensure AI model is valid when models are loaded
@@ -220,7 +255,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       // Store the full user objects for proper persistence
       userObjects: users,
       // Store the full channel objects to preserve user assignments
-      channelObjects: currentChannels || channels
+      channelObjects: currentChannels || channels,
+      perspectives,
     };
     
     // Notify parent component about channel changes
@@ -229,7 +265,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     onSave(configToSave);
   };
   
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     
     // Special handling for AI model selection to ensure we use the model ID
@@ -237,6 +273,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setConfig(prev => ({ ...prev, [name]: value }));
     } else {
       setConfig(prev => ({ ...prev, [name]: value }));
+    }
+
+    if (name === 'theme') {
+      onThemeChange?.(value);
     }
   };
 
@@ -259,7 +299,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const handleDebugConfigChange = (updates: Partial<typeof debugConfig>) => {
-    const newConfig = { ...debugConfig, ...updates };
+    const newConfig = {
+      ...debugConfig,
+      ...updates,
+      categories: {
+        ...debugConfig.categories,
+        ...updates.categories,
+      },
+    };
     setDebugConfig(newConfig);
     updateDebugConfig(newConfig);
   };
@@ -297,9 +344,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 lg:px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm lg:text-base"
             />
           </div>
+
+          <div>
+            <label htmlFor="theme" className="block text-sm font-medium text-gray-300 mb-2">Theme</label>
+            <select
+              id="theme"
+              name="theme"
+              value={config.theme}
+              onChange={handleChange}
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 lg:px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm lg:text-base"
+            >
+              <option value="dark">Dark</option>
+              <option value="light">Light</option>
+            </select>
+          </div>
           
-          <UserManagement 
-            users={users} 
+          <UserManagement
+            users={users}
             onUsersChange={onUsersChange || setUsers} 
             aiModel={config.aiModel}
             channels={currentChannels || channels}
@@ -331,7 +392,67 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             allUsers={users} 
           />
           
-          
+          <div className="border-t border-gray-600 pt-6">
+            <h3 className="text-lg font-semibold text-gray-200 mb-4">🎭 Perspective Configuration</h3>
+            <p className="text-sm text-gray-400 mb-4">Manage the different narrative perspectives available for AI users.</p>
+            <div className="space-y-4">
+              <div className="flex gap-4">
+                <div className="w-1/2">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Available Perspectives</label>
+                  <ul className="bg-gray-700 border border-gray-600 rounded-lg p-2 space-y-2 h-40 overflow-y-auto">
+                    {perspectives.map((p, index) => (
+                      <li
+                        key={index}
+                        onClick={() => {
+                          setSelectedPerspective(p);
+                          setEditingPerspective(p);
+                        }}
+                        className={`p-2 rounded-md cursor-pointer ${selectedPerspective === p ? 'bg-indigo-600' : 'hover:bg-gray-600'}`}
+                      >
+                        {p}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="w-1/2">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Edit Perspective</label>
+                  <input
+                    type="text"
+                    value={editingPerspective}
+                    onChange={(e) => setEditingPerspective(e.target.value)}
+                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-gray-200"
+                    placeholder="Select or create a perspective"
+                  />
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      onClick={() => {
+                        if (editingPerspective && !perspectives.includes(editingPerspective)) {
+                          setPerspectives([...perspectives, editingPerspective]);
+                          setEditingPerspective('');
+                        }
+                      }}
+                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm"
+                    >
+                      Add New
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (selectedPerspective) {
+                          setPerspectives(perspectives.filter(p => p !== selectedPerspective));
+                          setSelectedPerspective(null);
+                          setEditingPerspective('');
+                        }
+                      }}
+                      disabled={!selectedPerspective}
+                      className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm disabled:opacity-50"
+                    >
+                      Delete Selected
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
           
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">Background Simulation Speed</label>
@@ -542,17 +663,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Image Generation Provider</label>
                 <select
-                  value={config.imageGeneration?.provider || 'nano-banana'}
+                  value={config.imageGeneration?.provider || 'gemini'}
                   onChange={(e) => setConfig(prev => ({
                     ...prev,
                     imageGeneration: {
                       ...prev.imageGeneration,
-                      provider: e.target.value as 'nano-banana' | 'imagen' | 'placeholder' | 'dalle'
+                      provider: e.target.value as 'gemini' | 'imagen' | 'placeholder' | 'dalle'
                     }
                   }))}
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="nano-banana">Gemini AI (Default - Real AI-generated images)</option>
+                  <option value="gemini">Gemini AI (Default - Real AI-generated images)</option>
                   <option value="placeholder">Placeholder (Simple placeholder images)</option>
                   <option value="imagen">Google Imagen (Coming Soon)</option>
                   <option value="dalle">OpenAI DALLE (Coming Soon)</option>
@@ -580,9 +701,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">Model</label>
-                    <input
-                      type="text"
-                      value={config.imageGeneration?.model || 'stable-diffusion-xl'}
+                    <select
+                      value={config.imageGeneration?.model || 'gemini-1.5-pro'}
                       onChange={(e) => setConfig(prev => ({
                         ...prev,
                         imageGeneration: {
@@ -590,16 +710,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           model: e.target.value
                         }
                       }))}
+                      disabled={isLoadingImageModels}
                       className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Model name (e.g., stable-diffusion-xl)"
-                    />
+                    >
+                      {isLoadingImageModels ? (
+                        <option>Loading models...</option>
+                      ) : (
+                        imageModels.map(modelName => (
+                          <option key={modelName} value={modelName}>
+                            {modelName}
+                          </option>
+                        ))
+                      )}
+                    </select>
                   </div>
                   
-                  {config.imageGeneration?.provider === 'nano-banana' && (
+                  {config.imageGeneration?.provider === 'gemini' && (
                     <div className="bg-blue-900/20 border border-blue-500/30 p-3 rounded-lg">
                       <p className="text-xs text-blue-300">
-                        <strong>ℹ️ Nano Banana Info:</strong> Nano Banana uses the Google GenAI SDK with the <code className="bg-gray-800 px-1 rounded">gemini-2.0-flash-exp</code> model. 
-                        No base URL configuration needed - it uses Google's infrastructure directly.
+                        <strong>ℹ️ Gemini AI Info:</strong> Gemini AI uses the Google GenAI SDK.
+                        No base URL configuration is needed as it connects directly to Google's infrastructure.
                       </p>
                     </div>
                   )}
@@ -609,24 +739,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="bg-gray-700 p-3 rounded-lg">
                 <p className="text-xs text-gray-400">
                   <strong>Image Generation Services:</strong><br/>
-                  • <strong>Gemini AI:</strong> Real AI-generated images using Google's Gemini model (requires API key)<br/>
-                  • <strong>Placeholder:</strong> Simple placeholder images (no API key needed, no CORS issues)<br/>
-                  • <strong>Imagen:</strong> Google's dedicated image generation (coming soon)<br/>
-                  • <strong>DALLE:</strong> OpenAI's image generation (coming soon)
-                </p>
-              </div>
-              
-              <div className="bg-blue-900/20 border border-blue-500/30 p-3 rounded-lg">
-                <p className="text-xs text-blue-300">
-                  <strong>ℹ️ Gemini AI Info:</strong> Gemini AI uses the Google GenAI SDK with the <code className="bg-gray-800 px-1 rounded">gemini-2.5-flash-image-preview</code> model. 
-                  This provides real AI-generated images based on your prompts. If you encounter issues, the system will automatically fall back to placeholder images.
-                </p>
-              </div>
-              
-              <div className="bg-red-900/20 border border-red-500/30 p-3 rounded-lg">
-                <p className="text-xs text-red-300">
-                  <strong>🚫 Browser Limitation:</strong> Direct browser requests to external APIs are blocked by CORS. 
-                  To use external APIs, you need to set up a proxy server or use server-side rendering.
+                  • <strong>Gemini AI:</strong> Provides real AI-generated images using Google's Gemini model (requires an API key).<br/>
+                  • <strong>Placeholder:</strong> Displays simple placeholder images (no API key needed and avoids CORS issues).<br/>
+                  • <strong>Imagen & DALLE:</strong> Support for Google's Imagen and OpenAI's DALLE is coming soon.
                 </p>
               </div>
               
@@ -635,6 +750,112 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <strong>Test Image Generation:</strong> Try typing <code className="bg-gray-800 px-1 rounded">!image a sunset</code> in a channel with a bot to test image generation.
                 </p>
               </div>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-600 pt-6">
+            <h3 className="text-lg font-semibold text-gray-200 mb-4">🌐 IRC Export Settings</h3>
+            <p className="text-sm text-gray-400 mb-4">Export chat simulation to a real IRC server for monitoring or integration.</p>
+            
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-gray-300">Enable IRC Export</label>
+                <input
+                  type="checkbox"
+                  checked={config.ircExport?.enabled || false}
+                  onChange={(e) => setConfig(prev => ({
+                    ...prev,
+                    ircExport: { ...prev.ircExport, enabled: e.target.checked }
+                  }))}
+                  className="h-4 w-4 bg-gray-700 border-gray-600 text-indigo-600 focus:ring-indigo-500 rounded"
+                />
+              </div>
+              
+              {config.ircExport?.enabled && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">IRC Server</label>
+                    <input
+                      type="text"
+                      value={config.ircExport?.server || ''}
+                      onChange={(e) => setConfig(prev => ({
+                        ...prev,
+                        ircExport: { ...prev.ircExport, server: e.target.value }
+                      }))}
+                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="e.g., irc.libera.chat"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Port</label>
+                    <input
+                      type="number"
+                      value={config.ircExport?.port || 6697}
+                      onChange={(e) => setConfig(prev => ({
+                        ...prev,
+                        ircExport: { ...prev.ircExport, port: parseInt(e.target.value) }
+                      }))}
+                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium text-gray-300">Use SSL</label>
+                    <input
+                      type="checkbox"
+                      checked={config.ircExport?.ssl || true}
+                      onChange={(e) => setConfig(prev => ({
+                        ...prev,
+                        ircExport: { ...prev.ircExport, ssl: e.target.checked }
+                      }))}
+                      className="h-4 w-4 bg-gray-700 border-gray-600 text-indigo-600 focus:ring-indigo-500 rounded"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Bot Nickname</label>
+                    <input
+                      type="text"
+                      value={config.ircExport?.nickname || ''}
+                      onChange={(e) => setConfig(prev => ({
+                        ...prev,
+                        ircExport: { ...prev.ircExport, nickname: e.target.value }
+                      }))}
+                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="e.g., station-v-bot"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Bot Real Name</label>
+                    <input
+                      type="text"
+                      value={config.ircExport?.realname || ''}
+                      onChange={(e) => setConfig(prev => ({
+                        ...prev,
+                        ircExport: { ...prev.ircExport, realname: e.target.value }
+                      }))}
+                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="e.g., Station V Bot"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Channel to Join</label>
+                    <input
+                      type="text"
+                      value={config.ircExport?.channel || ''}
+                      onChange={(e) => setConfig(prev => ({
+                        ...prev,
+                        ircExport: { ...prev.ircExport, channel: e.target.value }
+                      }))}
+                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="e.g., #station-v-testing"
+                    />
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -686,49 +907,36 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
 
-          <div className="border-t border-gray-600 pt-6">
-            <h3 className="text-lg font-semibold text-gray-200 mb-4">Debug Tools</h3>
-            <p className="text-sm text-gray-400 mb-4">Additional tools for debugging and monitoring the application.</p>
-            
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-300">Debug Log Window</p>
-                  <p className="text-xs text-gray-400">Open a separate window to view debug logs in real-time</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowDebugLogWindow(true)}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  Open Debug Logs
-                </button>
-              </div>
-            </div>
-          </div>
 
           <div className="border-t border-gray-600 pt-6">
             <h3 className="text-lg font-semibold text-gray-200 mb-4">Data Management</h3>
-            <p className="text-sm text-gray-400 mb-4">Export all your data (channels, messages, configuration) to a JSON file for backup, or import previously exported data.</p>
+            <p className="text-sm text-gray-400 mb-4">Export or import data for backup and sharing.</p>
             
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-300">Backup & Restore</p>
-                  <p className="text-xs text-gray-400">Export all data to JSON file or import from backup</p>
+                  <p className="text-sm font-medium text-gray-300">Channel Import/Export</p>
+                  <p className="text-xs text-gray-400">Export selected channels or import from a file.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowChannelImportExportModal(true)}
+                  className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                >
+                  Manage Channels
+                </button>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-300">Full Backup & Restore</p>
+                  <p className="text-xs text-gray-400">Export all data to a JSON file or import from a backup.</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowDataExportModal(true)}
                   className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                  </svg>
-                  Manage Data
+                  Manage Full Backup
                 </button>
               </div>
             </div>
@@ -771,15 +979,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
       </div>
       
-      <DataExportModal 
+      <DataExportModal
         isOpen={showDataExportModal}
         onClose={() => setShowDataExportModal(false)}
+        onImport={onImport}
+      />
+
+      <ChannelImportExportModal
+        isOpen={showChannelImportExportModal}
+        onClose={() => setShowChannelImportExportModal(false)}
+        channels={currentChannels || channels}
+        onImport={(importedChannels) => {
+          const existingChannelNames = (currentChannels || channels).map(c => c.name);
+          const newChannels = importedChannels.filter(ic => !existingChannelNames.includes(ic.name));
+          const updatedChannels = [...(currentChannels || channels), ...newChannels];
+          setChannels(updatedChannels);
+          onChannelsChange?.(updatedChannels);
+        }}
       />
       
-      <DebugLogWindow 
-        isOpen={showDebugLogWindow}
-        onClose={() => setShowDebugLogWindow(false)}
-      />
     </div>
     );
   } catch (error) {

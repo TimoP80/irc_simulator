@@ -9,214 +9,28 @@ async function buildWindowsDistribution() {
   console.log('🚀 Building Station V Windows Distribution...');
   
   try {
-    // Step 1: Clean previous builds
-    console.log('🧹 Cleaning previous builds...');
-    await runCommand('npm', ['run', 'electron:clean']);
-    
-    // Clean dist directory to ensure fresh build
-    console.log('🧹 Cleaning dist directory...');
-    if (fs.existsSync('dist')) {
-      fs.rmSync('dist', { recursive: true, force: true });
+    // The 'npm run build' command should be executed before this script.
+    // Verification of build files is the first step here.
+    console.log('✅ Verifying pre-built files...');
+    if (!fs.existsSync('dist') || !fs.existsSync('dist-electron')) {
+      throw new Error('Build files not found. Please run "npm run build" first.');
     }
-    
-    // Ensure dist directory exists after cleaning
-    if (!fs.existsSync('dist')) {
-      fs.mkdirSync('dist', { recursive: true });
-    }
-    
-    // Step 2: Build React application
-    console.log('📦 Building React application...');
-    console.log('🔧 Setting ELECTRON=true for Electron-specific build');
-    await runCommand('npm', ['run', 'build'], {
-      env: { ...process.env, ELECTRON: 'true' }
-    });
-    
-    // Verify the correct HTML file was generated
-    const electronHtmlExists = fs.existsSync('dist/index-electron.html');
-    const regularHtmlExists = fs.existsSync('dist/index.html');
-    
-    console.log('📄 Generated files:');
-    console.log('  - index-electron.html:', electronHtmlExists ? '✅' : '❌');
-    console.log('  - index.html:', regularHtmlExists ? '✅' : '❌');
-    
-    if (!electronHtmlExists) {
-      console.log('⚠️ Electron-specific HTML not found, using regular HTML');
-    }
-    
-    // Step 3: Compile Electron main process
-    console.log('⚡ Compiling Electron main process...');
-    await runCommand('npm', ['run', 'build:electron']);
-    
-    // Step 3.5: Rename .js files to .cjs for ES module compatibility
+
+    // Step 1: Rename .js files to .cjs for ES module compatibility
     console.log('🔄 Renaming Electron files to .cjs for ES module compatibility...');
     await runCommand('node', ['scripts/rename-electron-files.js']);
     
-    // Step 4: Verify build files exist
-    // Copy default configuration file
-    console.log('📋 Copying default configuration...');
-    try {
-      const defaultConfigPath = path.join(process.cwd(), 'default-config.json');
-      const distConfigPath = path.join(process.cwd(), 'dist', 'default-config.json');
-      
-      if (fs.existsSync(defaultConfigPath)) {
-        fs.copyFileSync(defaultConfigPath, distConfigPath);
-        console.log('✅ Copied default-config.json to dist directory');
-      } else {
-        console.log('⚠️ Default config file not found, app will use fallback configuration');
-      }
-    } catch (error) {
-      console.error('❌ Failed to copy default config:', error.message);
-    }
-    // Enhanced verification of build files
-    console.log('✅ Verifying build files...');
-    const distExists = fs.existsSync('dist');
-    const electronDistExists = fs.existsSync('dist-electron');
-    const distAssetsExists = fs.existsSync('dist/assets');
-    const distHtmlExists = fs.existsSync('dist/index-electron.html');
-    const distConfigExists = fs.existsSync('dist/default-config.json');
-    
-    console.log('📁 Directory verification:');
-    console.log('  - dist:', distExists ? '✅' : '❌');
-    console.log('  - dist-electron:', electronDistExists ? '✅' : '❌');
-    console.log('  - dist/assets:', distAssetsExists ? '✅' : '❌');
-    console.log('  - dist/index-electron.html:', distHtmlExists ? '✅' : '❌');
-    console.log('  - dist/default-config.json:', distConfigExists ? '✅' : '❌');
-    
-    if (!distExists) {
-      throw new Error('React build failed - dist directory not found');
-    }
-    if (!electronDistExists) {
-      throw new Error('Electron build failed - dist-electron directory not found');
-    }
-    if (!distAssetsExists) {
-      throw new Error('React build failed - dist/assets directory not found');
-    }
-    if (!distHtmlExists) {
-      throw new Error('React build failed - dist/index-electron.html not found');
-    }
-    
-    // Wait a moment to ensure all files are written
-    console.log('⏳ Ensuring all files are written...');
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Step 5: Build Windows executable
-    console.log('🪟 Building Windows executable...');
-    console.log('📝 Code signing is disabled in package-electron.json (sign: false)');
-    console.log('   Signing warnings are expected and can be safely ignored');
-    
-    // Debug: List files before electron-builder
-    console.log('🔍 Files before electron-builder:');
-    if (fs.existsSync('dist')) {
-      const distFiles = fs.readdirSync('dist', { recursive: true });
-      console.log('  dist directory contents:', distFiles);
-    }
-    if (fs.existsSync('dist-electron')) {
-      const electronFiles = fs.readdirSync('dist-electron');
-      console.log('  dist-electron directory contents:', electronFiles);
-    }
-    
-    // Set environment variables to suppress code signing warnings
-    const buildEnv = {
-      ...process.env,
-      CSC_IDENTITY_AUTO_DISCOVERY: 'false',
-      CSC_NAME: '',
-      WIN_CSC_LINK: '',
-      WIN_CSC_KEY_PASSWORD: '',
-      CSC_LINK: '',
-      CSC_KEY_PASSWORD: ''
-    };
-    
-    try {
-      await runCommand('npx', ['electron-builder', '--win', '--config', 'package-electron.json'], {
-        env: buildEnv
-      });
-    } catch (error) {
-      console.log('⚠️ Electron Builder encountered an error, checking if executable was created...');
-      
-      // Check if executable was created despite code signing errors
-      const executablePath = 'release/win-unpacked/Station V - Virtual IRC Simulator.exe';
-      if (fs.existsSync(executablePath)) {
-        console.log('✅ Executable created successfully despite errors');
-        console.log('📁 Location:', executablePath);
-        console.log('ℹ️ Any signing warnings are expected and do not affect functionality');
-      } else {
-        console.log('❌ Executable not found, checking release directory...');
-        await listGeneratedFiles();
-        throw error; // Re-throw if executable wasn't created
-      }
-    }
+    // Step 2: Build Windows executable
+    console.log('🪟 Building Windows executable with electron-builder...');
+    await runCommand('npx', ['electron-builder', '--win', '--config', 'package-electron.json']);
 
-    // Step 6: Copy ICU files manually (Electron Builder sometimes misses them)
+    // Step 3: Copy ICU files manually if needed
     console.log('📋 Copying ICU files manually...');
     await runCommand('node', ['scripts/copy-icu-files.js']);
-    
-    // Step 7: Copy application files manually (Electron Builder is not including them)
-    console.log('📋 Copying application files manually...');
-    try {
-      const releaseDir = 'release/win-unpacked';
-      
-      // Copy dist directory
-      if (fs.existsSync('dist')) {
-        const distDest = path.join(releaseDir, 'dist');
-        if (fs.existsSync(distDest)) {
-          fs.rmSync(distDest, { recursive: true, force: true });
-        }
-        fs.cpSync('dist', distDest, { recursive: true });
-        console.log('✅ Copied dist directory');
-      }
-      
-      // Copy dist-electron directory
-      if (fs.existsSync('dist-electron')) {
-        const electronDest = path.join(releaseDir, 'dist-electron');
-        if (fs.existsSync(electronDest)) {
-          fs.rmSync(electronDest, { recursive: true, force: true });
-        }
-        fs.cpSync('dist-electron', electronDest, { recursive: true });
-        console.log('✅ Copied dist-electron directory');
-      }
-      
-      // Copy server directory
-      if (fs.existsSync('server')) {
-        const serverDest = path.join(releaseDir, 'server');
-        if (fs.existsSync(serverDest)) {
-          fs.rmSync(serverDest, { recursive: true, force: true });
-        }
-        fs.cpSync('server', serverDest, { recursive: true });
-        console.log('✅ Copied server directory');
-      }
-      
-      // Copy default-config.json
-      if (fs.existsSync('default-config.json')) {
-        const configDest = path.join(releaseDir, 'default-config.json');
-        fs.copyFileSync('default-config.json', configDest);
-        console.log('✅ Copied default-config.json');
-      }
-      
-    } catch (error) {
-      console.error('❌ Failed to copy application files:', error.message);
-      
-      // Check if it's a permission error
-      if (error.code === 'EPERM' || error.code === 'EACCES' || error.message.includes('EBUSY') || error.message.includes('permission')) {
-        console.error('');
-        console.error('🔒 Permission Error Detected!');
-        console.error('');
-        console.error('This usually happens when files are locked by running processes.');
-        console.error('Try these solutions:');
-        console.error('');
-        console.error('1. Close all Electron windows');
-        console.error('2. Close all "Station V" applications');
-        console.error('3. Run: npm run electron:cleanup');
-        console.error('4. Or manually run: taskkill /F /IM electron.exe');
-        console.error('5. Close file explorers opened to the release directory');
-        console.error('6. Restart your terminal and try again');
-        console.error('');
-      }
-    }
 
     console.log('🎉 Windows distribution build complete!');
     console.log('📁 Check the release directory for the installer');
     
-    // List generated files
     await listGeneratedFiles();
     
   } catch (error) {
@@ -272,9 +86,8 @@ function runCommand(command, args, options = {}) {
   });
 }
 
-// ES module detection - more reliable method
+// ES module detection
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 // Check if this script is being run directly
 if (process.argv[1] === __filename) {

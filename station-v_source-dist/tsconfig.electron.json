@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "composite": true,
+    "module": "CommonJS",
+    "outDir": "dist-electron",
+    "sourceMap": true,
+    "strict": true,
+    "target": "esnext"
+  },
+  "include": ["electron/**/*.ts"],
+  "exclude": ["node_modules"]
+}

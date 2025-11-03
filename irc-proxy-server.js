@@ -1,15 +1,25 @@
 import { WebSocketServer } from 'ws';
 import { Client } from 'irc-framework';
 
+/**
+ * IRC Proxy Server to handle WebSocket to IRC connections.
+ */
 class IRCProxyServer {
+  /**
+   * Creates an instance of IRCProxyServer.
+   */
   constructor() {
     this.wss = null;
     this.ircClients = new Map(); // Map WebSocket connections to IRC clients
     this.activeNicks = new Set(); // Track active nicknames to prevent conflicts
   }
 
+  /**
+   * Starts the IRC Proxy Server.
+   * @param {number} [port=8080] - The port to listen on.
+   */
   start(port = 8080) {
-    this.wss = new WebSocketServer({ 
+    this.wss = new WebSocketServer({
       port,
       path: '/irc-proxy'
     });
@@ -49,6 +59,11 @@ class IRCProxyServer {
     });
   }
 
+  /**
+   * Handles incoming WebSocket messages.
+   * @param {import('ws').WebSocket} ws - The WebSocket connection.
+   * @param {object} message - The parsed message object.
+   */
   handleWebSocketMessage(ws, message) {
     console.log('📨 Handling message type:', message.type);
     
@@ -67,6 +82,11 @@ class IRCProxyServer {
     }
   }
 
+  /**
+   * Sets up a new IRC client for a WebSocket connection.
+   * @param {import('ws').WebSocket} ws - The WebSocket connection.
+   * @param {object} config - The IRC client configuration.
+   */
   setupIRCClient(ws, config) {
     console.log('🔧 Setting up IRC client for', config.nickname);
     
@@ -92,9 +112,11 @@ class IRCProxyServer {
         
       // Notify WebSocket client that we're connected
       console.log('📤 Sending connected message to WebSocket client');
-      ws.send(JSON.stringify({
-        type: 'connected'
-      }));
+      if (ws.readyState === 1) {
+        ws.send(JSON.stringify({
+          type: 'connected'
+        }));
+      }
         
         // Join channels after registration
         if (config.channels && config.channels.length > 0) {
@@ -111,17 +133,19 @@ class IRCProxyServer {
         console.log('📢 Join event details:', event);
         
         // Notify WebSocket client
-        ws.send(JSON.stringify({
-          type: 'joined',
-          channel: event.channel
-        }));
+        if (ws.readyState === 1) {
+          ws.send(JSON.stringify({
+            type: 'joined',
+            channel: event.channel
+          }));
+        }
       });
 
       ircClient.on('message', (event) => {
         console.log('📨 IRC message from', event.nick, 'in', event.channel, ':', event.message);
         
         // Only forward messages from other users (not system messages)
-        if (event.nick && event.nick !== config.nickname) {
+        if (event.nick && event.nick !== config.nickname && ws.readyState === 1) {
           ws.send(JSON.stringify({
             type: 'message',
             nick: event.nick,
@@ -134,18 +158,22 @@ class IRCProxyServer {
 
       ircClient.on('error', (error) => {
         console.error('❌ IRC client error:', error);
-        ws.send(JSON.stringify({
-          type: 'error',
-          error: error.message
-        }));
+        if (ws.readyState === 1) {
+          ws.send(JSON.stringify({
+            type: 'error',
+            error: error.message
+          }));
+        }
       });
 
       ircClient.on('close', () => {
         console.log('🔌 IRC connection closed');
         this.activeNicks.delete(config.nickname);
-        ws.send(JSON.stringify({
-          type: 'disconnected'
-        }));
+        if (ws.readyState === 1) {
+          ws.send(JSON.stringify({
+            type: 'disconnected'
+          }));
+        }
       });
 
       ircClient.on('raw', (event) => {
@@ -173,19 +201,28 @@ class IRCProxyServer {
       console.log('🔗 IRC connection initiated');
       
       // Notify WebSocket client that connection is being attempted
-      ws.send(JSON.stringify({
-        type: 'connecting'
-      }));
+      if (ws.readyState === 1) {
+        ws.send(JSON.stringify({
+          type: 'connecting'
+        }));
+      }
       
     } catch (error) {
       console.error('❌ Failed to setup IRC client:', error);
-      ws.send(JSON.stringify({
-        type: 'error',
-        error: error.message
-      }));
+      if (ws.readyState === 1) {
+        ws.send(JSON.stringify({
+          type: 'error',
+          error: error.message
+        }));
+      }
     }
   }
 
+  /**
+   * Handles a 'message' from a WebSocket client and sends it to the IRC server.
+   * @param {import('ws').WebSocket} ws - The WebSocket connection.
+   * @param {object} message - The message object.
+   */
   handleMessage(ws, message) {
     const ircClient = this.ircClients.get(ws);
     if (ircClient) {
@@ -196,6 +233,10 @@ class IRCProxyServer {
     }
   }
 
+  /**
+   * Cleans up the IRC client associated with a WebSocket connection.
+   * @param {import('ws').WebSocket} ws - The WebSocket connection.
+   */
   cleanupIRCClient(ws) {
     const ircClient = this.ircClients.get(ws);
     if (ircClient) {

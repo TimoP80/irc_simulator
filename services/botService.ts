@@ -2,6 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 import type { User, Message, BotCommandType } from '../types';
 import { withRateLimitAndRetries } from '../utils/config';
 import { generateImage, getImageGenerationService } from './imageGenerationService';
+import { generateTranslatedPersonality } from '../services/geminiService';
 
 const API_KEY = process.env.GEMINI_API_KEY;
 
@@ -13,16 +14,20 @@ const ai = new GoogleGenAI({ apiKey: API_KEY });
 
 // Bot command handlers
 export const handleBotCommand = async (
-  command: string, 
-  user: User, 
-  channelName: string, 
+  command: string,
+  user: User,
+  channelName: string,
   model: string = 'gemini-2.5-flash',
   imageConfig?: {
-    provider: 'nano-banana' | 'imagen' | 'placeholder' | 'dalle';
+    provider: 'gemini' | 'imagen' | 'placeholder' | 'dalle';
     apiKey?: string;
     model?: string;
     baseUrl?: string;
-  }
+  },
+  addMessageToContext?: (message: Message, context: any) => void,
+  updateMessageInContext?: (message: Message, context: any) => void,
+  generateUniqueMessageId?: () => number,
+  activeContext?: any
 ): Promise<Message | null> => {
   const commandParts = command.trim().split(' ');
   const botCommand = commandParts[0].toLowerCase();
@@ -30,59 +35,125 @@ export const handleBotCommand = async (
 
   console.log(`[Bot Service] Handling command: ${botCommand} from ${user.nickname} in ${channelName}`);
 
-  switch (botCommand) {
-    case '!image':
-    case '!img':
-      return await generateImageCommand(args, user, channelName, model, imageConfig);
-    
-    case '!weather':
-      return await generateWeatherCommand(args, user, channelName, model);
-    
-    case '!time':
-      return await generateTimeCommand(user, channelName, model);
-    
-    case '!info':
-      return await generateInfoCommand(args, user, channelName, model);
-    
-    case '!help':
-      return await generateHelpCommand(user, channelName, model);
-    
-    case '!quote':
-      return await generateQuoteCommand(user, channelName, model);
-    
-    case '!joke':
-      return await generateJokeCommand(user, channelName, model);
-    
-    case '!fact':
-      return await generateFactCommand(user, channelName, model);
-    
-    case '!translate':
-      return await generateTranslateCommand(args, user, channelName, model);
-    
-    case '!calc':
-    case '!calculate':
-      return await generateCalcCommand(args, user, channelName, model);
-    
-    case '!search':
-      return await generateSearchCommand(args, user, channelName, model);
-    
-    default:
-      return null; // Unknown command
+  // If callbacks are provided, manage the typing indicator
+  let typingMessageId: number | undefined;
+  if (addMessageToContext && updateMessageInContext && generateUniqueMessageId && activeContext) {
+    typingMessageId = generateUniqueMessageId();
+    const typingMessage: Message = {
+      id: typingMessageId,
+      nickname: user.nickname,
+      content: '', // Content will be updated later
+      timestamp: new Date(),
+      type: 'bot',
+      isTyping: true,
+      botCommand: botCommand as BotCommandType,
+      botResponse: { status: 'generating' }
+    };
+    addMessageToContext(typingMessage, activeContext);
   }
+
+  let botResponse: Message | null = null;
+
+  try {
+    switch (botCommand) {
+      case '!image':
+      case '!img':
+        botResponse = await generateImageCommand(args, user, channelName, model, imageConfig, addMessageToContext, updateMessageInContext, generateUniqueMessageId, activeContext);
+        break;
+      
+      case '!weather':
+        botResponse = await generateWeatherCommand(args, user, channelName, model);
+        break;
+      
+      case '!time':
+        botResponse = await generateTimeCommand(user, channelName, model);
+        break;
+      
+      case '!info':
+        botResponse = await generateInfoCommand(args, user, channelName, model);
+        break;
+      
+      case '!help':
+        botResponse = await generateHelpCommand(user, channelName, model);
+        break;
+      
+      case '!quote':
+        botResponse = await generateQuoteCommand(user, channelName, model);
+        break;
+      
+      case '!joke':
+        botResponse = await generateJokeCommand(user, channelName, model);
+        break;
+      
+      case '!fact':
+        botResponse = await generateFactCommand(user, channelName, model);
+        break;
+      
+      case '!translate':
+        botResponse = await generateTranslateCommand(args, user, channelName, model);
+        break;
+      
+      case '!calc':
+      case '!calculate':
+        botResponse = await generateCalcCommand(args, user, channelName, model);
+        break;
+      
+      case '!search':
+        botResponse = await generateSearchCommand(args, user, channelName, model);
+        break;
+      
+      default:
+        botResponse = null; // Unknown command
+    }
+  } catch (error) {
+    console.error(`[Bot Service] Error handling command ${botCommand}:`, error);
+    botResponse = {
+      id: generateUniqueMessageId ? generateUniqueMessageId() : Date.now(),
+      nickname: user.nickname,
+      content: `❌ An error occurred while processing your command: ${botCommand}`,
+      timestamp: new Date(),
+      type: 'bot',
+      botCommand: botCommand as BotCommandType,
+      isTyping: false
+    };
+  } finally {
+    // Update the typing message with the actual response or remove it
+    if (typingMessageId && updateMessageInContext && activeContext) {
+      if (botResponse) {
+        updateMessageInContext({ ...botResponse, id: typingMessageId, isTyping: false }, activeContext);
+      } else {
+        // If no response, just remove the typing indicator
+        updateMessageInContext({
+          id: typingMessageId,
+          nickname: user.nickname,
+          content: '',
+          timestamp: new Date(),
+          type: 'bot',
+          isTyping: false
+        }, activeContext);
+      }
+    }
+  }
+
+  return botResponse;
 };
 
 // Generate AI image using proper image generation service
 const generateImageCommand = async (
-  args: string[], 
-  user: User, 
-  channelName: string, 
+  args: string[],
+  user: User,
+  channelName: string,
   model: string,
   imageConfig?: {
-    provider: 'nano-banana' | 'imagen' | 'placeholder' | 'dalle';
+    provider: 'gemini' | 'imagen' | 'placeholder' | 'dalle';
     apiKey?: string;
     model?: string;
     baseUrl?: string;
-  }
+  },
+  addMessageToContext?: (message: Message, context: any) => void,
+  updateMessageInContext?: (message: Message, context: any) => void,
+  generateUniqueMessageId?: () => number,
+  activeContext?: any
 ): Promise<Message> => {
   const prompt = args.join(' ') || 'a beautiful landscape';
   
@@ -101,18 +172,19 @@ const generateImageCommand = async (
       console.log(`[Bot Service] Image generated successfully: ${result.imageUrl}`);
       
       return {
-        id: Date.now(),
+        id: generateUniqueMessageId ? generateUniqueMessageId() : Date.now(),
         nickname: user.nickname,
-        content: `🖼️ Generated image for "${prompt}"`,
+        content: `🖼️ An image has been generated.`,
         timestamp: new Date(),
         type: 'bot',
         botCommand: 'image',
-        botResponse: { 
-          imageUrl: result.imageUrl, 
+        botResponse: {
+          imageUrl: result.imageUrl,
           prompt,
-          metadata: result.metadata 
+          metadata: result.metadata
         },
-        images: [result.imageUrl]
+        images: [result.imageUrl],
+        isTyping: false // Ensure typing is false when response is ready
       };
     } else {
       console.error('[Bot Service] Image generation failed:', result.error);
@@ -131,32 +203,34 @@ const generateImageCommand = async (
       }
       
       return {
-        id: Date.now(),
+        id: generateUniqueMessageId ? generateUniqueMessageId() : Date.now(),
         nickname: user.nickname,
         content: errorMessage,
         timestamp: new Date(),
         type: 'bot',
-        botCommand: 'image'
+        botCommand: 'image',
+        isTyping: false // Ensure typing is false on error
       };
     }
   } catch (error) {
     console.error('[Bot Service] Image generation failed:', error);
     return {
-      id: Date.now(),
+      id: generateUniqueMessageId ? generateUniqueMessageId() : Date.now(),
       nickname: user.nickname,
       content: `❌ Sorry, I couldn't generate an image for "${prompt}". Please try again later.`,
       timestamp: new Date(),
       type: 'bot',
-      botCommand: 'image'
+      botCommand: 'image',
+      isTyping: false // Ensure typing is false on error
     };
   }
 };
 
 // Weather information
 const generateWeatherCommand = async (
-  args: string[], 
-  user: User, 
-  channelName: string, 
+  args: string[],
+  user: User,
+  channelName: string,
   model: string
 ): Promise<Message> => {
   const location = args.join(' ') || 'current location';
@@ -165,7 +239,7 @@ const generateWeatherCommand = async (
     const response = await withRateLimitAndRetries(async () => {
       return await ai.models.generateContent({
         model: model,
-        contents: `Provide a brief weather report for ${location}. 
+        contents: `Provide a brief weather report for ${location}.
         Include temperature, conditions, and a brief forecast.
         Keep it concise and friendly, like a weather bot would respond.`
       });
@@ -180,7 +254,8 @@ const generateWeatherCommand = async (
       timestamp: new Date(),
       type: 'bot',
       botCommand: 'weather',
-      botResponse: { location, weatherInfo }
+      botResponse: { location, weatherInfo },
+      isTyping: false
     };
   } catch (error) {
     console.error('[Bot Service] Weather generation failed:', error);
@@ -190,15 +265,16 @@ const generateWeatherCommand = async (
       content: `❌ Sorry, I couldn't get weather information for "${location}". Please try again later.`,
       timestamp: new Date(),
       type: 'bot',
-      botCommand: 'weather'
+      botCommand: 'weather',
+      isTyping: false
     };
   }
 };
 
 // Current time
 const generateTimeCommand = async (
-  user: User, 
-  channelName: string, 
+  user: User,
+  channelName: string,
   model: string
 ): Promise<Message> => {
   const now = new Date();
@@ -212,31 +288,31 @@ const generateTimeCommand = async (
     timestamp: new Date(),
     type: 'bot',
     botCommand: 'time',
-    botResponse: { time: timeString, timezone }
+    botResponse: { time: timeString, timezone },
+    isTyping: false
   };
 };
 
 // Information lookup
 const generateInfoCommand = async (
-  args: string[], 
-  user: User, 
-  channelName: string, 
+  args: string[],
+  user: User,
+  channelName: string,
   model: string
 ): Promise<Message> => {
   const query = args.join(' ') || 'general information';
   
   try {
     const response = await withRateLimitAndRetries(async () => {
-      return await ai.getGenerativeModel({ model }).generateContent([
-        {
-          text: `Provide a brief, informative response about "${query}". 
+      return await ai.models.generateContent({
+        model: model,
+        contents: `Provide a brief, informative response about "${query}".
           Keep it concise (2-3 sentences) and factual.
           Format it like a helpful bot response.`
-        }
-      ]);
+      });
     });
 
-    const info = response.response.text();
+    const info = response.candidates[0].content.parts[0].text;
     
     return {
       id: Date.now(),
@@ -245,7 +321,8 @@ const generateInfoCommand = async (
       timestamp: new Date(),
       type: 'bot',
       botCommand: 'info',
-      botResponse: { query, info }
+      botResponse: { query, info },
+      isTyping: false
     };
   } catch (error) {
     console.error('[Bot Service] Info generation failed:', error);
@@ -255,15 +332,16 @@ const generateInfoCommand = async (
       content: `❌ Sorry, I couldn't find information about "${query}". Please try again later.`,
       timestamp: new Date(),
       type: 'bot',
-      botCommand: 'info'
+      botCommand: 'info',
+      isTyping: false
     };
   }
 };
 
 // Help command
 const generateHelpCommand = async (
-  user: User, 
-  channelName: string, 
+  user: User,
+  channelName: string,
   model: string
 ): Promise<Message> => {
   const helpText = `🤖 Available bot commands:
@@ -285,21 +363,22 @@ const generateHelpCommand = async (
     timestamp: new Date(),
     type: 'bot',
     botCommand: 'help',
-    botResponse: { helpText }
+    botResponse: { helpText },
+    isTyping: false
   };
 };
 
 // Random quote
 const generateQuoteCommand = async (
-  user: User, 
-  channelName: string, 
+  user: User,
+  channelName: string,
   model: string
 ): Promise<Message> => {
   try {
     const response = await withRateLimitAndRetries(async () => {
       return await ai.models.generateContent({
         model: model,
-        contents: `Generate an inspiring or interesting quote. 
+        contents: `Generate an inspiring or interesting quote.
         Include the author if possible.
         Keep it concise and meaningful.`
       });
@@ -314,7 +393,8 @@ const generateQuoteCommand = async (
       timestamp: new Date(),
       type: 'bot',
       botCommand: 'quote',
-      botResponse: { quote }
+      botResponse: { quote },
+      isTyping: false
     };
   } catch (error) {
     console.error('[Bot Service] Quote generation failed:', error);
@@ -324,22 +404,23 @@ const generateQuoteCommand = async (
       content: `❌ Sorry, I couldn't generate a quote right now. Please try again later.`,
       timestamp: new Date(),
       type: 'bot',
-      botCommand: 'quote'
+      botCommand: 'quote',
+      isTyping: false
     };
   }
 };
 
 // Joke
 const generateJokeCommand = async (
-  user: User, 
-  channelName: string, 
+  user: User,
+  channelName: string,
   model: string
 ): Promise<Message> => {
   try {
     const response = await withRateLimitAndRetries(async () => {
       return await ai.models.generateContent({
         model: model,
-        contents: `Tell a clean, family-friendly joke. 
+        contents: `Tell a clean, family-friendly joke.
         Keep it short and funny.
         Format it like a bot would tell a joke.`
       });
@@ -354,7 +435,8 @@ const generateJokeCommand = async (
       timestamp: new Date(),
       type: 'bot',
       botCommand: 'joke',
-      botResponse: { joke }
+      botResponse: { joke },
+      isTyping: false
     };
   } catch (error) {
     console.error('[Bot Service] Joke generation failed:', error);
@@ -364,22 +446,23 @@ const generateJokeCommand = async (
       content: `❌ Sorry, I couldn't think of a joke right now. Please try again later.`,
       timestamp: new Date(),
       type: 'bot',
-      botCommand: 'joke'
+      botCommand: 'joke',
+      isTyping: false
     };
   }
 };
 
 // Interesting fact
 const generateFactCommand = async (
-  user: User, 
-  channelName: string, 
+  user: User,
+  channelName: string,
   model: string
 ): Promise<Message> => {
   try {
     const response = await withRateLimitAndRetries(async () => {
       return await ai.models.generateContent({
         model: model,
-        contents: `Share an interesting, educational fact. 
+        contents: `Share an interesting, educational fact.
         Make it surprising or little-known.
         Keep it concise and factual.`
       });
@@ -394,7 +477,8 @@ const generateFactCommand = async (
       timestamp: new Date(),
       type: 'bot',
       botCommand: 'fact',
-      botResponse: { fact }
+      botResponse: { fact },
+      isTyping: false
     };
   } catch (error) {
     console.error('[Bot Service] Fact generation failed:', error);
@@ -404,16 +488,17 @@ const generateFactCommand = async (
       content: `❌ Sorry, I couldn't find an interesting fact right now. Please try again later.`,
       timestamp: new Date(),
       type: 'bot',
-      botCommand: 'fact'
+      botCommand: 'fact',
+      isTyping: false
     };
   }
 };
 
 // Translation
 const generateTranslateCommand = async (
-  args: string[], 
-  user: User, 
-  channelName: string, 
+  args: string[],
+  user: User,
+  channelName: string,
   model: string
 ): Promise<Message> => {
   const text = args.join(' ');
@@ -425,7 +510,8 @@ const generateTranslateCommand = async (
       content: `❌ Please provide text to translate. Usage: !translate <text>`,
       timestamp: new Date(),
       type: 'bot',
-      botCommand: 'translate'
+      botCommand: 'translate',
+      isTyping: false
     };
   }
   
@@ -433,7 +519,7 @@ const generateTranslateCommand = async (
     const response = await withRateLimitAndRetries(async () => {
       return await ai.models.generateContent({
         model: model,
-        contents: `Translate the following text to English: "${text}". 
+        contents: `Translate the following text to English: "${text}".
         If it's already in English, translate it to Spanish.
         Provide the translation and indicate the target language.`
       });
@@ -448,7 +534,8 @@ const generateTranslateCommand = async (
       timestamp: new Date(),
       type: 'bot',
       botCommand: 'translate',
-      botResponse: { originalText: text, translation }
+      botResponse: { originalText: text, translation },
+      isTyping: false
     };
   } catch (error) {
     console.error('[Bot Service] Translation failed:', error);
@@ -458,16 +545,17 @@ const generateTranslateCommand = async (
       content: `❌ Sorry, I couldn't translate "${text}". Please try again later.`,
       timestamp: new Date(),
       type: 'bot',
-      botCommand: 'translate'
+      botCommand: 'translate',
+      isTyping: false
     };
   }
 };
 
 // Calculator
 const generateCalcCommand = async (
-  args: string[], 
-  user: User, 
-  channelName: string, 
+  args: string[],
+  user: User,
+  channelName: string,
   model: string
 ): Promise<Message> => {
   const expression = args.join(' ');
@@ -479,7 +567,8 @@ const generateCalcCommand = async (
       content: `❌ Please provide a math expression. Usage: !calc <expression>`,
       timestamp: new Date(),
       type: 'bot',
-      botCommand: 'calc'
+      botCommand: 'calc',
+      isTyping: false
     };
   }
   
@@ -493,7 +582,8 @@ const generateCalcCommand = async (
         content: `❌ Invalid characters in expression: "${expression}". Only numbers and basic operators (+, -, *, /, parentheses) are allowed.`,
         timestamp: new Date(),
         type: 'bot',
-        botCommand: 'calc'
+        botCommand: 'calc',
+        isTyping: false
       };
     }
     
@@ -507,7 +597,8 @@ const generateCalcCommand = async (
       timestamp: new Date(),
       type: 'bot',
       botCommand: 'calc',
-      botResponse: { expression, result }
+      botResponse: { expression, result },
+      isTyping: false
     };
   } catch (error) {
     return {
@@ -516,16 +607,17 @@ const generateCalcCommand = async (
       content: `❌ Invalid math expression: "${expression}". Please check your syntax.`,
       timestamp: new Date(),
       type: 'bot',
-      botCommand: 'calc'
+      botCommand: 'calc',
+      isTyping: false
     };
   }
 };
 
 // Search
 const generateSearchCommand = async (
-  args: string[], 
-  user: User, 
-  channelName: string, 
+  args: string[],
+  user: User,
+  channelName: string,
   model: string
 ): Promise<Message> => {
   const query = args.join(' ');
@@ -537,7 +629,8 @@ const generateSearchCommand = async (
       content: `❌ Please provide a search query. Usage: !search <query>`,
       timestamp: new Date(),
       type: 'bot',
-      botCommand: 'search'
+      botCommand: 'search',
+      isTyping: false
     };
   }
   
@@ -545,7 +638,7 @@ const generateSearchCommand = async (
     const response = await withRateLimitAndRetries(async () => {
       return await ai.models.generateContent({
         model: model,
-        contents: `Search for information about "${query}". 
+        contents: `Search for information about "${query}".
         Provide a brief, informative summary.
         Keep it concise and relevant.`
       });
@@ -560,7 +653,8 @@ const generateSearchCommand = async (
       timestamp: new Date(),
       type: 'bot',
       botCommand: 'search',
-      botResponse: { query, results: searchResults }
+      botResponse: { query, results: searchResults },
+      isTyping: false
     };
   } catch (error) {
     console.error('[Bot Service] Search failed:', error);
@@ -570,8 +664,25 @@ const generateSearchCommand = async (
       content: `❌ Sorry, I couldn't search for "${query}". Please try again later.`,
       timestamp: new Date(),
       type: 'bot',
-      botCommand: 'search'
+      botCommand: 'search',
+      isTyping: false
     };
+  }
+};
+
+/**
+ * Translates a bot's personality description to a specified language.
+ * @param personality The personality description to translate.
+ * @param language The target language for the translation.
+ * @returns A promise that resolves to the translated personality string.
+ */
+export const translateBotPersonality = async (personality: string, language: string): Promise<string> => {
+  try {
+    const translatedPersonality = await generateTranslatedPersonality(personality, language);
+    return translatedPersonality;
+  } catch (error) {
+    console.error(`[Bot Service] Error translating personality:`, error);
+    throw error; // Re-throw the error for the UI layer to handle
   }
 };
 

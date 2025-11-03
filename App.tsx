@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useEffect, useCallback, useRef, useMemo, useState } from 'react';
+import { useChatState, useChatDispatch } from './context/ChatProvider';
 import { ChannelList } from './components/ChannelList';
 import { UserList } from './components/UserList';
 import { ChatWindow } from './components/ChatWindow';
@@ -6,9 +7,9 @@ import { SettingsModal } from './components/SettingsModal';
 import { ChannelListModal } from './components/ChannelListModal';
 import { MobileNavigation } from './components/MobileNavigation';
 import { DEFAULT_CHANNELS, DEFAULT_VIRTUAL_USERS, DEFAULT_NICKNAME, SIMULATION_INTERVALS, DEFAULT_AI_MODEL, DEFAULT_TYPING_DELAY, DEFAULT_TYPING_INDICATOR } from './constants';
-import type { Channel, Message, User, ActiveContext, PrivateMessageConversation, AppConfig } from './types';
+import type { Channel, Message, User, ActiveContext, PrivateMessageConversation, AppConfig, Attachment } from './types';
 import { addChannelOperator, removeChannelOperator, isChannelOperator, canUserPerformAction } from './types';
-import { generateChannelActivity, generateReactionToMessage, generatePrivateMessageResponse, generateOperatorResponse } from './services/geminiService';
+import { generateChannelActivity, generateReactionToMessage, generatePrivateMessageResponse, generateOperatorResponse, generateInCharacterComment } from './services/geminiService';
 import { handleBotCommand, isBotCommand } from './services/botService';
 import { updateChannelRelationshipMemory, initializeRelationshipMemory } from './services/relationshipMemoryService';
 import { loadConfig, saveConfig, initializeStateFromConfig, saveChannelLogs, loadChannelLogs, clearChannelLogs, simulateTypingDelay, initializeConfigWithFallback } from './utils/config';
@@ -24,6 +25,10 @@ import { ChatLogManager } from './components/ChatLogManager';
 import { NetworkConnection } from './components/NetworkConnection';
 import { NetworkUsers } from './components/NetworkUsers';
 import { getNetworkService, type NetworkUser } from './services/networkService';
+import { DebugLogWindow } from './components/DebugLogWindow';
+import { AudioAnalysis } from './components/AudioAnalysis';
+import { VisionAnalysis } from './components/VisionAnalysis';
+import { DocumentationModal } from './components/DocumentationModal';
 
 // Electron detection utility
 const isElectron = (): boolean => {
@@ -181,137 +186,89 @@ const migrateChannelUsers = (channels: Channel[], virtualUsers: User[], currentU
 };
 
 const App: React.FC = () => {
+  const [showVerificationWarning, setShowVerificationWarning] = useState(false);
+
+  useEffect(() => {
+    const checkBuildHash = async () => {
+      try {
+        const response = await fetch('/build-hash.json');
+        const { hash: buildHash } = await response.json();
+
+        // Since we can't access the filesystem in the browser,
+        // we can't generate the hash at runtime.
+        // This check is now a placeholder.
+        // In a real-world scenario with server-side rendering or a different architecture,
+        // this could be a full verification.
+        console.log('Build Hash:', buildHash);
+
+      } catch (error) {
+        console.error('Could not verify build hash:', error);
+        setShowVerificationWarning(true);
+      }
+    };
+
+    checkBuildHash();
+  }, []);
+
+  const state = useChatState();
+  const dispatch = useChatDispatch();
+
+  const {
+    currentUserNickname,
+    virtualUsers,
+    channels,
+    privateMessages,
+    unreadPMUsers,
+    unreadChannels,
+    activeContext,
+    simulationSpeed,
+    aiModel,
+    isLoading,
+    isSettingsOpen,
+    isChatLogOpen,
+    isChannelListModalOpen,
+    isDebugLogOpen,
+    isAudioAnalysisOpen,
+    isVisionAnalysisOpen,
+    isDocumentationOpen,
+    isBatchUserModalOpen,
+    mobileActivePanel,
+    isMobileMenuOpen,
+    isElectronApp,
+    electronWindowState,
+    showElectronTitleBar,
+    electronMenuVisible,
+    typingUsers,
+    networkUsers,
+    isNetworkConnected,
+    showNetworkPanel,
+    networkNickname,
+    theme,
+  } = state;
+  
   // State for configuration initialization
   const [isConfigInitialized, setIsConfigInitialized] = useState<boolean>(false);
   const [configError, setConfigError] = useState<string | null>(null);
-
-  // Initialize with saved config or defaults
-  const [currentUserNickname, setCurrentUserNickname] = useState<string>(() => {
-    const savedConfig = loadConfig();
-    return savedConfig?.currentUserNickname || DEFAULT_NICKNAME;
-  });
-  const [virtualUsers, setVirtualUsers] = useState<User[]>(() => {
-    const savedConfig = loadConfig();
-    if (savedConfig) {
-      const { virtualUsers: configUsers } = initializeStateFromConfig(savedConfig);
-      const usersWithAssignments = loadUserChannelAssignments(configUsers);
-      // Initialize relationship memory for all virtual users
-      return usersWithAssignments.map(user => initializeRelationshipMemory(user));
-    }
-    return DEFAULT_VIRTUAL_USERS.map(user => initializeRelationshipMemory(user));
-  });
-  const [channels, setChannels] = useState<Channel[]>(() => {
-    const savedConfig = loadConfig();
-    if (savedConfig) {
-      const { channels: configChannels } = initializeStateFromConfig(savedConfig);
-      return loadOperatorAssignments(migrateChannels(configChannels));
-    }
-    return DEFAULT_CHANNELS;
-  });
-  const [privateMessages, setPrivateMessages] = useState<Record<string, PrivateMessageConversation>>(() => {
-    // Load PM conversations from localStorage on initialization
-    try {
-      const savedPMs = localStorage.getItem('station-v-private-messages');
-      if (savedPMs) {
-        const parsed = JSON.parse(savedPMs);
-        pmDebug.log('Loaded PM conversations from localStorage:', Object.keys(parsed));
-        return parsed;
-      }
-    } catch (error) {
-      pmDebug.error('Failed to load PM conversations from localStorage:', error);
-    }
-    return {};
-  });
-  const [unreadPMUsers, setUnreadPMUsers] = useState<Set<string>>(() => {
-    // Load unread PM users from localStorage on initialization
-    try {
-      const savedUnreadPMs = localStorage.getItem('station-v-unread-pm-users');
-      if (savedUnreadPMs) {
-        const parsed = JSON.parse(savedUnreadPMs);
-        pmDebug.log('Loaded unread PM users from localStorage:', parsed);
-        return new Set(parsed);
-      }
-    } catch (error) {
-      pmDebug.error('Failed to load unread PM users from localStorage:', error);
-    }
-    return new Set();
-  });
-  const [unreadChannels, setUnreadChannels] = useState<Set<string>>(() => {
-    // Load unread channels from localStorage on initialization
-    try {
-      const savedUnreadChannels = localStorage.getItem('station-v-unread-channels');
-      if (savedUnreadChannels) {
-        const parsed = JSON.parse(savedUnreadChannels);
-        unreadDebug.log('Loaded unread channels from localStorage:', parsed);
-        return new Set(parsed);
-      }
-    } catch (error) {
-      unreadDebug.error('Failed to load unread channels from localStorage:', error);
-    }
-    return new Set();
-  });
-  const [activeContext, setActiveContext] = useState<ActiveContext | null>(() => {
-    // Load active context from localStorage on initialization
-    try {
-      const savedContext = localStorage.getItem('station-v-active-context');
-      if (savedContext) {
-        const parsed = JSON.parse(savedContext);
-        contextDebug.log('Loaded active context from localStorage:', parsed);
-        return parsed;
-      }
-    } catch (error) {
-      contextDebug.error('Failed to load active context from localStorage:', error);
-    }
-    return null;
-  });
-  const [simulationSpeed, setSimulationSpeed] = useState<AppConfig['simulationSpeed']>(() => {
-    const savedConfig = loadConfig();
-    return savedConfig?.simulationSpeed || 'normal';
-  });
-  const [aiModel, setAiModel] = useState<AppConfig['aiModel']>(() => {
-    const savedConfig = loadConfig();
-    return savedConfig?.aiModel || DEFAULT_AI_MODEL;
-  });
-  const [isLoading, setIsLoading] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isChatLogOpen, setIsChatLogOpen] = useState(false);
-  const [isChannelListModalOpen, setIsChannelListModalOpen] = useState(false);
-  
-  // Mobile navigation state
-  const [mobileActivePanel, setMobileActivePanel] = useState<'chat' | 'channels' | 'users' | 'network'>('chat');
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  
-  // Electron-specific state
-  const [isElectronApp, setIsElectronApp] = useState<boolean>(false);
-  const [electronWindowState, setElectronWindowState] = useState<'maximized' | 'normal' | 'minimized'>('normal');
-  const [showElectronTitleBar, setShowElectronTitleBar] = useState<boolean>(true);
-  const [electronMenuVisible, setElectronMenuVisible] = useState<boolean>(false);
-  
-  const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
   const [lastSpeakersReset, setLastSpeakersReset] = useState(0); // Force user selection reset
-  const [typingDelayConfig, setTypingDelayConfig] = useState(() => {
-    const savedConfig = loadConfig();
-    return savedConfig?.typingDelay || DEFAULT_TYPING_DELAY;
-  });
-  const [typingIndicatorConfig, setTypingIndicatorConfig] = useState(() => {
-    const savedConfig = loadConfig();
-    return savedConfig?.typingIndicator || DEFAULT_TYPING_INDICATOR;
-  });
-  const [imageGenerationConfig, setImageGenerationConfig] = useState(() => {
-    const savedConfig = loadConfig();
-    return savedConfig?.imageGeneration || {
-      provider: 'nano-banana',
-      apiKey: '',
-      model: 'gemini-2.5-flash-image-preview',
-      baseUrl: undefined
-    };
+  const [typingDelayConfig, setTypingDelayConfig] = useState(DEFAULT_TYPING_DELAY);
+  const [typingIndicatorConfig, setTypingIndicatorConfig] = useState(DEFAULT_TYPING_INDICATOR);
+  const [imageGenerationConfig, setImageGenerationConfig] = useState({
+    provider: 'nano-banana',
+    apiKey: '',
+    model: 'gemini-2.5-flash-image-preview',
+    baseUrl: undefined
   });
 
-  // Network state
-  const [networkUsers, setNetworkUsers] = useState<NetworkUser[]>([]);
-  const [isNetworkConnected, setIsNetworkConnected] = useState(false);
-  const [showNetworkPanel, setShowNetworkPanel] = useState(false);
-  const [networkNickname, setNetworkNickname] = useState<string | null>(null);
+  const [ircExportConfig, setIrcExportConfig] = useState({
+    enabled: false,
+    server: 'irc.libera.chat',
+    port: 6697,
+    nickname: 'station-v-user',
+    realname: 'Station V User',
+    channel: '#station-v-testing',
+    ssl: true
+  });
+  const [originalTheme, setOriginalTheme] = useState(theme);
   
   // Cross-tab communication for virtual user messages
   const [broadcastChannel, setBroadcastChannel] = useState<BroadcastChannel | null>(null);
@@ -383,125 +340,77 @@ const App: React.FC = () => {
 
   // Handle PM user click - open PM and clear unread status
   const handlePMUserClick = useCallback(async (nickname: string) => {
-    setActiveContext({ type: 'pm', with: nickname });
+    pmDebug.log(`handlePMUserClick called for user: ${nickname}`);
+    dispatch({ type: 'SET_ACTIVE_CONTEXT', payload: { type: 'pm', with: nickname } });
     
     // Create PM conversation immediately if it doesn't exist
-    setPrivateMessages(prev => {
-      if (!prev[nickname]) {
-        // Find the user in virtual users or network users
-        let user = virtualUsers.find(u => u.nickname === nickname);
-        if (!user) {
-          user = networkUsers.find(u => u.nickname === nickname);
-          if (user) {
-            // Convert network user to User format
-            user = {
-              nickname: user.nickname,
-              status: user.status,
-              userType: 'network' as const,
-              personality: 'Network User',
-              languageSkills: {
-                languages: [{ language: 'English', fluency: 'native' }]
-              },
-              writingStyle: {
-                formality: 'neutral',
-                verbosity: 'neutral',
-                humor: 'none',
-                emojiUsage: 'low',
-                punctuation: 'standard'
-              }
-            };
-          }
-        }
-        
-        if (user) {
-          pmDebug.log('Creating new PM conversation with:', nickname);
-          return {
-            ...prev,
-            [nickname]: { user, messages: [] }
-          };
-        } else {
-          pmDebug.error('User not found for PM:', nickname);
-          // Create a fallback user entry to prevent UI disappearing
-          return {
-            ...prev,
-            [nickname]: { 
-              user: {
-                nickname,
-                status: 'online',
-                userType: 'network' as const,
-                personality: 'User',
-                languageSkills: {
-                  languages: [{ language: 'English', fluency: 'native' }]
-                },
-                writingStyle: {
-                  formality: 'neutral',
-                  verbosity: 'neutral',
-                  humor: 'none',
-                  emojiUsage: 'low',
-                  punctuation: 'standard'
-                }
-              }, 
-              messages: [] 
-            }
-          };
-        }
+    const userPayload = virtualUsers.find(u => u.nickname === nickname) ||
+    (() => {
+      const networkUser = networkUsers.find(u => u.nickname === nickname);
+      if (networkUser) {
+        return {
+          ...networkUser,
+          userType: 'network' as const,
+          personality: 'Network User',
+          languageSkills: { fluency: 'native' as const, languages: ['English'] },
+          writingStyle: { formality: 'casual' as const, verbosity: 'moderate' as const, humor: 'none' as const, emojiUsage: 'none' as const, punctuation: 'standard' as const },
+        };
       }
-      return prev;
+      // Create a placeholder if user not found anywhere
+      return {
+        nickname,
+        status: 'online' as const,
+        userType: 'network' as const,
+        personality: 'Network User',
+        languageSkills: { fluency: 'native' as const, languages: ['English'] },
+        writingStyle: { formality: 'casual' as const, verbosity: 'moderate' as const, humor: 'none' as const, emojiUsage: 'none' as const, punctuation: 'standard' as const },
+      };
+    })();
+
+    dispatch({
+      type: 'CREATE_PM_CONVERSATION',
+      payload: {
+        nickname,
+        user: userPayload
+      }
     });
     
     // Load existing PM messages from IndexedDB
-    try {
-      const chatLogService = getChatLogService();
-      const pmChannelName = `pm_${nickname}`;
-      const existingMessages = await chatLogService.getMessages(pmChannelName, 1000);
-      
-      if (existingMessages.length > 0) {
-        pmDebug.log(`Loading ${existingMessages.length} existing PM messages for ${nickname}`);
+    (async () => {
+      try {
+        pmDebug.log(`Attempting to load PM logs for ${nickname}`);
+        const chatLogService = getChatLogService();
+        const pmChannelName = `pm_${nickname}`;
+        const existingMessages = await chatLogService.getMessages(pmChannelName, 1000);
         
-        // Convert ChatLogEntry[] to Message[] and sort by timestamp
-        const messages = existingMessages
-          .map(entry => entry.message)
-          .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-        
-        // Update the PM conversation with loaded messages
-        setPrivateMessages(prev => {
-          if (prev[nickname]) {
-            return {
-              ...prev,
-              [nickname]: {
-                ...prev[nickname],
-                messages: messages
-              }
-            };
-          }
-          return prev;
-        });
+        if (existingMessages.length > 0) {
+          pmDebug.log(`Loaded ${existingMessages.length} existing PM messages for ${nickname}`);
+          
+          const messages = existingMessages
+            .map(entry => entry.message)
+            .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+            
+          dispatch({ type: 'SET_PM_MESSAGES', payload: { nickname, messages } });
+        }
+      } catch (error) {
+        pmDebug.error('Failed to load PM messages from IndexedDB:', error);
       }
-    } catch (error) {
-      pmDebug.error('Failed to load PM messages from IndexedDB:', error);
-    }
+    })();
     
     // Clear unread status for this PM user
-    setUnreadPMUsers(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(nickname);
-      return newSet;
-    });
+    dispatch({ type: 'CLEAR_UNREAD_PM', payload: nickname });
   }, [virtualUsers, networkUsers]);
 
   // Handle channel click - open channel and clear unread status
   const handleChannelClick = useCallback((channelName: string) => {
-    setActiveContext({ type: 'channel', name: channelName });
+    dispatch({ type: 'SET_ACTIVE_CONTEXT', payload: { type: 'channel', name: channelName } });
     // Clear unread status for this channel
-    setUnreadChannels(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(channelName);
-      return newSet;
-    });
-  }, []);
+    dispatch({ type: 'CLEAR_UNREAD_CHANNEL', payload: channelName });
+  }, [dispatch]);
   
   
-  const simulationIntervalRef = useRef<number | null>(null);
+  const channelSimulationIntervalRef = useRef<number | null>(null);
+  const pmSimulationIntervalRef = useRef<number | null>(null);
   const lastSimErrorTimestampRef = useRef<number>(0);
   const lastUserMessageTimeRef = useRef<number>(0);
   
@@ -532,18 +441,13 @@ const App: React.FC = () => {
     setLastSpeakersReset(prev => prev + 1);
     
     // Clear recent messages to reset the "recent speakers" tracking
-    setChannels(prevChannels => 
-      prevChannels.map(channel => ({
-        ...channel,
-        messages: channel.messages.slice(-50) // Keep only last 50 messages to reset recent speaker tracking
-      }))
-    );
+    dispatch({ type: 'RESET_RECENT_SPEAKERS' });
   }, []);
 
   // Manual reset function for stuck loading state
   const resetLoadingState = useCallback(() => {
     inputDebug.warn('Manually resetting loading state');
-    setIsLoading(false);
+    dispatch({ type: 'SET_IS_LOADING', payload: false });
   }, []);
 
   // Show AI reaction notification
@@ -595,27 +499,42 @@ const App: React.FC = () => {
     }
     
     try {
-      // Check if this is an image command
-      if (content.startsWith('!image') || content.startsWith('!img')) {
-        // Send generating message first
-        const generatingMessage: Message = {
-        id: generateUniqueMessageId(),
-          nickname: botUser.nickname,
-          content: `🎨 Generating image...`,
-          timestamp: new Date(),
-          type: 'bot',
-          botCommand: 'image',
-          botResponse: { 
-            status: 'generating',
-            prompt: content.split(' ').slice(1).join(' ') || 'a beautiful landscape'
-          }
-        };
-        addMessageToContext(generatingMessage, activeContext);
-      }
-      
-      const botResponse = await handleBotCommand(content, botUser, activeContext.name, aiModel, imageGenerationConfig);
+      // Create a unique ID for the typing message
+      const typingMessageId = generateUniqueMessageId();
+
+      // Send a "typing" message first
+      const typingMessage: Message = {
+        id: typingMessageId,
+        nickname: botUser.nickname,
+        content: '', // Content will be updated later
+        timestamp: new Date(),
+        type: 'bot',
+        botCommand: (content.startsWith('!image') || content.startsWith('!img')) ? 'image' : undefined,
+        botResponse: {
+          status: 'generating',
+          prompt: (content.startsWith('!image') || content.startsWith('!img')) ? (content.split(' ').slice(1).join(' ') || 'a beautiful landscape') : undefined
+        }
+      };
+      addMessageToContext(typingMessage, activeContext);
+
+      const botResponse = await handleBotCommand(
+        content,
+        botUser,
+        activeContext.name,
+        aiModel,
+        imageGenerationConfig,
+        addMessageToContext,
+        updateMessageInContext,
+        generateUniqueMessageId,
+        activeContext
+      );
+
       if (botResponse) {
-        addMessageToContext(botResponse, activeContext);
+        // Update the existing typing message with the actual bot response
+        updateMessageInContext({ ...botResponse, id: typingMessageId }, activeContext);
+      } else {
+        // If no bot response, remove the typing indicator
+        updateMessageInContext({ ...typingMessage }, activeContext);
       }
     } catch (error) {
       botDebug.error('Bot command failed:', error);
@@ -660,24 +579,55 @@ const App: React.FC = () => {
       
       // Check if this is an image command and send generating message first
       if (content.startsWith('!image') || content.startsWith('!img')) {
-        const generatingMessage: Message = {
-          id: generateUniqueMessageId(),
+        const typingMessageId = generateUniqueMessageId();
+        const typingMessage: Message = {
+          id: typingMessageId,
           nickname: botUser.nickname,
-          content: `🎨 Generating image...`,
+          content: '',
           timestamp: new Date(),
           type: 'bot',
           botCommand: 'image',
-          botResponse: { 
+          botResponse: {
             status: 'generating',
             prompt: content.split(' ').slice(1).join(' ') || 'a beautiful landscape'
           }
         };
-        addMessageToContext(generatingMessage, { type: 'channel', name: channelName });
-      }
-      
-      const botResponse = await handleBotCommand(content, botUser, channelName, aiModel, imageGenerationConfig);
-      if (botResponse) {
-        return botResponse;
+        addMessageToContext(typingMessage, { type: 'channel', name: channelName });
+
+        const botResponse = await handleBotCommand(
+          content,
+          botUser,
+          channelName,
+          aiModel,
+          imageGenerationConfig,
+          addMessageToContext,
+          updateMessageInContext,
+          generateUniqueMessageId,
+          { type: 'channel', name: channelName }
+        );
+
+        if (botResponse) {
+          updateMessageInContext({ ...botResponse, id: typingMessageId }, { type: 'channel', name: channelName });
+          return botResponse;
+        } else {
+          updateMessageInContext({ ...typingMessage }, { type: 'channel', name: channelName });
+        }
+      } else {
+        // For non-image bot commands, directly get the response
+        const botResponse = await handleBotCommand(
+          content,
+          botUser,
+          channelName,
+          aiModel,
+          imageGenerationConfig,
+          addMessageToContext,
+          updateMessageInContext,
+          generateUniqueMessageId,
+          { type: 'channel', name: channelName }
+        );
+        if (botResponse) {
+          return botResponse;
+        }
       }
       
       return null;
@@ -743,7 +693,7 @@ const App: React.FC = () => {
               }
               return user;
             });
-            setVirtualUsers(updatedUsers);
+            dispatch({ type: 'SET_VIRTUAL_USERS', payload: updatedUsers });
             saveUserChannelAssignments(updatedUsers);
             
             simulationDebug.debug(`Auto-joined ${usersNotInChannel.length} users to ${channel.name}: ${usersNotInChannel.map(u => u.nickname).join(', ')}`);
@@ -753,35 +703,13 @@ const App: React.FC = () => {
     });
     
     if (channelsToUpdate.length > 0) {
-      setChannels(prevChannels => 
-        prevChannels.map(channel => {
-          const updatedChannel = channelsToUpdate.find(c => c.name === channel.name);
-          if (updatedChannel) {
-            // Deduplicate users to prevent React key collisions
-            return {
-              ...updatedChannel,
-              users: deduplicateChannelUsers(updatedChannel.users)
-            };
-          }
-          return channel;
-        })
-      );
+      dispatch({ type: 'UPDATE_CHANNELS', payload: channelsToUpdate });
     }
   }, [channels, virtualUsers, currentUserNickname, generateUniqueMessageId]);
 
   // Update current user nickname in all channels when nickname changes
   useEffect(() => {
-    setChannels(prevChannels => 
-      prevChannels.map(channel => ({
-        ...channel,
-        users: channel.users.map(user => 
-          user.nickname === DEFAULT_NICKNAME || user.nickname === 'YourNickname' ? {
-            ...user,
-            nickname: currentUserNickname
-          } : user
-        )
-      }))
-    );
+    dispatch({ type: 'UPDATE_CURRENT_USER_NICKNAME_IN_CHANNELS', payload: currentUserNickname });
   }, [currentUserNickname]);
 
   // Electron-specific setup function
@@ -795,6 +723,12 @@ const App: React.FC = () => {
           if (window.electronAPI?.toggleDevTools) {
             window.electronAPI.toggleDevTools();
           }
+        }
+        
+        // Ctrl/Cmd + Shift + L: Toggle debug log window
+        if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key === 'L') {
+          event.preventDefault();
+          dispatch({ type: 'TOGGLE_DEBUG_LOG' });
         }
         
         // Ctrl/Cmd + R: Reload (prevent default browser reload)
@@ -827,7 +761,7 @@ const App: React.FC = () => {
       
       // Set up window state tracking
       const handleWindowStateChange = (state: 'maximized' | 'normal' | 'minimized') => {
-        setElectronWindowState(state);
+        dispatch({ type: 'SET_ELECTRON_WINDOW_STATE', payload: state });
       };
 
       // Listen for window state changes if Electron API is available
@@ -850,18 +784,21 @@ const App: React.FC = () => {
     const initializeApp = async () => {
       try {
         appDebug.log('Initializing application configuration...');
-        
+        setProgress(10);
+
         // Try to initialize config with fallback support
         const config = await initializeConfigWithFallback('./default-config.json');
+        setProgress(40);
         
         // Update state with the initialized config
-        const { nickname, virtualUsers: configUsers, channels: configChannels, simulationSpeed, aiModel, typingDelay, typingIndicator } = initializeStateFromConfig(config);
+        const { nickname, virtualUsers: configUsers, channels: configChannels, simulationSpeed, aiModel, typingDelay, typingIndicator, ircExport, imageGeneration } = initializeStateFromConfig(config);
+        setProgress(70);
         
-        setCurrentUserNickname(nickname);
-        setVirtualUsers(configUsers);
-        setChannels(configChannels);
-        setSimulationSpeed(simulationSpeed);
-        setAiModel(aiModel || DEFAULT_AI_MODEL);
+        dispatch({ type: 'SET_CURRENT_USER_NICKNAME', payload: nickname });
+        dispatch({ type: 'SET_VIRTUAL_USERS', payload: configUsers });
+        dispatch({ type: 'SET_CHANNELS', payload: configChannels });
+        dispatch({ type: 'SET_SIMULATION_SPEED', payload: simulationSpeed });
+        dispatch({ type: 'SET_AI_MODEL', payload: aiModel || DEFAULT_AI_MODEL });
         
         if (typingDelay) {
           setTypingDelayConfig(typingDelay);
@@ -869,13 +806,25 @@ const App: React.FC = () => {
         if (typingIndicator) {
           setTypingIndicatorConfig(typingIndicator);
         }
+        if (ircExport) {
+          setIrcExportConfig(ircExport);
+        }
+        if (imageGeneration) {
+          setImageGenerationConfig(imageGeneration);
+        }
         
-        setIsConfigInitialized(true);
+        setProgress(100);
+        setTimeout(() => {
+          setIsConfigInitialized(true);
+        }, 500);
         appDebug.log('Application configuration initialized successfully');
       } catch (error) {
         console.error('Failed to initialize application configuration:', error);
         setConfigError('Failed to initialize configuration. Using default settings.');
-        setIsConfigInitialized(true); // Still allow app to run with defaults
+        setProgress(100);
+        setTimeout(() => {
+          setIsConfigInitialized(true); // Still allow app to run with defaults
+        }, 500);
       }
     };
 
@@ -886,7 +835,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const detectElectron = () => {
       const electronDetected = isElectron();
-      setIsElectronApp(electronDetected);
+      dispatch({ type: 'SET_IS_ELECTRON_APP', payload: electronDetected });
       
       if (electronDetected) {
         appDebug.log('Electron environment detected - enabling desktop optimizations');
@@ -895,11 +844,11 @@ const App: React.FC = () => {
         setupElectronFeatures();
         
         // Hide mobile navigation in Electron
-        setMobileActivePanel('chat');
+        dispatch({ type: 'SET_MOBILE_ACTIVE_PANEL', payload: 'chat' });
         
         // Set desktop-optimized defaults
-        setShowElectronTitleBar(true);
-        setElectronMenuVisible(false);
+        dispatch({ type: 'SET_SHOW_ELECTRON_TITLE_BAR', payload: true });
+        dispatch({ type: 'SET_ELECTRON_MENU_VISIBLE', payload: false });
       } else {
         appDebug.log('Web environment detected - using responsive layout');
       }
@@ -912,6 +861,14 @@ const App: React.FC = () => {
   useEffect(() => {
     initializeChatLogs().catch(error => console.error("Critical error:", error));
   }, []);
+
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [theme]);
 
   // Ensure channels have users after initialization
   useEffect(() => {
@@ -946,27 +903,55 @@ const App: React.FC = () => {
     }
   }, [virtualUsers]);
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+  const handleImportConfig = (importedConfig: Partial<AppConfig>) => {
+    const fullConfig: AppConfig = {
+      ...loadConfig(),
+      ...importedConfig,
+      currentUserNickname: importedConfig.currentUserNickname || DEFAULT_NICKNAME,
+      virtualUsers: importedConfig.virtualUsers || '',
+      channels: importedConfig.channels || '',
+      simulationSpeed: importedConfig.simulationSpeed || 'normal',
+      aiModel: importedConfig.aiModel || DEFAULT_AI_MODEL,
+      typingDelay: importedConfig.typingDelay || DEFAULT_TYPING_DELAY,
+      typingIndicator: importedConfig.typingIndicator || DEFAULT_TYPING_INDICATOR,
+    };
+    handleSaveSettings(fullConfig);
+  };
+
   const handleSaveSettings = (config: AppConfig) => {
     settingsDebug.log('handleSaveSettings called with config:', config);
     settingsDebug.log('Config keys:', Object.keys(config));
     settingsDebug.log('Config aiModel:', config.aiModel);
     settingsDebug.log('Config simulationSpeed:', config.simulationSpeed);
     
-    saveConfig(config);
+    saveConfig({ ...config, theme });
     settingsDebug.log('saveConfig called successfully');
     
     // Initialize state from the new config
-    const { nickname, virtualUsers, channels: newChannels, simulationSpeed, aiModel: savedAiModel, typingDelay, typingIndicator } = initializeStateFromConfig(config);
+    const { nickname, virtualUsers, channels: newChannels, simulationSpeed, aiModel: savedAiModel, typingDelay, typingIndicator, ircExport, imageGeneration } = initializeStateFromConfig(config);
     settingsDebug.log('Saving settings with aiModel:', savedAiModel);
-    setCurrentUserNickname(nickname);
-    setVirtualUsers(virtualUsers);
+    dispatch({ type: 'SET_CURRENT_USER_NICKNAME', payload: nickname });
+    dispatch({ type: 'SET_VIRTUAL_USERS', payload: virtualUsers });
     
     // Use the new channels from config, but preserve operator assignments where possible
     const migratedChannels = migrateChannels(newChannels);
-    setChannels(migratedChannels);
+    dispatch({ type: 'SET_CHANNELS', payload: migratedChannels });
     
-    setSimulationSpeed(simulationSpeed);
-    setAiModel(savedAiModel || DEFAULT_AI_MODEL);
+    dispatch({ type: 'SET_SIMULATION_SPEED', payload: simulationSpeed });
+    dispatch({ type: 'SET_AI_MODEL', payload: savedAiModel || DEFAULT_AI_MODEL });
     settingsDebug.log('Set aiModel to:', savedAiModel || DEFAULT_AI_MODEL);
     
     // Update typing delay and indicator configurations
@@ -976,12 +961,17 @@ const App: React.FC = () => {
     if (typingIndicator) {
       setTypingIndicatorConfig(typingIndicator);
     }
+    if (ircExport) {
+      setIrcExportConfig(ircExport);
+    }
+    if (imageGeneration) {
+      setImageGenerationConfig(imageGeneration);
+    }
     
     // Clear PM conversations and unread status when settings are reset
-    setPrivateMessages({});
-    setUnreadPMUsers(new Set());
-    setUnreadChannels(new Set());
-    setActiveContext(null);
+    dispatch({ type: 'SET_PRIVATE_MESSAGES', payload: {} });
+    dispatch({ type: 'SET_UNREAD_PM_USERS', payload: new Set() });
+    dispatch({ type: 'SET_UNREAD_CHANNELS', payload: new Set() });
     
     // Clear localStorage for PM data
     try {
@@ -993,61 +983,71 @@ const App: React.FC = () => {
     } catch (error) {
       pmDebug.error('Failed to clear PM data from localStorage:', error);
     }
-    setTypingDelayConfig(typingDelay || DEFAULT_TYPING_DELAY);
-      setImageGenerationConfig(config.imageGeneration || {
-        provider: 'nano-banana',
-        apiKey: '',
-        model: 'gemini-2.5-flash-image-preview',
-        baseUrl: undefined
-      });
-    setPrivateMessages({});
 
     
     // Preserve active context if it's a channel that still exists
     if (activeContext?.type === 'channel') {
       const channelStillExists = migratedChannels.some(c => c.name === activeContext.name);
       if (!channelStillExists) {
-        setActiveContext(null);
+        dispatch({ type: 'SET_ACTIVE_CONTEXT', payload: null });
       }
     } else {
-      setActiveContext(null);
+      dispatch({ type: 'SET_ACTIVE_CONTEXT', payload: null });
     }
-    setIsSettingsOpen(false);
+    dispatch({ type: 'TOGGLE_SETTINGS_MODAL', payload: false });
   };
 
+  const handleThemeChange = (newTheme: string) => {
+    dispatch({ type: 'SET_THEME', payload: newTheme });
+  };
+
+  const openModal = (modal: 'settings' | 'batchUser', isOpen: boolean) => {
+    if (modal === 'settings') {
+      dispatch({ type: 'TOGGLE_SETTINGS_MODAL', payload: isOpen });
+    } else if (modal === 'batchUser') {
+      dispatch({ type: 'TOGGLE_BATCH_USER_MODAL', payload: isOpen });
+    }
+  };
 
   const handleOpenSettings = () => {
+    setOriginalTheme(theme);
     // Stop simulation immediately when opening settings
-    if (simulationIntervalRef.current) {
-      clearInterval(simulationIntervalRef.current);
-      simulationIntervalRef.current = null;
+    if (channelSimulationIntervalRef.current) {
+      clearInterval(channelSimulationIntervalRef.current);
+      channelSimulationIntervalRef.current = null;
     }
-    setIsSettingsOpen(true);
+    if (pmSimulationIntervalRef.current) {
+      clearInterval(pmSimulationIntervalRef.current);
+      pmSimulationIntervalRef.current = null;
+    }
+    openModal('settings', true);
   };
 
   const handleCloseSettings = () => {
-    setIsSettingsOpen(false);
+    dispatch({ type: 'SET_THEME', payload: originalTheme });
+    openModal('settings', false);
+    openModal('batchUser', false);
   };
 
   const handleOpenChatLogs = () => {
-    setIsChatLogOpen(true);
+    dispatch({ type: 'TOGGLE_CHAT_LOG', payload: true });
   };
 
   const handleCloseChatLogs = () => {
-    setIsChatLogOpen(false);
+    dispatch({ type: 'TOGGLE_CHAT_LOG', payload: false });
+  };
+
+  const handleOpenDebugLog = () => {
+    dispatch({ type: 'TOGGLE_DEBUG_LOG', payload: true });
+  };
+
+  const handleCloseDebugLog = () => {
+    dispatch({ type: 'TOGGLE_DEBUG_LOG', payload: false });
   };
 
 
   const setTyping = (nickname: string, isTyping: boolean) => {
-    setTypingUsers(prev => {
-      const newSet = new Set(prev);
-      if (isTyping) {
-        newSet.add(nickname);
-      } else {
-        newSet.delete(nickname);
-      }
-      return newSet;
-    });
+    dispatch({ type: 'SET_TYPING_USER', payload: { nickname, isTyping } });
   };
 
   // Helper function to parse PM responses and remove username prefixes
@@ -1663,108 +1663,14 @@ const App: React.FC = () => {
     };
     if (context.type === 'channel') {
       messageDebug.log(` Adding message to channel ${context.name}:`, processedMessage);
-      setChannels(prev => {
-        const updatedChannels = prev.map(c => {
-          if (c.name === context.name) {
-            // Check if message already exists to prevent duplicates
-            const existingMessage = c.messages?.find(m => m.id === processedMessage.id);
-            if (existingMessage) {
-              messageDebug.log(` Message ${processedMessage.id} already exists in channel ${context.name}, skipping`);
-              return c;
-            }
-            
-            // Update relationship memory for all virtual users in the channel
-            const updatedUsers = updateChannelRelationshipMemory(c.users, processedMessage, context.name);
-            
-            return { 
-              ...c, 
-              messages: [...(c.messages || []), processedMessage].slice(-1000),
-              users: updatedUsers
-            };
-          }
-          return c;
-        });
-        simulationDebug.debug(`Message added to channel ${context.name}. Updated channel messages count: ${updatedChannels.find(c => c.name === context.name)?.messages?.length || 0}`);
-        return updatedChannels;
-      });
+      dispatch({ type: 'ADD_MESSAGE_TO_CHANNEL', payload: { channelName: context.name, message: processedMessage } });
 
     } else { // 'pm'
-      setPrivateMessages(prev => {
-        // First try to find user in virtualUsers
-        let user = virtualUsers.find(u => u.nickname === context.with);
-        
-        // If not found in virtualUsers, check networkUsers
-        if (!user) {
-          const networkUser = networkUsers.find(u => u.nickname === context.with);
-          if (networkUser) {
-            // Convert network user to User format
-            user = {
-              nickname: networkUser.nickname,
-              status: networkUser.status,
-              userType: 'network' as const,
-              personality: 'Network User',
-              languageSkills: {
-                languages: [{ language: 'English', fluency: 'native' }]
-              },
-              writingStyle: {
-                formality: 'neutral',
-                verbosity: 'neutral',
-                humor: 'none',
-                emojiUsage: 'low',
-                punctuation: 'standard'
-              }
-            };
-          }
-        }
-        
-        // If still not found, try to get from existing conversation
-        if (!user) {
-          const existingConversation = prev[context.with];
-          if (existingConversation) {
-            user = existingConversation.user;
-          } else {
-            messageDebug.error(` User ${context.with} not found, creating fallback user`);
-            // Create fallback user to prevent UI disappearing
-            user = {
-              nickname: context.with,
-              status: 'online',
-              userType: 'network' as const,
-              personality: 'User',
-              languageSkills: {
-                languages: [{ language: 'English', fluency: 'native' }]
-              },
-              writingStyle: {
-                formality: 'neutral',
-                verbosity: 'neutral',
-                humor: 'none',
-                emojiUsage: 'low',
-                punctuation: 'standard'
-              }
-            };
-          }
-        }
-        
-        const conversation = prev[context.with] || { user, messages: [] };
-        
-        // Check if message already exists to prevent duplicates
-        const existingMessage = conversation.messages?.find(m => m.id === processedMessage.id);
-        if (existingMessage) {
-          messageDebug.log(` Message ${processedMessage.id} already exists in PM with ${context.with}, skipping`);
-          return prev;
-        }
-        
-        return {
-          ...prev,
-          [context.with]: {
-            ...conversation,
-            messages: [...conversation.messages, processedMessage].slice(-1000),
-          },
-        };
-      });
+      dispatch({ type: 'ADD_MESSAGE_TO_PM', payload: { nickname: context.with, message: processedMessage } });
       
       // Mark PM user as having unread messages if the message is not from the current user
       if (processedMessage.nickname !== currentUserNickname) {
-        setUnreadPMUsers(prev => new Set([...prev, context.with]));
+        dispatch({ type: 'ADD_UNREAD_PM_USER', payload: context.with });
         
         // Auto-open PM window if not already open and message is from virtual/network user
         if (activeContext?.type !== 'pm' || activeContext?.with !== context.with) {
@@ -1783,45 +1689,30 @@ const App: React.FC = () => {
             setTimeout(() => setRecentlyAutoOpenedPM(null), 2000); // Clear after 2 seconds
             
             // Create PM conversation if it doesn't exist
-            setPrivateMessages(prev => {
-              if (!prev[context.with]) {
-                // Find the user in virtual users or network users
-                let user = virtualUsers.find(u => u.nickname === context.with);
-                if (!user) {
-                  user = networkUsers.find(u => u.nickname === context.with);
-                  if (user) {
-                    // Convert network user to User format
-                    user = {
-                      nickname: user.nickname,
-                      status: user.status,
-                      userType: 'network' as const,
-                      personality: 'Network User',
-                      languageSkills: {
-                        languages: [{ language: 'English', fluency: 'native' }]
-                      },
-                      writingStyle: {
-                        formality: 'neutral',
-                        verbosity: 'neutral',
-                        humor: 'none',
-                        emojiUsage: 'low',
-                        punctuation: 'standard'
-                      }
-                    };
-                  }
-                }
-                
-                if (user) {
-                  pmDebug.log('Creating new PM conversation for auto-open:', context.with);
-                  return {
-                    ...prev,
-                    [context.with]: { user, messages: [] }
-                  };
-                }
+            const userForPM = virtualUsers.find(u => u.nickname === context.with) ||
+            (() => {
+              const networkUser = networkUsers.find(u => u.nickname === context.with);
+              if (networkUser) {
+                return {
+                  ...networkUser,
+                  userType: 'network' as const,
+                  personality: 'Network User',
+                  languageSkills: { fluency: 'native' as const, languages: ['English'] },
+                  writingStyle: { formality: 'casual' as const, verbosity: 'moderate' as const, humor: 'none' as const, emojiUsage: 'none' as const, punctuation: 'standard' as const },
+                };
               }
-              return prev;
-            });
+              return {
+                nickname: context.with,
+                status: 'online' as const,
+                userType: 'network' as const,
+                personality: 'Network User',
+                languageSkills: { fluency: 'native' as const, languages: ['English'] },
+                writingStyle: { formality: 'casual' as const, verbosity: 'moderate' as const, humor: 'none' as const, emojiUsage: 'none' as const, punctuation: 'standard' as const },
+              };
+            })();
+            dispatch({ type: 'CREATE_PM_CONVERSATION', payload: { nickname: context.with, user: userForPM } });
             
-            setActiveContext({ type: 'pm', with: context.with });
+            dispatch({ type: 'SET_ACTIVE_CONTEXT', payload: { type: 'pm', with: context.with } });
           }
         }
       }
@@ -1829,7 +1720,7 @@ const App: React.FC = () => {
     
     // Mark channel as unread if the message is not from the current user (for channel messages)
     if (context.type === 'channel' && processedMessage.nickname !== currentUserNickname) {
-      setUnreadChannels(prev => new Set([...prev, context.name]));
+      dispatch({ type: 'ADD_UNREAD_CHANNEL', payload: context.name });
     }
 
 
@@ -1903,7 +1794,17 @@ const App: React.FC = () => {
         }
       }
     }
-  }, [virtualUsers, networkUsers, currentUserNickname, activeContext, broadcastChannel, setPrivateMessages, setUnreadPMUsers, setChannels, setUnreadChannels, setTyping, setProcessedVirtualMessageIds, showAiReactionNotification, setRecentlyAutoOpenedPM, isNetworkConnected]);
+  }, [virtualUsers, networkUsers, currentUserNickname, activeContext, broadcastChannel, dispatch, showAiReactionNotification, setRecentlyAutoOpenedPM, isNetworkConnected, setProcessedVirtualMessageIds]);
+
+  const updateMessageInContext = useCallback((updatedMessage: Message, context: ActiveContext | null) => {
+    if (!context) return;
+
+    if (context.type === 'channel') {
+      dispatch({ type: 'UPDATE_MESSAGE_IN_CHANNEL', payload: { channelName: context.name, message: updatedMessage } });
+    } else { // 'pm'
+      dispatch({ type: 'UPDATE_MESSAGE_IN_PM', payload: { nickname: context.with, message: updatedMessage } });
+    }
+  }, [dispatch]);
 
   // Trigger AI operator response to op requests
   const triggerAIOperatorResponse = useCallback(async (channel: Channel, requestingUser: string, operators: User[]) => {
@@ -1939,14 +1840,7 @@ const App: React.FC = () => {
         
         if (isGrantingOp) {
           // Grant operator status to the requesting user
-          setChannels(prevChannels => 
-            prevChannels.map(c => {
-              if (c.name === channel.name) {
-                return addChannelOperator(c, requestingUser);
-              }
-              return c;
-            })
-          );
+          dispatch({ type: 'ADD_CHANNEL_OPERATOR', payload: { channelName: channel.name, nickname: requestingUser } });
           
           // Add a system message confirming the op grant
           setTimeout(() => {
@@ -1979,7 +1873,7 @@ const App: React.FC = () => {
         type: 'system'
       }, { type: 'channel', name: channel.name });
     }
-  }, [aiModel, addMessageToContext, generateUniqueMessageId, setChannels]);
+  }, [aiModel, addMessageToContext, generateUniqueMessageId, dispatch]);
 
   // Handle joining a channel
   const handleJoinChannel = useCallback((channelName: string) => {
@@ -2005,11 +1899,7 @@ const App: React.FC = () => {
         writingStyle: { formality: 'casual' as const, verbosity: 'moderate' as const, humor: 'none' as const, emojiUsage: 'rare' as const, punctuation: 'standard' as const }
       };
 
-      setChannels(prev => prev.map(c => 
-        c.name === channelName 
-          ? { ...c, users: [...c.users, currentUser] }
-          : c
-      ));
+      dispatch({ type: 'ADD_USER_TO_CHANNEL', payload: { channelName, user: currentUser } });
 
       // Add join notification
       const joinMessage: Message = {
@@ -2036,11 +1926,7 @@ const App: React.FC = () => {
         const shuffledUsers = [...availableUsers].sort(() => Math.random() - 0.5);
         const usersToJoin = shuffledUsers.slice(0, numUsersToJoin);
         
-        setChannels(prev => prev.map(c => 
-          c.name === channelName 
-            ? { ...c, users: [...c.users, ...usersToJoin] }
-            : c
-        ));
+        dispatch({ type: 'ADD_USERS_TO_CHANNEL', payload: { channelName, users: usersToJoin } });
 
         // Add join messages for the new users
         usersToJoin.forEach(user => {
@@ -2057,7 +1943,7 @@ const App: React.FC = () => {
     }
 
     // Switch to the channel
-    setActiveContext({ type: 'channel', name: channelName });
+    dispatch({ type: 'SET_ACTIVE_CONTEXT', payload: { type: 'channel', name: channelName } });
   }, [channels, currentUserNickname, addMessageToContext, virtualUsers]);
 
   // Handle leaving a channel
@@ -2067,11 +1953,7 @@ const App: React.FC = () => {
 
 
     // Remove current user from channel
-    setChannels(prev => prev.map(c => 
-      c.name === channelName 
-        ? { ...c, users: c.users.filter(u => u.nickname !== currentUserNickname) }
-        : c
-    ));
+    dispatch({ type: 'REMOVE_USER_FROM_CHANNEL', payload: { channelName, nickname: currentUserNickname } });
 
     // Add leave notification
     const leaveMessage: Message = {
@@ -2088,9 +1970,9 @@ const App: React.FC = () => {
     if (activeContext?.type === 'channel' && activeContext.name === channelName) {
       const remainingChannels = channels.filter(c => c.name !== channelName && c.users.some(u => u.nickname === currentUserNickname));
       if (remainingChannels.length > 0) {
-        setActiveContext({ type: 'channel', name: remainingChannels[0].name });
+        dispatch({ type: 'SET_ACTIVE_CONTEXT', payload: { type: 'channel', name: remainingChannels[0].name } });
       } else {
-        setActiveContext(null);
+        dispatch({ type: 'SET_ACTIVE_CONTEXT', payload: null });
       }
     }
   }, [channels, currentUserNickname, activeContext, addMessageToContext]);
@@ -2101,9 +1983,54 @@ const App: React.FC = () => {
       handleLeaveChannel(activeContext.name);
     } else if (activeContext?.type === 'pm') {
       // For PMs, just clear the context (don't remove the conversation)
-      setActiveContext(null);
+      dispatch({ type: 'SET_ACTIVE_CONTEXT', payload: null });
     }
   }, [activeContext, handleLeaveChannel]);
+
+  const handleClearChat = useCallback(async () => {
+    if (!activeContext) return;
+
+    const confirmation = window.confirm(
+      `Are you sure you want to clear the chat history for ${
+        activeContext.type === 'channel' ? activeContext.name : `your conversation with ${activeContext.with}`
+      }? This action cannot be undone.`
+    );
+
+    if (!confirmation) return;
+
+    const chatLogService = getChatLogService();
+
+    if (activeContext.type === 'channel') {
+      const channelName = activeContext.name;
+      await chatLogService.clearChannel(channelName);
+      dispatch({ type: 'CLEAR_CHANNEL_MESSAGES', payload: channelName });
+      addMessageToContext(
+        {
+          id: generateUniqueMessageId(),
+          nickname: 'system',
+          content: 'Chat history has been cleared.',
+          timestamp: new Date(),
+          type: 'system',
+        },
+        activeContext
+      );
+    } else if (activeContext.type === 'pm') {
+      const pmUser = activeContext.with;
+      const pmChannelName = `pm_${pmUser}`;
+      await chatLogService.clearChannel(pmChannelName);
+      dispatch({ type: 'CLEAR_PM_MESSAGES', payload: pmUser });
+      addMessageToContext(
+        {
+          id: generateUniqueMessageId(),
+          nickname: 'system',
+          content: 'Chat history has been cleared.',
+          timestamp: new Date(),
+          type: 'system',
+        },
+        activeContext
+      );
+    }
+  }, [activeContext, addMessageToContext, generateUniqueMessageId]);
 
   // Generate contextually appropriate trigger message for autonomous PMs
   const generateContextualTriggerMessage = useCallback((conversation: PrivateMessageConversation, currentUserNickname: string): Message => {
@@ -2977,12 +2904,7 @@ const App: React.FC = () => {
   // Generate autonomous private messages from virtual users
   const generateAutonomousPM = useCallback(async () => {
     // Get all virtual users from all channels, excluding human users
-    const allVirtualUsers = channels.flatMap(channel => 
-      migrateUsers(channel.users).filter(u => 
-        u.userType === 'virtual' && 
-        !isHumanUser(u, currentUserNickname)
-      )
-    );
+    const allVirtualUsers = virtualUsers.filter(u => !isHumanUser(u, currentUserNickname));
 
     if (allVirtualUsers.length === 0) {
       simulationDebug.log('No virtual users available for autonomous PM generation (excluding human users)');
@@ -3069,7 +2991,7 @@ const App: React.FC = () => {
           addMessageToContext(pmMessage, { type: 'pm', with: randomUser.nickname });
           
           // Mark as unread
-          setUnreadPMUsers(prev => new Set([...prev, randomUser.nickname]));
+          dispatch({ type: 'ADD_UNREAD_PM_USER', payload: randomUser.nickname });
           
           simulationDebug.log(`Generated autonomous PM from ${randomUser.nickname}: "${pmContent}"`);
         }
@@ -3082,7 +3004,7 @@ const App: React.FC = () => {
         simulationDebug.error(`Failed to generate PM message ${i + 1} from ${randomUser.nickname}:`, error);
       }
     }
-  }, [activeContext, channels, currentUserNickname, privateMessages, aiModel, addMessageToContext, setUnreadPMUsers, generateUniqueMessageId, generateContextualTriggerMessage]);
+  }, [activeContext, channels, currentUserNickname, privateMessages, aiModel, addMessageToContext, dispatch, generateUniqueMessageId, generateContextualTriggerMessage]);
 
   // Refs to avoid circular dependencies in useEffect
   const channelsRef = useRef(channels);
@@ -3147,13 +3069,7 @@ const App: React.FC = () => {
         
         // Set new topic
         const newTopic = parts.slice(1).join(' ');
-        setChannels(prevChannels => 
-          prevChannels.map(channel => 
-            channel.name === activeChannel.name 
-              ? { ...channel, topic: newTopic }
-              : channel
-          )
-        );
+        dispatch({ type: 'SET_CHANNEL_TOPIC', payload: { channelName: activeChannel.name, topic: newTopic } });
         
         // Add topic change message
         addMessageToContext({
@@ -3275,10 +3191,16 @@ const App: React.FC = () => {
         
         const channelName = parts[1].startsWith('#') ? parts[1] : `#${parts[1]}`;
         
+        if (isNetworkConnected) {
+          const networkService = getNetworkService();
+          networkService.joinChannel(channelName);
+          return;
+        }
+        
         // Check if channel already exists
         const existingChannel = channels.find(c => c.name === channelName);
         if (existingChannel) {
-          setActiveContext({ type: 'channel', name: channelName });
+          dispatch({ type: 'SET_ACTIVE_CONTEXT', payload: { type: 'channel', name: channelName } });
           addMessageToContext({
             id: generateUniqueMessageId(),
             nickname: 'system',
@@ -3297,7 +3219,7 @@ const App: React.FC = () => {
             status: 'online' as const,
             personality: 'The human user',
             userType: 'virtual' as const,
-            languageSkills: { 
+            languageSkills: {
               languages: [{
                 language: 'English',
                 fluency: 'native' as const,
@@ -3311,8 +3233,8 @@ const App: React.FC = () => {
           operators: [...new Set([currentUserNickname])]
         };
         
-        setChannels(prev => [...prev, newChannel]);
-        setActiveContext({ type: 'channel', name: channelName });
+        dispatch({ type: 'ADD_CHANNEL', payload: newChannel });
+        dispatch({ type: 'SET_ACTIVE_CONTEXT', payload: { type: 'channel', name: channelName } });
         
             addMessageToContext({
           id: generateUniqueMessageId(),
@@ -3350,25 +3272,14 @@ const App: React.FC = () => {
         }, activeContext);
         
         // Remove user from channel
-        setChannels(prevChannels => 
-          prevChannels.map(channel => {
-            if (channel.name === activeContext.name) {
-              return {
-                ...channel,
-                users: channel.users.filter(u => u.nickname !== currentUserNickname),
-                operators: channel.operators.filter(op => op !== currentUserNickname)
-              };
-            }
-            return channel;
-          })
-        );
+        dispatch({ type: 'REMOVE_USER_FROM_CHANNEL', payload: { channelName: activeContext.name, nickname: currentUserNickname } });
         
         // Switch to first available channel or general
         const remainingChannels = channels.filter(c => c.name !== activeContext.name);
         if (remainingChannels.length > 0) {
-          setActiveContext({ type: 'channel', name: remainingChannels[0].name });
+          dispatch({ type: 'SET_ACTIVE_CONTEXT', payload: { type: 'channel', name: remainingChannels[0].name } });
         } else {
-          setActiveContext(null);
+          dispatch({ type: 'SET_ACTIVE_CONTEXT', payload: null });
         }
         
         return;
@@ -3416,20 +3327,10 @@ const App: React.FC = () => {
         }
         
         const oldNickname = currentUserNickname;
-        setCurrentUserNickname(newNickname);
+        dispatch({ type: 'SET_CURRENT_USER_NICKNAME', payload: newNickname });
         
         // Update nickname in all channels
-        setChannels(prevChannels => 
-          prevChannels.map(channel => ({
-            ...channel,
-            users: channel.users.map(user => 
-              user.nickname === oldNickname ? { ...user, nickname: newNickname } : user
-            ),
-            operators: channel.operators.map(op => 
-              op === oldNickname ? newNickname : op
-            )
-          }))
-        );
+        dispatch({ type: 'UPDATE_NICKNAME_IN_CHANNELS', payload: { oldNickname, newNickname } });
         
         // Add nickname change message to all channels
         channels.forEach(channel => {
@@ -3577,19 +3478,36 @@ const App: React.FC = () => {
   // Operator management functions
   const handleToggleOperator = (nickname: string) => {
     if (!activeChannel) return;
+
+    if (!canUserPerformAction(activeChannel, currentUserNickname, 'mode')) {
+      addMessageToContext({
+        id: generateUniqueMessageId(),
+        nickname: 'system',
+        content: 'You do not have permission to change user modes.',
+        timestamp: new Date(),
+        type: 'system'
+      }, activeContext);
+      return;
+    }
+
+    const isAddingOp = !isChannelOperator(activeChannel, nickname);
+    const mode = isAddingOp ? '+o' : '-o';
+    const modeMessage = `sets mode: ${mode} ${nickname}`;
+
+    addMessageToContext({
+      id: generateUniqueMessageId(),
+      nickname: currentUserNickname,
+      content: modeMessage,
+      timestamp: new Date(),
+      type: 'system',
+      command: 'mode'
+    }, activeContext);
     
-    setChannels(prevChannels => 
-      prevChannels.map(channel => {
-        if (channel.name === activeChannel.name) {
-          if (isChannelOperator(channel, nickname)) {
-            return removeChannelOperator(channel, nickname);
-          } else {
-            return addChannelOperator(channel, nickname);
-          }
-        }
-        return channel;
-      })
-    );
+    if (isChannelOperator(activeChannel, nickname)) {
+      dispatch({ type: 'REMOVE_CHANNEL_OPERATOR', payload: { channelName: activeChannel.name, nickname } });
+    } else {
+      dispatch({ type: 'ADD_CHANNEL_OPERATOR', payload: { channelName: activeChannel.name, nickname } });
+    }
   };
 
   const handleKickUser = (targetNickname: string, reason: string) => {
@@ -3605,17 +3523,7 @@ const App: React.FC = () => {
     }
 
     // Remove user from channel
-    setChannels(prevChannels => 
-      prevChannels.map(channel => {
-        if (channel.name === activeChannel.name) {
-          return {
-            ...channel,
-            users: channel.users.filter(u => u.nickname !== targetNickname)
-          };
-        }
-        return channel;
-      })
-    );
+    dispatch({ type: 'REMOVE_USER_FROM_CHANNEL', payload: { channelName: activeChannel.name, nickname: targetNickname } });
 
     // Add kick message
     addMessageToContext({
@@ -3640,17 +3548,7 @@ const App: React.FC = () => {
     }
 
     // Remove user from channel
-    setChannels(prevChannels => 
-      prevChannels.map(channel => {
-        if (channel.name === activeChannel.name) {
-          return {
-            ...channel,
-            users: channel.users.filter(u => u.nickname !== targetNickname)
-          };
-        }
-        return channel;
-      })
-    );
+    dispatch({ type: 'REMOVE_USER_FROM_CHANNEL', payload: { channelName: activeChannel.name, nickname: targetNickname } });
 
     // Add ban message
     addMessageToContext({
@@ -3668,8 +3566,8 @@ const App: React.FC = () => {
     // The quoted message will be passed to handleSendMessage when the user sends their reply
   }, []);
 
-  const handleSendMessage = async (content: string, quotedMessage?: Message) => {
-    notificationDebug.log('handleSendMessage called with content:', content, 'activeContext:', activeContext, 'quotedMessage:', quotedMessage);
+  const handleSendMessage = async (content: string, quotedMessage?: Message, attachments?: Attachment[], audioAnalysis?: { transcript: string }) => {
+    notificationDebug.log('handleSendMessage called with content:', content, 'activeContext:', activeContext, 'quotedMessage:', quotedMessage, 'attachments:', attachments, 'audioAnalysis:', audioAnalysis);
     
     if (content.startsWith('/')) {
       handleCommand(content);
@@ -3678,7 +3576,12 @@ const App: React.FC = () => {
     
     // Check for bot commands
     if (isBotCommand(content)) {
-      await handleBotCommandMessage(content);
+      dispatch({ type: 'SET_IS_LOADING', payload: true });
+      try {
+        await handleBotCommandMessage(content);
+      } finally {
+        dispatch({ type: 'SET_IS_LOADING', payload: false });
+      }
       return;
     }
     
@@ -3688,9 +3591,7 @@ const App: React.FC = () => {
       return;
     }
     
-    // Set loading state only briefly for immediate feedback, then reset
-    setIsLoading(true);
-    setTimeout(() => setIsLoading(false), 100); // Reset quickly to allow new messages
+    dispatch({ type: 'SET_IS_LOADING', payload: true });
     
     // Create user message object for both network and local handling
     const userMessage: Message = {
@@ -3698,14 +3599,16 @@ const App: React.FC = () => {
       nickname: currentUserNickname,
       content,
       timestamp: new Date(),
-      type: activeContext?.type === 'pm' ? 'pm' : 'user',
+      type: 'user',
       quotedMessage: quotedMessage ? {
         id: quotedMessage.id,
         nickname: quotedMessage.nickname,
         content: quotedMessage.content,
         timestamp: quotedMessage.timestamp,
         type: quotedMessage.type
-      } : undefined
+      } : undefined,
+      attachments: attachments,
+      audioAnalysis: audioAnalysis
     };
     
     // If connected to network, send message via network
@@ -3772,7 +3675,21 @@ const App: React.FC = () => {
             notificationDebug.log('No channel found for activeContext:', activeContext);
           }
         } else if (activeContext && activeContext.type === 'pm') { // 'pm'
-          const user = virtualUsers.find(u => u.nickname === activeContext.with);
+          const user =
+            virtualUsers.find(u => u.nickname === activeContext.with) ||
+            (() => {
+              const networkUser = networkUsers.find(u => u.nickname === activeContext.with);
+              if (networkUser) {
+                return {
+                  ...networkUser,
+                  userType: 'network' as const,
+                  personality: 'Network User',
+                  languageSkills: { fluency: 'native' as const, languages: ['English'] },
+                  writingStyle: { formality: 'casual' as const, verbosity: 'moderate' as const, humor: 'none' as const, emojiUsage: 'none' as const, punctuation: 'standard' as const },
+                };
+              }
+              return undefined;
+            })();
           if (!user) {
             pmDebug.error(` User ${activeContext.with} not found in virtualUsers, skipping PM response`);
             return;
@@ -3893,6 +3810,8 @@ const App: React.FC = () => {
           type: 'system'
         };
         addMessageToContext(errorMessage, activeContext);
+      } finally {
+        dispatch({ type: 'SET_IS_LOADING', payload: false });
       }
     })(); // Execute the async function immediately
   };
@@ -3959,73 +3878,23 @@ The response must be a single line in the format: "nickname: greeting message"
   // Enhanced user management with dynamic channel joining
   const handleUsersChange = useCallback((newUsers: User[]) => {
     const oldUsers = virtualUsers;
-    const addedUsers = newUsers.filter(newUser => 
+    const addedUsers = newUsers.filter(newUser =>
       !oldUsers.some(oldUser => oldUser.nickname === newUser.nickname)
     );
-    const removedUsers = oldUsers.filter(oldUser => 
+    const removedUsers = oldUsers.filter(oldUser =>
       !newUsers.some(newUser => newUser.nickname === oldUser.nickname)
     );
-    const updatedUsers = newUsers.filter(newUser => 
+    const updatedUsers = newUsers.filter(newUser =>
       oldUsers.some(oldUser => oldUser.nickname === newUser.nickname) &&
       !oldUsers.some(oldUser => oldUser.nickname === newUser.nickname && JSON.stringify(oldUser) === JSON.stringify(newUser))
     );
     
     // Update virtual users
-    setVirtualUsers(newUsers);
+    dispatch({ type: 'SET_VIRTUAL_USERS', payload: newUsers });
     
     // Handle added users - add them to channels dynamically
     if (addedUsers.length > 0) {
-      setChannels(prevChannels => {
-        const updatedChannels = prevChannels.map(channel => {
-          const updatedChannel = { ...channel };
-          
-          // Add new users to this channel
-          addedUsers.forEach((newUser, userIndex) => {
-            const isAlreadyInChannel = channel.users.some(u => u.nickname === newUser.nickname);
-            if (!isAlreadyInChannel) {
-              updatedChannel.users = [...updatedChannel.users, newUser];
-            }
-          });
-          
-          // Deduplicate users to prevent React key collisions
-          updatedChannel.users = deduplicateChannelUsers(updatedChannel.users);
-          
-          return updatedChannel;
-        });
-        
-        // Only add join messages for actual user joins, not channel data synchronization
-        // Check if this is a real user join (not just channel data sync)
-        const isRealUserJoin = addedUsers.length === 1 && 
-          addedUsers[0].personality === 'Network User' && 
-          !prevChannels.some(channel => 
-            channel.users.some(user => user.nickname === addedUsers[0].nickname)
-          );
-        
-        if (isRealUserJoin) {
-          // Find which channel the user actually joined
-          const joinedChannel = updatedChannels.find(channel => 
-            channel.users.some(user => user.nickname === addedUsers[0].nickname) &&
-            !prevChannels.find(prevChannel => 
-              prevChannel.name === channel.name && 
-              prevChannel.users.some(user => user.nickname === addedUsers[0].nickname)
-            )
-          );
-          
-          if (joinedChannel) {
-              const joinMessage: Message = {
-                id: generateUniqueMessageId(),
-              nickname: addedUsers[0].nickname,
-              content: joinedChannel.name,
-                timestamp: new Date(),
-                type: 'join'
-              };
-            joinDebug.log(`Creating join message for ${addedUsers[0].nickname} in ${joinedChannel.name}:`, joinMessage);
-            addMessageToContext(joinMessage, { type: 'channel', name: joinedChannel.name });
-            }
-        }
-        
-        return updatedChannels;
-      });
+      dispatch({ type: 'ADD_USERS_TO_CHANNELS', payload: { addedUsers } });
       
       // Generate greetings for new users in active channel
       if (activeContext?.type === 'channel') {
@@ -4062,39 +3931,14 @@ The response must be a single line in the format: "nickname: greeting message"
         });
       });
       
-      setChannels(prevChannels => 
-        prevChannels.map(channel => {
-          const updatedChannel = { ...channel };
-          
-          removedUsers.forEach((removedUser, userIndex) => {
-            const wasInChannel = channel.users.some(u => u.nickname === removedUser.nickname);
-            if (wasInChannel) {
-              updatedChannel.users = updatedChannel.users.filter(u => u.nickname !== removedUser.nickname);
-            }
-          });
-          
-          return updatedChannel;
-        })
-      );
+      dispatch({ type: 'REMOVE_USERS_FROM_CHANNELS', payload: removedUsers });
     }
     
     // Handle updated users - update them in all channels where they exist
     if (updatedUsers.length > 0) {
-      setChannels(prevChannels => 
-        prevChannels.map(channel => {
-          const updatedChannel = { ...channel };
-          
-          // Update users in this channel
-          updatedChannel.users = updatedChannel.users.map(channelUser => {
-            const updatedUser = updatedUsers.find(u => u.nickname === channelUser.nickname);
-            return updatedUser || channelUser;
-          });
-          
-          return updatedChannel;
-        })
-      );
+      dispatch({ type: 'UPDATE_USERS_IN_CHANNELS', payload: { updatedUsers, oldUsers } });
     }
-  }, [virtualUsers, activeContext, channels, addMessageToContext, generateGreetingForNewUser, aiModel]);
+  }, [virtualUsers, activeContext, channels, addMessageToContext, generateGreetingForNewUser, aiModel, dispatch]);
 
   // Afterhours Protocol detection
   const isAfterhoursProtocol = useCallback((): boolean => {
@@ -4182,7 +4026,7 @@ The response must be a single line in the format: "nickname: greeting message"
     return false;
   }, []);
 
-  const runSimulation = useCallback(async () => {
+  const runChannelSimulation = useCallback(async () => {
     // Safety check: Don't run simulation if settings modal is open
     if (isSettingsOpen) {
       simulationDebug.debug('Settings modal is open, skipping simulation');
@@ -4240,13 +4084,13 @@ The response must be a single line in the format: "nickname: greeting message"
               
               if (reactionNickname && reactionContent && reactionNickname.trim()) {
                 // Show typing indicator
-                setTyping(reactionNickname.trim(), true);
+                dispatch({ type: 'SET_TYPING_USER', payload: { nickname: reactionNickname.trim(), isTyping: true } });
                 
                 // Simulate typing delay
                 await simulateTypingDelay(reactionContent.length, typingDelayConfig);
                 
                 // Hide typing indicator
-                setTyping(reactionNickname.trim(), false);
+                dispatch({ type: 'SET_TYPING_USER', payload: { nickname: reactionNickname.trim(), isTyping: false } });
                 
                 const reactionMessage: Message = {
                   id: generateUniqueMessageId(),
@@ -4298,7 +4142,7 @@ The response must be a single line in the format: "nickname: greeting message"
           ? { ...channel, messages: channel.messages.slice(-1000) }
           : channel
       );
-      setChannels(updatedChannels);
+      dispatch({ type: 'SET_CHANNELS', payload: updatedChannels });
     }
 
     try {
@@ -4316,9 +4160,6 @@ The response must be a single line in the format: "nickname: greeting message"
           if (isBotCommand(content)) {
             simulationDebug.log(` Virtual user ${nickname.trim()} used bot command: ${content}`);
             
-            // Don't add the original bot command message - the bot response will show the prompt
-            // Users don't need to see the raw command text, just the bot's response
-            
             // Find the user who sent the command
             const user = targetChannel.users.find(u => u.nickname === nickname.trim());
             if (user) {
@@ -4332,7 +4173,7 @@ The response must be a single line in the format: "nickname: greeting message"
             }
           } else {
             // Regular message - show typing indicator
-          setTyping(nickname.trim(), true);
+          dispatch({ type: 'SET_TYPING_USER', payload: { nickname: nickname.trim(), isTyping: true } });
           
           // Ensure minimum delay for typing indicator visibility
           await new Promise(resolve => setTimeout(resolve, 200));
@@ -4347,7 +4188,7 @@ The response must be a single line in the format: "nickname: greeting message"
           }
           
           // Hide typing indicator
-          setTyping(nickname.trim(), false);
+          dispatch({ type: 'SET_TYPING_USER', payload: { nickname: nickname.trim(), isTyping: false } });
           
           const aiMessage: Message = {
               id: generateUniqueMessageId(),
@@ -4360,7 +4201,7 @@ The response must be a single line in the format: "nickname: greeting message"
           addMessageToContext(aiMessage, { type: 'channel', name: targetChannel.name });
           
           // Sometimes generate a reaction to the AI message for more conversation
-          if (Math.random() < 0.2) { // 20% chance to generate a reaction (reduced from 50%)
+          if (Math.random() < 0.15) { // 15% chance to generate a reaction (reduced from 20%)
             simulationDebug.debug(`Generating reaction to AI message from ${nickname.trim()}`);
             setTimeout(async () => {
               try {
@@ -4379,13 +4220,13 @@ The response must be a single line in the format: "nickname: greeting message"
                   
                   if (reactionNickname && reactionContent && reactionNickname.trim()) {
                     // Show typing indicator
-                    setTyping(reactionNickname.trim(), true);
+                    dispatch({ type: 'SET_TYPING_USER', payload: { nickname: reactionNickname.trim(), isTyping: true } });
                     
                     // Simulate typing delay
                     await simulateTypingDelay(reactionContent.length, typingDelayConfig);
                     
                     // Hide typing indicator
-                    setTyping(reactionNickname.trim(), false);
+                    dispatch({ type: 'SET_TYPING_USER', payload: { nickname: reactionNickname.trim(), isTyping: false } });
                     
                     const reactionMessage: Message = {
                       id: generateUniqueMessageId(),
@@ -4440,7 +4281,7 @@ The response must be a single line in the format: "nickname: greeting message"
                   }
                 } else {
                   // Regular message - show typing indicator
-                  setTyping(nickname.trim(), true);
+                  dispatch({ type: 'SET_TYPING_USER', payload: { nickname: nickname.trim(), isTyping: true } });
                   
                   // Ensure minimum delay for typing indicator visibility
                   await new Promise(resolve => setTimeout(resolve, 200));
@@ -4454,7 +4295,7 @@ The response must be a single line in the format: "nickname: greeting message"
                   }
                   
                   // Hide typing indicator
-                  setTyping(nickname.trim(), false);
+                  dispatch({ type: 'SET_TYPING_USER', payload: { nickname: nickname.trim(), isTyping: false } });
                   
                   const aiMessage: Message = {
                     id: generateUniqueMessageId(),
@@ -4476,7 +4317,7 @@ The response must be a single line in the format: "nickname: greeting message"
       
       // In burst mode, sometimes generate a second message for more activity
       // Reduced probability for less hectic simulation
-      if (shouldBurst && Math.random() < 0.3) { // Reduced from 0.6 to 0.3
+      if (shouldBurst && Math.random() < 0.2) { // Reduced from 0.3 to 0.2
         simulationDebug.debug(`Burst mode: generating second message for ${targetChannel.name}`);
         setTimeout(async () => {
           try {
@@ -4506,7 +4347,7 @@ The response must be a single line in the format: "nickname: greeting message"
                   }
                 } else {
                   // Regular message - show typing indicator for burst message
-                  setTyping(nickname.trim(), true);
+                  dispatch({ type: 'SET_TYPING_USER', payload: { nickname: nickname.trim(), isTyping: true } });
                   
                   // Ensure minimum delay for typing indicator visibility
                   await new Promise(resolve => setTimeout(resolve, 200));
@@ -4521,7 +4362,7 @@ The response must be a single line in the format: "nickname: greeting message"
                   }
                   
                   // Hide typing indicator
-                  setTyping(nickname.trim(), false);
+                  dispatch({ type: 'SET_TYPING_USER', payload: { nickname: nickname.trim(), isTyping: false } });
                   
                   const aiMessage: Message = {
                     id: generateUniqueMessageId(),
@@ -4575,12 +4416,15 @@ The response must be a single line in the format: "nickname: greeting message"
       }, 30000);
     }
 
-    // Generate autonomous private messages (1-2 messages, no flooding)
-    // Enhanced PM generation logic - works from any context
-    const activeChannel = channels.find(c => c.name === activeContext?.name);
-    
+  }, [channels, virtualUsers, activeContext, addMessageToContext, currentUserNickname, isSettingsOpen, autoJoinUsersToEmptyChannels, aiModel, typingDelayConfig, generateUniqueMessageId, handleVirtualUserBotCommand, shouldResetConversation, lastUserMessageTimeRef, imageGenerationConfig, dispatch]);
+
+  const runPMSimulation = useCallback(async () => {
+    if (isSettingsOpen || simulationSpeed === 'off' || document.hidden) {
+      return;
+    }
+
     // Get all virtual users from all channels for PM generation
-    const allVirtualUsers = channels.flatMap(channel => 
+    const allVirtualUsers = channels.flatMap(channel =>
       migrateUsers(channel.users).filter(u => u.userType === 'virtual')
     );
     const hasUsersWithPMProbability = allVirtualUsers.some(user => (user.pmProbability ?? 25) > 0);
@@ -4589,21 +4433,21 @@ The response must be a single line in the format: "nickname: greeting message"
     const isInPM = activeContext?.type === 'pm';
     const currentPMUser = isInPM ? activeContext.with : null;
     
-    let pmChance = 0.05; // Base 5% chance (reduced from 10%)
+    let pmChance = 0.04; // Base 4% chance (reduced from 5%)
     
     // Afterhours Protocol: Increase PM activity during nocturnal hours
     const afterhoursActive = isAfterhoursProtocol();
     if (afterhoursActive) {
-      pmChance = 0.08; // 8% base chance during afterhours
+      pmChance = 0.06; // 6% base chance during afterhours
     }
     
     if (isInPM && currentPMUser) {
       // Higher chance for follow-up PMs when already in PM conversation
-      pmChance = afterhoursActive ? 0.4 : 0.3; // 40% during afterhours, 30% normally
+      pmChance = afterhoursActive ? 0.3 : 0.2; // 30% during afterhours, 20% normally
       simulationDebug.log(`Higher PM chance (${pmChance * 100}%) for ongoing conversation with ${currentPMUser}`);
     } else if (hasUsersWithPMProbability) {
       // Lower chance for initial PMs
-      pmChance = afterhoursActive ? 0.08 : 0.1; // 8% during afterhours, 10% normally
+      pmChance = afterhoursActive ? 0.06 : 0.08; // 6% during afterhours, 8% normally
       simulationDebug.log(`Standard PM chance (${pmChance * 100}%) for initial PMs`);
     }
     
@@ -4617,14 +4461,18 @@ The response must be a single line in the format: "nickname: greeting message"
     } else {
       simulationDebug.debug(`PM generation skipped. hasUsersWithPMProbability: ${hasUsersWithPMProbability}, pmChance: ${pmChance}, random: ${Math.random()}`);
     }
-  }, [channels, activeContext, addMessageToContext, currentUserNickname, isSettingsOpen, autoJoinUsersToEmptyChannels, generateAutonomousPM]);
+  }, [isSettingsOpen, simulationSpeed, channels, activeContext, isAfterhoursProtocol, generateAutonomousPM, migrateUsers]);
 
   useEffect(() => {
     simulationDebug.debug(`useEffect triggered - simulationSpeed: ${simulationSpeed}, isSettingsOpen: ${isSettingsOpen}`);
     const stopSimulation = () => {
-      if (simulationIntervalRef.current) {
-        clearInterval(simulationIntervalRef.current);
-        simulationIntervalRef.current = null;
+      if (channelSimulationIntervalRef.current) {
+        clearInterval(channelSimulationIntervalRef.current);
+        channelSimulationIntervalRef.current = null;
+      }
+      if (pmSimulationIntervalRef.current) {
+        clearInterval(pmSimulationIntervalRef.current);
+        pmSimulationIntervalRef.current = null;
       }
     };
 
@@ -4638,8 +4486,12 @@ The response must be a single line in the format: "nickname: greeting message"
       const baseInterval = SIMULATION_INTERVALS[simulationSpeed];
       const timeAdjustedInterval = getTimeAdjustedInterval(baseInterval);
       
-      simulationDebug.debug(`Starting simulation with interval: ${timeAdjustedInterval}ms (${simulationSpeed}, time-adjusted)`);
-      simulationIntervalRef.current = window.setInterval(runSimulation, timeAdjustedInterval);
+      simulationDebug.debug(`Starting channel simulation with interval: ${timeAdjustedInterval}ms (${simulationSpeed}, time-adjusted)`);
+      channelSimulationIntervalRef.current = window.setInterval(runChannelSimulation, timeAdjustedInterval);
+
+      const pmInterval = timeAdjustedInterval * 1.5;
+      simulationDebug.debug(`Starting PM simulation with interval: ${pmInterval}ms`);
+      pmSimulationIntervalRef.current = window.setInterval(runPMSimulation, pmInterval);
     };
     
     const handleVisibilityChange = () => {
@@ -4659,17 +4511,17 @@ The response must be a single line in the format: "nickname: greeting message"
       stopSimulation();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [runSimulation, simulationSpeed, isSettingsOpen]);
+  }, [runChannelSimulation, runPMSimulation, simulationSpeed, isSettingsOpen, getTimeAdjustedInterval]);
 
   // Safety mechanism to reset loading state on component unmount or errors
   useEffect(() => {
     const handleBeforeUnload = () => {
-      setIsLoading(false);
+      dispatch({ type: 'SET_IS_LOADING', payload: false });
     };
 
     const handleError = () => {
       console.warn('[Input Protection] Global error detected, resetting loading state');
-      setIsLoading(false);
+      dispatch({ type: 'SET_IS_LOADING', payload: false });
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
@@ -4697,110 +4549,79 @@ The response must be a single line in the format: "nickname: greeting message"
   );
   
   const usersInContext: User[] = useMemo(() => {
+    // Helper to create the current user object, ensuring it's always up-to-date
+    const getCurrentUserObject = (): User => {
+      const currentUserData = virtualUsers.find(u => u.nickname === currentUserNickname);
+      return {
+        nickname: currentUserNickname,
+        status: 'online',
+        userType: 'virtual',
+        personality: 'The human user',
+        languageSkills: { languages: [{ language: 'English', fluency: 'native' }] },
+        writingStyle: { formality: 'casual', verbosity: 'moderate', humor: 'none', emojiUsage: 'rare', punctuation: 'standard' },
+        ...currentUserData, // Spread latest data, like profile picture
+      };
+    };
+
+    // Helper to find a user from all available sources to get the most recent data
+    const findUser = (nickname: string): User | undefined => {
+      if (nickname === currentUserNickname) {
+        return getCurrentUserObject();
+      }
+      // Check virtual users first for the most complete, up-to-date data
+      const virtualUser = virtualUsers.find(u => u.nickname === nickname);
+      if (virtualUser) return virtualUser;
+
+      // Check network users next
+      const networkUser = networkUsers.find(u => u.nickname === nickname);
+      if (networkUser) {
+        return {
+          nickname: networkUser.nickname,
+          status: networkUser.status,
+          userType: 'network' as const,
+          personality: 'Network User',
+          languageSkills: { languages: [{ language: 'English', fluency: 'native' }] },
+          writingStyle: { formality: 'semi_formal', verbosity: 'moderate', humor: 'none', emojiUsage: 'rare', punctuation: 'standard' },
+          profilePicture: undefined // Network users don't have profile pictures in this implementation
+        };
+      }
+      userListDebug.warn(`User with nickname "${nickname}" not found in virtual or network users.`);
+      return undefined;
+    };
+
     if (activeContext?.type === 'channel' && activeChannel) {
-      userListDebug.log(`Calculating usersInContext for channel: ${activeChannel.name}`);
-      userListDebug.log(`Channel users count: ${activeChannel.users.length}`);
-      userListDebug.log(`Channel users:`, activeChannel.users.map(u => u.nickname));
+      userListDebug.log(`Re-calculating usersInContext for channel: ${activeChannel.name}`);
       
-      // Debug profile pictures in channel users
-      userListDebug.log(`Channel users profile pictures:`, activeChannel.users.map(u => ({
-        nickname: u.nickname,
-        profilePicture: u.profilePicture,
-        hasProfilePicture: !!u.profilePicture
-      })));
+      // Get all unique nicknames for the channel from the channel's user list
+      const channelUserNicknames = new Set(activeChannel.users.map(u => u.nickname));
       
-      // Get network users in this channel
-      const networkUsersInChannel = networkUsers.filter(networkUser => {
-        // Ensure channels is an array before checking
-        const channels = Array.isArray(networkUser.channels) ? networkUser.channels : Array.from(networkUser.channels || []);
-        return channels.includes(activeChannel.name);
+      // Also include network users that are in this channel
+      networkUsers.forEach(nu => {
+        if (nu.channels?.includes(activeChannel.name)) {
+          channelUserNicknames.add(nu.nickname);
+        }
       });
-      
-      userListDebug.log(`Network users in channel: ${networkUsersInChannel.length}`);
-      
-      // Convert network users to User objects
-      const convertedNetworkUsers: User[] = networkUsersInChannel.map(networkUser => ({
-        nickname: networkUser.nickname,
-        status: networkUser.status,
-        userType: 'network' as const,
-        personality: 'Network User',
-        languageSkills: {
-          languages: [{ language: 'English', fluency: 'native' }]
-        },
-        writingStyle: {
-          formality: 'neutral',
-          verbosity: 'neutral',
-          humor: 'none',
-          emojiUsage: 'low',
-          punctuation: 'standard'
-        },
-        profilePicture: undefined // Network users don't have profile pictures by default
-      }));
-      
-      // Combine channel users with network users
-      let allUsers = [...activeChannel.users, ...convertedNetworkUsers];
-      
-      // If network is connected, exclude the default human user (currentUserNickname) 
-      // but only if it's not a network user (to avoid filtering out the actual network user)
-      if (isNetworkConnected) {
-        allUsers = allUsers.filter(user => {
-          // Keep network users even if they have the same nickname
-          if (user.personality === 'Network User') {
-            return true;
-          }
-          // Filter out the default human user
-          return user.nickname !== currentUserNickname;
-        });
-      }
-      
-      // Deduplicate users by nickname to prevent React key collisions
-      const uniqueUsers = allUsers.reduce((acc, user) => {
-        if (!acc.find(u => u.nickname === user.nickname)) {
-          acc.push(user);
-        }
-        return acc;
-      }, [] as User[]);
-      
-      // Only log if there are issues
-      if (allUsers.length !== uniqueUsers.length) {
-        userListDebug.warn(` Found duplicate users in channel ${activeChannel.name}. Original: ${allUsers.length}, Deduplicated: ${uniqueUsers.length}`);
-      }
-      
-      return uniqueUsers;
+
+      // Rebuild the user list from nicknames, fetching the latest user data for each
+      const freshUsers = Array.from(channelUserNicknames)
+        .map((nickname: string) => findUser(nickname))
+        .filter((user): user is User => user !== undefined); // Filter out any users that couldn't be found
+
+      userListDebug.log(`Final fresh users for ${activeChannel.name}:`, freshUsers.map(u => ({ nick: u.nickname, type: u.userType })));
+      return freshUsers;
+
     } else if (activeContext?.type === 'pm') {
-      // Find the PM user in virtual users or network users
-      let pmUser = virtualUsers.find(u => u.nickname === activeContext.with);
-      if (!pmUser) {
-        // Try to find in network users
-        const networkUser = networkUsers.find(u => u.nickname === activeContext.with);
-        if (networkUser) {
-          pmUser = {
-            nickname: networkUser.nickname,
-            status: networkUser.status,
-            userType: 'network' as const,
-            personality: 'Network User',
-            languageSkills: {
-              languages: [{ language: 'English', fluency: 'native' }]
-            },
-            writingStyle: {
-              formality: 'neutral',
-              verbosity: 'neutral',
-              humor: 'none',
-              emojiUsage: 'low',
-              punctuation: 'standard'
-            },
-            profilePicture: undefined // Network users don't have profile pictures by default
-          };
-        }
-      }
+      userListDebug.log(`Re-calculating usersInContext for PM with: ${activeContext.with}`);
+      const otherUser = findUser(activeContext.with);
+      const currentUser = getCurrentUserObject();
       
-      if (!pmUser) {
-        userListDebug.error(` PM user ${activeContext.with} not found in virtual or network users`);
-        return [{ nickname: currentUserNickname, status: 'online' }];
-      }
+      // The user list for a PM is just the two participants
+      const pmUsers = [otherUser, currentUser].filter((user): user is User => user !== undefined);
       
-      return [pmUser, { nickname: currentUserNickname, status: 'online' }];
+      userListDebug.log(`Final fresh users for PM:`, pmUsers.map(u => u.nickname));
+      return pmUsers;
     }
+
     return [];
   }, [activeContext, activeChannel, virtualUsers, currentUserNickname, networkUsers, isNetworkConnected]);
 
@@ -4819,11 +4640,15 @@ The response must be a single line in the format: "nickname: greeting message"
 
   const messagesInContext = useMemo(() => {
     if (activeContext?.type === 'channel' && activeChannel) {
-      return activeChannel.messages;
+      const messages = activeChannel.messages;
+      // pmDebug.log(`Context changed to channel ${activeChannel.name}, messages: ${messages.length}`);
+      return messages;
     } else if (activeContext?.type === 'pm') {
-      // Return messages even if activePM is undefined (fallback to empty array)
-      return activePM?.messages || [];
+      const messages = activePM?.messages || [];
+      pmDebug.log(`Context changed to PM with ${activeContext.with}, messages: ${messages.length}`);
+      return messages;
     }
+    // pmDebug.log('Context is null or invalid, returning empty messages.');
     return [];
   }, [activeContext, activeChannel, activePM]);
   
@@ -4873,113 +4698,38 @@ The response must be a single line in the format: "nickname: greeting message"
 
   // Network users update handler
   const handleNetworkUsersUpdate = useCallback((users: NetworkUser[]) => {
-    setNetworkUsers(users);
+    dispatch({ type: 'SET_NETWORK_USERS', payload: users });
     
     // Update network nickname when connected
     if (isNetworkConnected) {
       const networkService = getNetworkService();
       const currentNickname = networkService.getCurrentNickname();
       if (currentNickname && currentNickname !== networkNickname) {
-        setNetworkNickname(currentNickname);
+        dispatch({ type: 'SET_NETWORK_NICKNAME', payload: currentNickname });
       }
     }
-  }, [isNetworkConnected, networkNickname]);
+  }, [isNetworkConnected, networkNickname, dispatch]);
 
   // Clear network users when disconnected
   useEffect(() => {
     if (!isNetworkConnected) {
-      setNetworkUsers([]);
-      setNetworkNickname(null);
+      dispatch({ type: 'SET_NETWORK_USERS', payload: [] });
+      dispatch({ type: 'SET_NETWORK_NICKNAME', payload: null });
     }
-  }, [isNetworkConnected]);
+  }, [isNetworkConnected, dispatch]);
 
   // Network channel data update handler
   const handleNetworkChannelData = useCallback((channelData: any) => {
     
+    // Set the active context to the joined channel
+    if (channelData.channel) {
+      dispatch({ type: 'SET_ACTIVE_CONTEXT', payload: { type: 'channel', name: channelData.channel } });
+    }
+    
     // Update the local channel with the received data
-    setChannels(prev => prev.map(channel => {
-      if (channel.name === channelData.channel) {
-        // Convert network users to local users and merge with existing users
-        const networkUsers = channelData.users.map((user: any) => ({
-          nickname: user.nickname,
-          status: 'online' as const,
-          personality: 'Network User',
-          languageSkills: {
-            languages: [{ language: 'English', fluency: 'native' as const, accent: 'neutral' }]
-          },
-          writingStyle: {
-            formality: 'casual' as const,
-            verbosity: 'moderate' as const,
-            humor: 'none' as const,
-            emojiUsage: 'rare' as const,
-            punctuation: 'standard' as const
-          },
-          userType: 'network' as const
-        }));
-        
-        // Separate existing users into virtual/local users and network users
-        const existingVirtualUsers = (channel.users || []).filter(user => 
-          user.userType === 'virtual' || user.userType === 'local'
-        );
-        
-        // Fix any network users that were incorrectly assigned userType 'virtual'
-        const existingNetworkUsers = (channel.users || []).map(user => {
-          if (user.personality === 'Network User' && user.userType === 'virtual') {
-            return { ...user, userType: 'network' as const };
-          }
-          return user;
-        }).filter(user => user.userType === 'network');
-        
-        // Combine virtual/local users with the current network users from server
-        // This ensures we only show users who are actually connected
-        const allUsers = [...existingVirtualUsers, ...networkUsers];
-        
-        // Remove duplicates by nickname to prevent React key conflicts
-        const uniqueUsers = allUsers.reduce((acc, user) => {
-          if (!acc.find(u => u.nickname === user.nickname)) {
-            acc.push(user);
-          }
-          return acc;
-        }, [] as User[]);
-        
-        // Merge messages and remove duplicates by ID
-        const existingMessages = channel.messages || [];
-        const newMessages = channelData.messages || [];
-        const allMessages = [...existingMessages];
-        
-        newMessages.forEach((newMsg: any) => {
-          if (!allMessages.find(m => m.id === newMsg.id)) {
-            allMessages.push(newMsg);
-          }
-        });
-        
-        return {
-          ...channel,
-          users: uniqueUsers,
-          messages: allMessages.slice(-1000),
-          topic: channelData.topic || channel.topic
-        };
-      }
-      return channel;
-    }));
+    dispatch({ type: 'UPDATE_CHANNEL_DATA', payload: channelData });
 
-    // Also update the global networkUsers state for the NetworkUsers component
-    const networkUsersFromChannel = channelData.users.map((user: any) => ({
-      nickname: user.nickname,
-      type: user.type || 'human',
-      status: user.status || 'online',
-      channels: [channelData.channel] // This user is in this specific channel
-    }));
-
-    // Update the global networkUsers state
-    setNetworkUsers(prev => {
-      // Remove users from this channel first
-      const usersNotInChannel = prev.filter(user => !user.channels.includes(channelData.channel));
-      
-      // Add the new users from this channel
-      return [...usersNotInChannel, ...networkUsersFromChannel];
-    });
-  }, []);
+  }, [dispatch]);
 
   // Set up network message handler
   // Cross-tab communication setup for virtual user messages
@@ -5101,20 +4851,7 @@ The response must be a single line in the format: "nickname: greeting message"
                       
                       // Add message to channel directly without triggering network broadcast
                       // This prevents infinite loops where AI responses get broadcast back to network
-                      setChannels(prev => {
-                        const updatedChannels = prev.map(c => {
-                          if (c.name === channelName) {
-                            // Check if message already exists to prevent duplicates
-                            const existingMessage = c.messages?.find(m => m.id === aiMessage.id);
-                            if (existingMessage) {
-                              return c;
-                            }
-                            return { ...c, messages: [...(c.messages || []), aiMessage].slice(-1000) };
-                          }
-                          return c;
-                        });
-                        return updatedChannels;
-                      });
+                      dispatch({ type: 'ADD_MESSAGE_TO_CHANNEL', payload: { channelName, message: aiMessage } });
                       
                       // Save to chat logs
                       const chatLogService = getChatLogService();
@@ -5146,28 +4883,94 @@ The response must be a single line in the format: "nickname: greeting message"
       networkService.offMessage(handleNetworkMessage);
       networkService.offChannelData(handleNetworkChannelData);
     };
-  }, [currentUserNickname, aiModel, handleNetworkChannelData, virtualUsers]);
+  }, [currentUserNickname, aiModel, handleNetworkChannelData, virtualUsers, dispatch]);
+
+  const handleAudioAnalysisComment = async (transcript: string, user: User | null) => {
+    if (!user) return;
+    const comment = await generateInCharacterComment(user, transcript, aiModel);
+    if (comment) {
+      const message: Message = {
+        id: generateUniqueMessageId(),
+        nickname: user.nickname,
+        content: comment,
+        timestamp: new Date(),
+        type: 'ai',
+      };
+      addMessageToContext(message, activeContext);
+    }
+    dispatch({ type: 'TOGGLE_AUDIO_ANALYSIS', payload: false });
+  };
+
+  const handleVisionAnalysisComment = async (description: string, user: User | null) => {
+    if (!user) return;
+    const comment = await generateInCharacterComment(user, description, aiModel);
+    if (comment) {
+      const message: Message = {
+        id: generateUniqueMessageId(),
+        nickname: user.nickname,
+        content: comment,
+        timestamp: new Date(),
+        type: 'ai',
+      };
+      addMessageToContext(message, activeContext);
+    }
+    dispatch({ type: 'TOGGLE_VISION_ANALYSIS', payload: false });
+  };
 
   // Show loading screen while configuration is being initialized
+  // Show loading screen while configuration is being initialized
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    if (!isConfigInitialized) {
+      const timer = setInterval(() => {
+        setProgress(oldProgress => {
+          if (oldProgress === 100) {
+            clearInterval(timer);
+            return 100;
+          }
+          const diff = Math.random() * 10;
+          return Math.min(oldProgress + diff, 100);
+        });
+      }, 500);
+
+      return () => {
+        clearInterval(timer);
+      };
+    }
+  }, [isConfigInitialized]);
+
   if (!isConfigInitialized) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
-        alignItems: 'center', 
-        justifyContent: 'center', 
-        height: '100vh', 
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '100vh',
         backgroundColor: '#1a1a1a',
         color: '#ffffff',
         fontFamily: 'monospace'
       }}>
-        <h1>Station V - Virtual IRC Simulator</h1>
-        <p>Initializing configuration...</p>
+        <img src="/logo.svg" alt="Station V Logo" style={{ width: '150px', height: '150px', marginBottom: '20px' }} />
+        <h1 style={{ fontSize: '2em', marginBottom: '10px' }}>Station V - Virtual IRC Simulator</h1>
+        <p style={{ marginBottom: '20px' }}>Initializing configuration...</p>
+        <div style={{ width: '50%', backgroundColor: '#333', borderRadius: '5px' }}>
+          <div
+            style={{
+              width: `${progress}%`,
+              height: '20px',
+              backgroundColor: '#00ff00',
+              borderRadius: '5px',
+              transition: 'width 0.5s ease-in-out'
+            }}
+          />
+        </div>
         {configError && (
-          <div style={{ 
-            color: '#ff6b6b', 
-            marginTop: '20px', 
-            padding: '10px', 
+          <div style={{
+            color: '#ff6b6b',
+            marginTop: '20px',
+            padding: '10px',
             border: '1px solid #ff6b6b',
             borderRadius: '4px',
             backgroundColor: '#2a1a1a'
@@ -5180,9 +4983,23 @@ The response must be a single line in the format: "nickname: greeting message"
   }
 
   return (
-    <div className={`flex flex-col h-screen w-screen bg-gray-800 font-mono ${
-      isElectronApp ? 'electron-app' : ''
-    }`}>
+    <div className={`flex flex-col h-screen w-screen font-mono ${
+      theme === 'light' ? 'bg-white' : 'bg-gray-800'
+    } ${isElectronApp ? 'electron-app' : ''}`}>
+      {showVerificationWarning && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+          <div className="bg-red-900 border border-red-600 text-white p-8 rounded-lg shadow-lg max-w-md text-center">
+            <h2 className="text-2xl font-bold mb-4">Build Out of Sync</h2>
+            <p className="mb-6">Your source code has changed, but the application has not been rebuilt. Please run `npm run build` to see your changes.</p>
+            <button
+              onClick={() => setShowVerificationWarning(false)}
+              className="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
       {/* Electron Title Bar */}
       {isElectronApp && showElectronTitleBar && (
         <div className="electron-title-bar bg-gray-900 border-b border-gray-700 px-4 py-2 flex items-center justify-between">
@@ -5205,7 +5022,7 @@ The response must be a single line in the format: "nickname: greeting message"
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setElectronMenuVisible(!electronMenuVisible)}
+              onClick={() => dispatch({ type: 'SET_ELECTRON_MENU_VISIBLE', payload: !electronMenuVisible })}
               className="text-gray-400 hover:text-white p-1"
               title="Menu"
             >
@@ -5221,7 +5038,7 @@ The response must be a single line in the format: "nickname: greeting message"
           <button
             onClick={() => {
               handleOpenSettings();
-              setElectronMenuVisible(false);
+              dispatch({ type: 'SET_ELECTRON_MENU_VISIBLE', payload: false });
             }}
             className="text-gray-300 hover:text-white"
           >
@@ -5230,7 +5047,7 @@ The response must be a single line in the format: "nickname: greeting message"
           <button
             onClick={() => {
               handleOpenChatLogs();
-              setElectronMenuVisible(false);
+              dispatch({ type: 'SET_ELECTRON_MENU_VISIBLE', payload: false });
             }}
             className="text-gray-300 hover:text-white"
           >
@@ -5238,8 +5055,17 @@ The response must be a single line in the format: "nickname: greeting message"
           </button>
           <button
             onClick={() => {
+              handleOpenDebugLog();
+              dispatch({ type: 'SET_ELECTRON_MENU_VISIBLE', payload: false });
+            }}
+            className="text-gray-300 hover:text-white"
+          >
+            Debug Log
+          </button>
+          <button
+            onClick={() => {
               window.electronAPI?.toggleDevTools?.();
-              setElectronMenuVisible(false);
+              dispatch({ type: 'SET_ELECTRON_MENU_VISIBLE', payload: false });
             }}
             className="text-gray-300 hover:text-white"
           >
@@ -5248,7 +5074,7 @@ The response must be a single line in the format: "nickname: greeting message"
           <button
             onClick={() => {
               window.electronAPI?.reload?.();
-              setElectronMenuVisible(false);
+              dispatch({ type: 'SET_ELECTRON_MENU_VISIBLE', payload: false });
             }}
             className="text-gray-300 hover:text-white"
           >
@@ -5257,7 +5083,7 @@ The response must be a single line in the format: "nickname: greeting message"
           <button
             onClick={() => {
               window.electronAPI?.setAlwaysOnTop?.(true);
-              setElectronMenuVisible(false);
+              dispatch({ type: 'SET_ELECTRON_MENU_VISIBLE', payload: false });
             }}
             className="text-gray-300 hover:text-white"
           >
@@ -5269,23 +5095,33 @@ The response must be a single line in the format: "nickname: greeting message"
       {isSettingsOpen && (
         <SettingsModal 
           onSave={handleSaveSettings} 
-          onCancel={handleCloseSettings} 
-          currentChannels={channels} 
-          onChannelsChange={setChannels} 
+          onCancel={handleCloseSettings}
+          currentChannels={channels}
+          onChannelsChange={(channels) => dispatch({ type: 'SET_CHANNELS', payload: channels })}
           currentUsers={virtualUsers}
           onUsersChange={handleUsersChange}
+          isBatchUserModalOpen={isBatchUserModalOpen}
+          openModal={openModal}
+          onImport={handleImportConfig}
+          onThemeChange={handleThemeChange}
         />
       )}
       {isChatLogOpen && (
-        <ChatLogManager 
+        <ChatLogManager
           isOpen={isChatLogOpen}
           onClose={handleCloseChatLogs}
           currentChannel={activeContext?.type === 'channel' ? activeContext.name : undefined}
         />
       )}
+      {isDebugLogOpen && (
+        <DebugLogWindow
+          isOpen={isDebugLogOpen}
+          onClose={handleCloseDebugLog}
+        />
+      )}
       <ChannelListModal
         isOpen={isChannelListModalOpen}
-        onClose={() => setIsChannelListModalOpen(false)}
+        onClose={() => dispatch({ type: 'TOGGLE_CHANNEL_LIST_MODAL', payload: false })}
         channels={channels}
         currentUserNickname={currentUserNickname}
         onJoinChannel={handleJoinChannel}
@@ -5297,13 +5133,36 @@ The response must be a single line in the format: "nickname: greeting message"
         activeContext={activeContext}
       />
 
+      {isAudioAnalysisOpen && (
+        <AudioAnalysis
+          onClose={() => dispatch({ type: 'TOGGLE_AUDIO_ANALYSIS', payload: false })}
+          onAnalysisComplete={handleAudioAnalysisComment}
+          virtualUsers={usersInContext.filter(u => u.nickname !== currentUserNickname && u.userType === 'virtual')}
+        />
+      )}
+
+      {isVisionAnalysisOpen && (
+        <VisionAnalysis
+          onClose={() => dispatch({ type: 'TOGGLE_VISION_ANALYSIS', payload: false })}
+          onAnalysisComplete={handleVisionAnalysisComment}
+          virtualUsers={usersInContext.filter(u => u.nickname !== currentUserNickname && u.userType === 'virtual')}
+        />
+      )}
+
+      {isDocumentationOpen && (
+        <DocumentationModal
+          isOpen={isDocumentationOpen}
+          onClose={() => dispatch({ type: 'TOGGLE_DOCUMENTATION_MODAL', payload: false })}
+        />
+      )}
+
       {/* Mobile Navigation - Hidden in Electron */}
       {!isElectronApp && (
         <MobileNavigation
           activePanel={mobileActivePanel}
-          onPanelChange={setMobileActivePanel}
+          onPanelChange={(panel) => dispatch({ type: 'SET_MOBILE_ACTIVE_PANEL', payload: panel })}
           isMenuOpen={isMobileMenuOpen}
-          onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          onMenuToggle={() => dispatch({ type: 'TOGGLE_MOBILE_MENU' })}
           unreadChannels={unreadChannels}
           unreadPMUsers={unreadPMUsers}
           isNetworkConnected={isNetworkConnected}
@@ -5317,17 +5176,18 @@ The response must be a single line in the format: "nickname: greeting message"
             channels={channels}
             privateMessageUsers={allPMUsers}
             activeContext={activeContext}
-            onSelectContext={setActiveContext}
+            onSelectContext={(context) => dispatch({ type: 'SET_ACTIVE_CONTEXT', payload: context })}
             onChannelClick={handleChannelClick}
             onPMClick={handlePMUserClick}
             onOpenSettings={handleOpenSettings}
-            onOpenChannelList={() => setIsChannelListModalOpen(true)}
+            onOpenChannelList={() => dispatch({ type: 'TOGGLE_CHANNEL_LIST_MODAL', payload: true })}
             onJoinChannel={handleJoinChannel}
             onLeaveChannel={handleLeaveChannel}
             unreadChannels={unreadChannels}
             unreadPMUsers={unreadPMUsers}
             onOpenChatLogs={handleOpenChatLogs}
             onResetSpeakers={resetLastSpeakers}
+            onOpenDocumentation={() => dispatch({ type: 'TOGGLE_DOCUMENTATION_MODAL', payload: true })}
             recentlyAutoOpenedPM={recentlyAutoOpenedPM}
             currentUserNickname={currentUserNickname}
           />
@@ -5335,25 +5195,21 @@ The response must be a single line in the format: "nickname: greeting message"
 
         {/* Mobile Layout - Channel List Panel */}
         {mobileActivePanel === 'channels' && (
-          <div className="lg:hidden w-full bg-gray-900">
+          <div className="lg:hidden w-full bg-gray-900 flex flex-1 flex-col">
             <ChannelList 
               channels={channels}
               privateMessageUsers={allPMUsers}
               activeContext={activeContext}
-              onSelectContext={(context) => {
-                setActiveContext(context);
-                setMobileActivePanel('chat');
-              }}
               onChannelClick={(channelName) => {
                 handleChannelClick(channelName);
-                setMobileActivePanel('chat');
+                dispatch({ type: 'SET_MOBILE_ACTIVE_PANEL', payload: 'chat' });
               }}
               onPMClick={(nickname) => {
                 handlePMUserClick(nickname);
-                setMobileActivePanel('chat');
+                dispatch({ type: 'SET_MOBILE_ACTIVE_PANEL', payload: 'chat' });
               }}
               onOpenSettings={handleOpenSettings}
-              onOpenChannelList={() => setIsChannelListModalOpen(true)}
+              onOpenChannelList={() => dispatch({ type: 'TOGGLE_CHANNEL_LIST_MODAL', payload: true })}
               onJoinChannel={handleJoinChannel}
               onLeaveChannel={handleLeaveChannel}
               unreadChannels={unreadChannels}
@@ -5373,7 +5229,7 @@ The response must be a single line in the format: "nickname: greeting message"
               users={usersInContext} 
               onUserClick={(nickname) => {
                 handlePMUserClick(nickname);
-                setMobileActivePanel('chat');
+                dispatch({ type: 'SET_MOBILE_ACTIVE_PANEL', payload: 'chat' });
               }} 
               currentUserNickname={isNetworkConnected && networkNickname ? networkNickname : currentUserNickname}
               channel={activeChannel}
@@ -5393,7 +5249,7 @@ The response must be a single line in the format: "nickname: greeting message"
             </div>
             <div className="flex-1 overflow-y-auto">
               <NetworkConnection 
-                onConnected={setIsNetworkConnected}
+                onConnected={(isConnected) => dispatch({ type: 'SET_IS_NETWORK_CONNECTED', payload: isConnected })}
                 onUsersUpdate={handleNetworkUsersUpdate}
               />
               <NetworkUsers 
@@ -5432,7 +5288,25 @@ The response must be a single line in the format: "nickname: greeting message"
               typingIndicatorMode={typingIndicatorConfig.mode}
               isPrivateMessage={activeContext?.type === 'pm'}
               onQuoteMessage={handleQuoteMessage}
+              onClearChat={handleClearChat}
+              virtualUsers={virtualUsers}
             />
+           {activeContext && (
+             <div className="p-2 bg-gray-700 border-t border-gray-600 flex gap-2">
+               <button
+                 onClick={() => dispatch({ type: 'TOGGLE_AUDIO_ANALYSIS', payload: true })}
+                 className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded"
+               >
+                 Audio Analysis
+               </button>
+               <button
+                 onClick={() => dispatch({ type: 'TOGGLE_VISION_ANALYSIS', payload: true })}
+                 className="bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 px-4 rounded"
+               >
+                 Image Analysis
+               </button>
+             </div>
+           )}
           </main>
 
         {/* Desktop Layout - User List - Always visible in Electron */}
@@ -5454,7 +5328,7 @@ The response must be a single line in the format: "nickname: greeting message"
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-lg font-semibold text-white">Network</h2>
               <button
-                onClick={() => setShowNetworkPanel(!showNetworkPanel)}
+                onClick={() => dispatch({ type: 'TOGGLE_SHOW_NETWORK_PANEL' })}
                 className="text-gray-400 hover:text-white"
               >
                 {showNetworkPanel ? '▼' : '▶'}
@@ -5501,7 +5375,7 @@ The response must be a single line in the format: "nickname: greeting message"
               </div>
 
               <NetworkConnection
-                onConnected={setIsNetworkConnected}
+                onConnected={(isConnected) => dispatch({ type: 'SET_IS_NETWORK_CONNECTED', payload: isConnected })}
                 onUsersUpdate={handleNetworkUsersUpdate}
               />
               

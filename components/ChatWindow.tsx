@@ -1,14 +1,16 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import type { Message, User } from '../types';
+import type { Message, User, Attachment } from '../types';
 import { MessageEntry } from './Message';
-import { SendIcon } from './icons';
+import { SendIcon, PaperclipIcon, XCircleIcon, EyeIcon } from './icons';
 import { convertEmoticonsToEmojis, convertEmojisToEmoticons } from '../utils/emojiConverter';
+import { VisionAnalysis } from './VisionAnalysis';
+import { AudioAnalysis } from './AudioAnalysis';
 
 interface ChatWindowProps {
   title: string;
   messages: Message[];
-  onSendMessage: (content: string, quotedMessage?: Message) => void;
+  onSendMessage: (content: string, quotedMessage?: Message, attachments?: Attachment[], audioAnalysis?: { transcript: string }) => void;
   isLoading: boolean;
   currentUserNickname: string;
   typingUsers: string[];
@@ -19,22 +21,26 @@ interface ChatWindowProps {
   typingIndicatorMode?: 'all' | 'private_only' | 'none'; // Typing indicator display mode
   isPrivateMessage?: boolean; // Whether this is a private message window
   onQuoteMessage?: (message: Message) => void; // Callback for quoting a message
+  onClearChat?: () => void;
+  virtualUsers?: User[];
 }
 
-export const ChatWindow: React.FC<ChatWindowProps> = ({ 
-  title, 
-  messages, 
-  onSendMessage, 
-  isLoading, 
-  currentUserNickname, 
-  typingUsers, 
-  channel, 
-  users, 
-  onClose, 
+export const ChatWindow: React.FC<ChatWindowProps> = ({
+  title,
+  messages,
+  onSendMessage,
+  isLoading,
+  currentUserNickname,
+  typingUsers,
+  channel,
+  users,
+  onClose,
   showCloseButton = false,
   typingIndicatorMode = 'all',
   isPrivateMessage = false,
-  onQuoteMessage
+  onQuoteMessage,
+  onClearChat,
+  virtualUsers = []
 }) => {
   const [input, setInput] = useState('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -45,11 +51,17 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [chatLeft, setChatLeft] = useState<number | null>(null);
   const [showFormattingHelp, setShowFormattingHelp] = useState(false);
   const [quotedMessage, setQuotedMessage] = useState<Message | null>(null);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatWindowRef = useRef<HTMLDivElement>(null);
   const resizeHandleRef = useRef<HTMLDivElement>(null);
   const leftResizeHandleRef = useRef<HTMLDivElement>(null);
   const rightResizeHandleRef = useRef<HTMLDivElement>(null);
+  const [isVisionAnalysisOpen, setIsVisionAnalysisOpen] = useState(false);
+  const [selectedAttachmentForAnalysis, setSelectedAttachmentForAnalysis] = useState<Attachment | null>(null);
+  const [isAudioAnalysisOpen, setIsAudioAnalysisOpen] = useState(false);
+  const [selectedAudioAttachment, setSelectedAudioAttachment] = useState<File | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -206,9 +218,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     if (input.trim() && !isLoading) {
       // Convert emoticons to emojis before sending
       const convertedInput = convertEmoticonsToEmojis(input.trim());
-      onSendMessage(convertedInput, quotedMessage || undefined);
+      onSendMessage(convertedInput, quotedMessage || undefined, attachments);
       setInput('');
       setQuotedMessage(null); // Clear quoted message after sending
+      setAttachments([]); // Clear attachments
       
       // Reset textarea height
       if (inputRef.current) {
@@ -219,11 +232,38 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   // Handle key events for Ctrl+Enter
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && e.ctrlKey) {
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit(e as any);
     }
   }, [handleSubmit]);
+
+  const handleAttachmentClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files);
+      const newAttachments: Attachment[] = files.map((file: File) => {
+        const type = file.type.startsWith('image/') ? 'image' : file.type.startsWith('audio/') ? 'audio' : 'file';
+        if (type === 'audio') {
+          setSelectedAudioAttachment(file);
+        }
+        return {
+          url: URL.createObjectURL(file),
+          type,
+          fileName: file.name,
+        };
+      });
+      setAttachments(prev => [...prev, ...newAttachments]);
+    }
+  };
+
+  const handleRemoveAttachment = (url: string) => {
+    setAttachments(prev => prev.filter(att => att.url !== url));
+    URL.revokeObjectURL(url);
+  };
 
   // Handle resize functionality
   const handleMouseDown = useCallback((e: React.MouseEvent, type: 'height' | 'width-left' | 'width-right') => {
@@ -300,16 +340,54 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   }, [isResizing, resizeType, handleMouseMove, handleMouseUp]);
 
   return (
-    <div 
+    <div
       ref={chatWindowRef}
       className="flex-1 flex flex-col bg-gray-800 h-full min-h-0 relative"
-      style={{ 
+      style={{
         height: chatHeight ? `${chatHeight}px` : undefined,
         width: chatWidth ? `${chatWidth}px` : undefined,
         left: chatLeft ? `${chatLeft}px` : undefined,
         position: (chatLeft || chatWidth) ? 'absolute' : undefined
       }}
     >
+      {isVisionAnalysisOpen && (
+        <VisionAnalysis
+          onClose={() => {
+            setIsVisionAnalysisOpen(false);
+            setSelectedAttachmentForAnalysis(null);
+          }}
+          onAnalysisComplete={(description, user) => {
+            if (user) {
+              onSendMessage(`[${user.nickname}'s analysis of the image]: ${description}`);
+            } else {
+              setInput(prev => prev ? `${prev}\n${description}` : description);
+            }
+            setIsVisionAnalysisOpen(false);
+            setSelectedAttachmentForAnalysis(null);
+          }}
+          attachment={selectedAttachmentForAnalysis}
+          virtualUsers={virtualUsers}
+        />
+      )}
+      {isAudioAnalysisOpen && (
+        <AudioAnalysis
+          onClose={() => {
+            setIsAudioAnalysisOpen(false);
+            setSelectedAudioAttachment(null);
+          }}
+          onAnalysisComplete={(transcript, user) => {
+            if (user) {
+              onSendMessage(`[${user.nickname}'s analysis of the audio]: ${transcript}`);
+            } else {
+              setInput(prev => prev ? `${prev}\n${transcript}` : transcript);
+            }
+            setIsAudioAnalysisOpen(false);
+            setSelectedAudioAttachment(null);
+          }}
+          audioAttachment={selectedAudioAttachment}
+          virtualUsers={virtualUsers}
+        />
+      )}
       <header className="px-3 lg:px-6 py-3 lg:py-3 border-b border-gray-700 bg-gray-900 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 lg:gap-3 min-w-0 flex-1">
@@ -331,6 +409,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   ))}
                 </div>
               </div>
+            )}
+            {onClearChat && (
+              <button
+                onClick={onClearChat}
+                className="ml-2 p-1 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors duration-150"
+                title="Clear chat history"
+              >
+                <XCircleIcon className="w-5 h-5" />
+              </button>
             )}
             {showCloseButton && onClose && (
               <button
@@ -357,6 +444,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
       <div className="flex-1 p-3 lg:p-4 overflow-y-auto min-h-0">
         <div className="flex flex-col gap-3 lg:gap-3">
+          {console.log(`[ChatWindow] Rendering messages for ${title}:`, messages)}
           {messages.map((msg) => {
             // Find user for profile picture
             const user = users?.find(u => u.nickname === msg.nickname);
@@ -364,9 +452,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             return (
               <div key={msg.id} className="group relative">
                 <MessageEntry 
-                  message={msg} 
-                  currentUserNickname={currentUserNickname} 
+                  message={msg}
+                  currentUserNickname={currentUserNickname}
                   user={user}
+                  isTyping={msg.isTyping}
                 />
                 {/* Reply button - only show for non-system messages */}
                 {msg.type !== 'system' && onQuoteMessage && (
@@ -443,19 +532,78 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           </div>
         )}
         
+        {/* Attachment previews */}
+        {attachments.length > 0 && (
+          <div className="mb-3 p-3 bg-gray-800 border border-gray-600 rounded-lg flex flex-wrap gap-4">
+            {attachments.map(att => (
+              <div key={att.url} className="relative">
+                {att.type === 'image' && (
+                  <img src={att.url} alt={att.fileName} className="w-24 h-24 object-cover rounded" />
+                )}
+                {att.type === 'audio' && (
+                  <div className="w-24 h-24 flex flex-col items-center justify-center bg-gray-700 rounded p-2">
+                    <span className="text-xs text-gray-300 truncate">{att.fileName}</span>
+                    <audio controls src={att.url} className="w-full mt-2" />
+                  </div>
+                )}
+                <button
+                  onClick={() => handleRemoveAttachment(att.url)}
+                  className="absolute -top-2 -right-2 bg-gray-800 rounded-full text-gray-400 hover:text-white"
+                  title="Remove attachment"
+                >
+                  <XCircleIcon className="w-5 h-5" />
+                </button>
+                {att.type === 'image' && (
+                  <button
+                    onClick={() => {
+                      setSelectedAttachmentForAnalysis(att);
+                      setIsVisionAnalysisOpen(true);
+                    }}
+                    className="absolute bottom-1 right-1 bg-gray-800 bg-opacity-75 rounded-full text-gray-300 hover:text-white p-1"
+                    title="Analyze Image"
+                  >
+                    <EyeIcon className="w-4 h-4" />
+                  </button>
+                )}
+                {att.type === 'audio' && (
+                  <button
+                    onClick={() => {
+                      setIsAudioAnalysisOpen(true);
+                    }}
+                    className="absolute bottom-1 right-1 bg-gray-800 bg-opacity-75 rounded-full text-gray-300 hover:text-white p-1"
+                    title="Analyze Audio"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7.5 7.5 0 01-7.5 7.5h-1a7.5 7.5 0 01-7.5-7.5V7.5a7.5 7.5 0 0115 0v3.5z" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        
         <form onSubmit={handleSubmit} className="flex items-end gap-3">
           <div className="flex-1 relative">
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              multiple
+              className="hidden"
+              accept="image/*,audio/*"
+            />
             <textarea
               ref={inputRef}
               value={displayInput}
               onChange={handleInputChange}
               onPaste={handlePaste}
               onKeyDown={handleKeyDown}
-              placeholder="Type your message... (try /nick, /join, /who or !image, !weather, !help) - Emoticons like :) will auto-convert to emojis - Use Ctrl+Enter to send"
+              placeholder="Type your message... (try /nick, /join, /who or !image, !weather, !help) - Emoticons like :) will auto-convert to emojis - Press Enter to send, Shift+Enter for new line"
               className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 lg:px-4 py-3 lg:py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base lg:text-base resize-none min-h-[48px] max-h-[120px] touch-manipulation"
               disabled={isLoading}
               rows={1}
-              style={{ 
+              style={{
                 height: 'auto',
                 minHeight: '48px',
                 maxHeight: '120px'
@@ -492,6 +640,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           
           <button
             type="button"
+            onClick={handleAttachmentClick}
+            className="px-3 py-3 lg:py-2 bg-gray-600 hover:bg-gray-500 text-gray-300 rounded-lg transition-colors duration-200 min-h-[48px] touch-manipulation"
+            title="Attach file"
+          >
+            <PaperclipIcon className="h-5 w-5" />
+          </button>
+          <button
+            type="button"
             onClick={() => setShowFormattingHelp(!showFormattingHelp)}
             className="px-3 py-3 lg:py-2 bg-gray-600 hover:bg-gray-500 text-gray-300 rounded-lg transition-colors duration-200 min-h-[48px] touch-manipulation"
             title="Formatting help"
@@ -499,6 +655,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             <span className="text-sm font-bold">?</span>
           </button>
           
+          <button
+            type="button"
+            onClick={() => setIsVisionAnalysisOpen(true)}
+            className="px-3 py-3 lg:py-2 bg-gray-600 hover:bg-gray-500 text-gray-300 rounded-lg transition-colors duration-200 min-h-[48px] touch-manipulation"
+            title="Analyze Image"
+          >
+            <EyeIcon className="h-5 w-5" />
+          </button>
           <button
             type="submit"
             disabled={isLoading || !input.trim()}

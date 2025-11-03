@@ -6,8 +6,7 @@
 import type { AppConfig, Channel, User, PrivateMessageConversation } from '../types';
 import { loadConfig, saveConfig } from '../utils/config';
 import { getChatLogService } from './chatLogService';
-import { getDebugConfig } from '../utils/debugLogger';
-import { dataExportDebug } from '../utils/debugLogger';
+import { getDebugConfig, dataExportDebug } from '../utils/debugLogger';
 
 export interface ExportedData {
   version: string;

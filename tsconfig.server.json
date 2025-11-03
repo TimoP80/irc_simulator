@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "outDir": "dist-server",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "strict": false,
+    "allowJs": true
+  },
+  "include": [
+    "services/imageGenerationService.ts",
+    "utils/debugLogger.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}
