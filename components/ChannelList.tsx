@@ -20,11 +20,12 @@ interface ChannelListProps {
   unreadChannels?: Set<string>;
   unreadPMUsers?: Set<string>;
   currentUserNickname: string;
+  currentUserProfilePicture?: string;
   recentlyAutoOpenedPM?: string | null;
 }
 
-export const ChannelList: React.FC<ChannelListProps> = ({ channels, privateMessageUsers, activeContext, onSelectContext, onChannelClick, onPMClick, onOpenSettings, onOpenChatLogs, onOpenChannelList, onResetSpeakers, onJoinChannel, onLeaveChannel, unreadChannels, unreadPMUsers, currentUserNickname, recentlyAutoOpenedPM, onOpenDocumentation }) => {
-  const getButtonClass = (isActive: boolean) => 
+export const ChannelList: React.FC<ChannelListProps> = ({ channels, privateMessageUsers, activeContext, onSelectContext, onChannelClick, onPMClick, onOpenSettings, onOpenChatLogs, onOpenChannelList, onResetSpeakers, onJoinChannel, onLeaveChannel, unreadChannels, unreadPMUsers, currentUserNickname, currentUserProfilePicture, recentlyAutoOpenedPM, onOpenDocumentation }) => {
+  const getButtonClass = (isActive: boolean) =>
     `w-full text-left px-4 py-2 text-sm truncate flex items-center gap-2 rounded-md transition-colors duration-150 ${
       isActive ? 'bg-indigo-500 text-white' : 'text-gray-300 hover:bg-gray-700'
     }`;
@@ -153,10 +154,23 @@ export const ChannelList: React.FC<ChannelListProps> = ({ channels, privateMessa
         </div>
       </div>
 
-      <div className="mt-4 pt-4 border-t border-gray-700 flex-shrink-0 space-y-2">
+      <div className="mt-auto pt-4 border-t border-gray-700 flex-shrink-0 space-y-2">
+        <div className="px-4 py-2 flex items-center gap-3">
+          <ProfilePicture
+            user={{
+              nickname: currentUserNickname,
+              profilePicture: currentUserProfilePicture,
+            }}
+            size="md"
+          />
+          <div className="flex-1 truncate">
+            <p className="text-sm font-semibold text-white truncate">{currentUserNickname}</p>
+            <p className="text-xs text-gray-400">Online</p>
+          </div>
+        </div>
         {onOpenChannelList && (
-          <button 
-            onClick={onOpenChannelList} 
+          <button
+            onClick={onOpenChannelList}
             className="w-full flex items-center justify-center gap-2 px-4 py-3 lg:py-2 text-sm rounded-md transition-colors duration-150 bg-indigo-700 text-indigo-300 hover:bg-indigo-600 active:bg-indigo-500 touch-manipulation"
             aria-label="Open channel list to join/leave channels"
           >

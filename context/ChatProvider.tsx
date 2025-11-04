@@ -1,10 +1,11 @@
 import React, { createContext, useReducer, useContext, ReactNode, useEffect } from 'react';
-import { chatReducer, ChatState } from './chatReducer';
+import { chatReducer, ChatState } from './chatReducer.js';
 import { getNetworkService } from '../services/networkService';
 import { DEFAULT_CHANNELS, DEFAULT_VIRTUAL_USERS, DEFAULT_NICKNAME, DEFAULT_AI_MODEL } from '../constants';
 
 const initialState: ChatState = {
   currentUserNickname: DEFAULT_NICKNAME,
+  currentUserProfilePicture: undefined,
   virtualUsers: DEFAULT_VIRTUAL_USERS,
   channels: DEFAULT_CHANNELS,
   privateMessages: {},
@@ -34,6 +35,8 @@ const initialState: ChatState = {
   showNetworkPanel: false,
   networkNickname: null,
   theme: 'dark',
+ userInfo: null,
+ isUserInfoModalOpen: false,
 };
 
 const ChatStateContext = createContext<ChatState | undefined>(undefined);
@@ -60,6 +63,19 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
       networkService.offChannelJoinFailed(handleChannelJoinFailed);
     };
   }, [dispatch]);
+
+ useEffect(() => {
+   const networkService = getNetworkService();
+   const handleWhois = (data: any) => {
+     dispatch({ type: 'SET_USER_INFO', payload: data });
+   };
+
+   networkService.onWhois(handleWhois);
+
+   return () => {
+     networkService.offWhois(handleWhois);
+   };
+ }, [dispatch]);
 
   return (
     <ChatStateContext.Provider value={state}>

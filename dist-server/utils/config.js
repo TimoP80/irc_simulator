@@ -106,10 +106,14 @@ export const saveConfig = (config) => {
         console.error("Failed to save config to localStorage:", error);
     }
 };
-const MAX_RETRIES = 3;
-const INITIAL_BACKOFF_MS = 2000; // 2 seconds
+const MAX_RETRIES = 2;
+const INITIAL_BACKOFF_MS = 1500; // 1.5 seconds
 const isRateLimitError = (error) => {
     if (error instanceof Error) {
+        // Don't retry if quota is 0 - this is a billing/configuration issue
+        if (error.message.includes('"quota_limit_value":"0"')) {
+            return false;
+        }
         return error.message.includes("429") ||
             error.message.includes("RESOURCE_EXHAUSTED") ||
             error.message.includes("quota") ||
@@ -150,18 +154,38 @@ export const withRateLimitAndRetries = async (apiCall, context, options) => {
                 console.warn(`[API Error] Network/CORS error detected. This may be due to browser security policies.`);
                 throw new Error(`Network error: Unable to connect to AI service. This may be due to CORS restrictions or network issues. Please check your internet connection and try again.`);
             }
-            if (isRateLimitError(error) && attempt < maxRetries) {
-                attempt++;
-                const delay = initialBackoffMs * Math.pow(2, attempt - 1) + Math.random() * 1000; // Add jitter
-                console.warn(`Rate limit hit. Retrying in ${Math.round(delay / 1000)}s... (Attempt ${attempt}/${maxRetries})`);
-                await new Promise(resolve => setTimeout(resolve, delay));
+            if (isRateLimitError(error)) {
+                // If this looks like a hard quota exhaustion, don't retry to avoid log/traffic storms
+                const msg = error instanceof Error ? error.message : String(error);
+                const isHardQuota = /RESOURCE_EXHAUSTED|quota exceeded|GenerateRequestsPerDayPerProjectPerModel/i.test(msg);
+                if (isHardQuota) {
+                    console.warn(`[API Error] Hard quota/RESOURCE_EXHAUSTED detected. Not retrying.`);
+                    // Force exit retry loop by setting attempt to max
+                    attempt = maxRetries;
+                }
+                else if (attempt < maxRetries) {
+                    attempt++;
+                    const delay = initialBackoffMs * Math.pow(2, attempt - 1) + Math.random() * 1000; // Add jitter
+                    console.warn(`Rate limit hit. Retrying in ${Math.round(delay / 1000)}s... (Attempt ${attempt}/${maxRetries})`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    continue;
+                }
             }
-            else {
+            {
                 if (error instanceof Error) {
-                    if (error.message.includes("RESOURCE_EXHAUSTED")) {
+                    // Check for zero quota error (billing/configuration issue)
+                    if (error.message.includes('"quota_limit_value":"0"')) {
+                        throw new Error(`❌ API Quota Error: Your Gemini API key has 0 quota allocated. This is a billing/configuration issue, not a rate limit.\n\n` +
+                            `Solutions:\n` +
+                            `1. Check your Google Cloud Console billing settings\n` +
+                            `2. Ensure your API key has quota allocated for your region\n` +
+                            `3. Try using a different API key\n` +
+                            `4. Check: https://console.cloud.google.com/apis/api/generativelanguage.googleapis.com/quotas`);
+                    }
+                    else if (error.message.includes("RESOURCE_EXHAUSTED") || /GenerateRequestsPerDayPerProjectPerModel/i.test(error.message)) {
                         throw new Error(`AI service quota exhausted. Please try again later or check your API key limits.`);
                     }
-                    else if (error.message.includes("quota")) {
+                    else if (error.message.match(/quota/i)) {
                         throw new Error(`AI service quota exceeded. Please try again later.`);
                     }
                     else if (error.message.includes("429")) {
@@ -277,6 +301,7 @@ const parseChannels = (channelsString, allVirtualUsers, currentUserNickname) => 
  */
 export const initializeStateFromConfig = (config) => {
     const nickname = config.currentUserNickname || DEFAULT_NICKNAME;
+    const profilePicture = config.currentUserProfilePicture;
     // Use userObjects if available (for proper persistence), otherwise fall back to text parsing
     const virtualUsers = config.userObjects || (config.virtualUsers ? parseVirtualUsers(config.virtualUsers) : DEFAULT_VIRTUAL_USERS);
     // Use channel objects if available (preserves user assignments), otherwise parse from text
@@ -287,6 +312,7 @@ export const initializeStateFromConfig = (config) => {
             ...c,
             users: c.users.map(user => user.nickname === DEFAULT_NICKNAME ? {
                 nickname,
+                profilePicture,
                 status: 'online',
                 personality: 'The human user',
                 userType: 'virtual',
@@ -306,6 +332,7 @@ export const initializeStateFromConfig = (config) => {
             ...c,
             users: c.users.map(user => user.nickname === DEFAULT_NICKNAME ? {
                 nickname,
+                profilePicture,
                 status: 'online',
                 personality: 'The human user',
                 userType: 'virtual',
@@ -325,11 +352,13 @@ export const initializeStateFromConfig = (config) => {
     }
     else {
         // Use default channels but ensure they have the correct current user nickname
+        // Only include the current user, not the default users from DEFAULT_CHANNELS
         channels = DEFAULT_CHANNELS.map(c => ({
             ...c,
             users: [
                 {
                     nickname,
+                    profilePicture,
                     status: 'online',
                     personality: 'The human user',
                     userType: 'virtual',
@@ -341,8 +370,7 @@ export const initializeStateFromConfig = (config) => {
                             }]
                     },
                     writingStyle: { formality: 'casual', verbosity: 'moderate', humor: 'none', emojiUsage: 'rare', punctuation: 'standard' }
-                },
-                ...c.users.filter(u => u.nickname !== DEFAULT_NICKNAME) // Keep original channel users, just update current user
+                }
             ]
         }));
     }
@@ -360,12 +388,12 @@ export const initializeStateFromConfig = (config) => {
         ssl: true
     };
     const imageGeneration = config.imageGeneration || {
-        provider: 'placeholder',
+        provider: 'dalle',
         apiKey: '',
-        model: 'stable-diffusion-xl',
-        baseUrl: 'https://api.nanobanana.ai'
+        model: 'dall-e-3',
+        baseUrl: undefined
     };
-    return { nickname, virtualUsers, channels, simulationSpeed, aiModel, typingDelay, typingIndicator, ircExport, imageGeneration };
+    return { nickname, virtualUsers, channels, simulationSpeed, aiModel, typingDelay, typingIndicator, ircExport, imageGeneration, profilePicture };
 };
 /**
  * Saves channel logs to localStorage.

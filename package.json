@@ -1,7 +1,7 @@
 {
   "name": "station-v-executable",
   "private": true,
-  "version": "1.20.2",
+  "version": "1.21.0",
   "type": "module",
   "description": "Station V - Virtual IRC Simulator - Desktop Executable - A cross-platform desktop application for simulating IRC chat environments with AI-powered virtual users",
   "author": "Station V Development Team",
@@ -27,8 +27,9 @@
     "start": "concurrently --kill-others-on-fail \"npm:server\" \"vite\"",
     "server": "cross-env PORT=8081 node server/station-v-server.mjs",
     "predev": "npm run build:server",
-    "dev": "concurrently --kill-others-on-fail \"npm:server\" \"vite\" \"npm:dev:electron\"",
-    "dev:electron": "wait-on http://localhost:3000 && electron electron-starter.cjs",
+    "test-api-key": "node scripts/test-api-key.js",	
+    "dev": "concurrently --kill-others-on-fail \"npm:server\" \"vite\"",
+    "dev:electron": "wait-on http://localhost:3000 && cross-env ELECTRON_RUN_AS_NODE=0 npx electron .",
     "build:server": "npx tsc --project tsconfig.server.json",
     "build": "npm run clean && tsc --project tsconfig.electron.json && node -e \"const fs = require('fs'); if (!fs.existsSync('dist-electron')) { fs.mkdirSync('dist-electron'); } fs.writeFileSync('dist-electron/package.json', JSON.stringify({ type: 'commonjs' }))\" && node scripts/generate-hash.js && cross-env ELECTRON=true vite build && npm run copy:config",
     "package": "npm run build && node scripts/build-electron.js",
@@ -36,11 +37,16 @@
     "clean": "rimraf dist dist-electron release",
     "copy:config": "node -e \"const fs=require('fs');const path=require('path');try{fs.copyFileSync('default-config.json','dist/default-config.json');console.log('✅ Copied default-config.json');}catch(e){console.log('⚠️ Config copy skipped:',e.message);}\"",
     "preview": "vite preview",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test:wrapper": "node scripts/test-wrapper.js",
+    "build:wrapper": "node scripts/build-test-wrapper.js",
+    "dev:full": "start cmd /c dev-full.bat",
+    "dev:full:ps1": "powershell -ExecutionPolicy Bypass -File dev-full.ps1"
   },
   "dependencies": {
     "@google/genai": "^1.28.0",
     "express": "^4.19.2",
+    "openai": "^4.52.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "ws": "^8.18.0"
@@ -57,12 +63,13 @@
     "postcss": "^8.5.6",
     "rimraf": "^6.0.1",
     "tailwindcss": "^3.4.18",
+    "terser": "^5.44.0",
     "ts-node": "^10.9.2",
     "typescript": "~5.9.3",
     "vite": "^6.4.1",
     "wait-on": "^8.0.5"
   },
-  "main": "electron-starter.cjs",
+  "main": "dist-electron/main.cjs",
   "build": {
     "appId": "com.stationv.ircsimulator",
     "productName": "Station V - Virtual IRC Simulator",
@@ -77,6 +84,7 @@
       "dist/**/*",
       "dist-electron/**/*",
       "server/**/*",
+      "electron-starter.cjs",
       "node_modules/**/*",
       "!node_modules/electron/dist/**/*"
     ],

@@ -4,6 +4,7 @@ import { NetworkUser } from '../services/networkService';
 export type { ChatState };
 interface ChatState {
   currentUserNickname: string;
+  currentUserProfilePicture?: string;
   virtualUsers: User[];
   channels: Channel[];
   privateMessages: Record<string, PrivateMessageConversation>;
@@ -33,11 +34,14 @@ interface ChatState {
   showNetworkPanel: boolean;
   networkNickname: string | null;
   theme: AppConfig['theme'];
+ userInfo: any | null;
+ isUserInfoModalOpen: boolean;
 }
 
 export type { ChatAction };
 type ChatAction =
   | { type: 'SET_CURRENT_USER_NICKNAME'; payload: string }
+  | { type: 'SET_CURRENT_USER_PROFILE_PICTURE'; payload?: string }
   | { type: 'SET_VIRTUAL_USERS'; payload: User[] }
   | { type: 'SET_CHANNELS'; payload: Channel[] }
   | { type: 'ADD_CHANNEL'; payload: Channel }
@@ -96,12 +100,16 @@ type ChatAction =
   | { type: 'TOGGLE_CHANNEL_LIST_MODAL'; payload: boolean }
   | { type: 'TOGGLE_SHOW_NETWORK_PANEL' }
   | { type: 'CLEAR_CHANNEL_MESSAGES'; payload: string }
-  | { type: 'CLEAR_PM_MESSAGES'; payload: string };
+  | { type: 'CLEAR_PM_MESSAGES'; payload: string }
+ | { type: 'TOGGLE_USER_INFO_MODAL'; payload: boolean }
+ | { type: 'SET_USER_INFO'; payload: any };
 
 export const chatReducer = (state: ChatState, action: ChatAction): ChatState => {
   switch (action.type) {
     case 'SET_CURRENT_USER_NICKNAME':
       return { ...state, currentUserNickname: action.payload };
+    case 'SET_CURRENT_USER_PROFILE_PICTURE':
+      return { ...state, currentUserProfilePicture: action.payload };
     case 'SET_VIRTUAL_USERS':
       return { ...state, virtualUsers: action.payload };
     case 'SET_CHANNELS':
@@ -450,6 +458,14 @@ export const chatReducer = (state: ChatState, action: ChatAction): ChatState => 
         }
         return { ...state, privateMessages: newPrivateMessages };
     }
+    case 'TOGGLE_USER_INFO_MODAL':
+     return {
+       ...state,
+       isUserInfoModalOpen: action.payload,
+       userInfo: action.payload ? state.userInfo : null, // Clear user info when closing
+     };
+   case 'SET_USER_INFO':
+     return { ...state, userInfo: action.payload };
     default:
       return state;
   }

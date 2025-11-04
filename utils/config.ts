@@ -1,6 +1,9 @@
 import type { AppConfig, User, Channel } from '../types.js';
 import { DEFAULT_NICKNAME, DEFAULT_VIRTUAL_USERS, DEFAULT_CHANNELS, DEFAULT_TYPING_DELAY, DEFAULT_TYPING_INDICATOR } from '../constants.js';
 import { configInitService } from '../services/configInitializationService.js';
+import { saveConfigToDatabase, loadConfigFromDatabase } from '../services/configDatabaseService.js';
+import { sendConfigToMain, requestConfigFromMain } from '../services/electronConfigSync.js';
+import { broadcastConfigUpdate } from '../services/configSyncService.js';
 
 const CONFIG_STORAGE_KEY = 'gemini-irc-simulator-config';
 const CHANNEL_LOGS_STORAGE_KEY = 'station-v-channel-logs';
@@ -34,32 +37,63 @@ const checkLocalStorageQuota = (): { available: number; used: number; total: num
 };
 
 /**
- * Loads the application configuration from localStorage.
+ * Loads the application configuration from multiple sources.
+ * Priority: Electron (if available) > IndexedDB > localStorage
  * @returns The saved AppConfig or null if none is found.
  */
-export const loadConfig = (): AppConfig | null => {
+export const loadConfig = async (): Promise<AppConfig | null> => {
   try {
+    // Try to load from Electron main process first (if in Electron)
+    console.log('[Config Debug] Attempting to load config from Electron...');
+    const electronConfig = await requestConfigFromMain();
+    if (electronConfig) {
+      console.log('[Config Debug] Loaded config from Electron');
+      return {
+        ...electronConfig,
+        typingDelay: electronConfig.typingDelay || DEFAULT_TYPING_DELAY
+      };
+    }
+
+    // Try to load from IndexedDB
+    console.log('[Config Debug] No config in Electron, trying database...');
+    const dbConfig = await loadConfigFromDatabase();
+    if (dbConfig) {
+      console.log('[Config Debug] Loaded config from database');
+      // Sync to Electron if available
+      await sendConfigToMain(dbConfig);
+      return {
+        ...dbConfig,
+        typingDelay: dbConfig.typingDelay || DEFAULT_TYPING_DELAY
+      };
+    }
+
+    // Fall back to localStorage
+    console.log('[Config Debug] No config in database, trying localStorage...');
     const savedConfig = localStorage.getItem(CONFIG_STORAGE_KEY);
     console.log('[Config Debug] loadConfig called, savedConfig exists:', !!savedConfig);
     if (!savedConfig) {
       console.log('[Config Debug] No saved config found, returning null');
       return null;
     }
-    
+
     const parsed = JSON.parse(savedConfig);
-    console.log('[Config Debug] Loaded config:', parsed);
+    console.log('[Config Debug] Loaded config from localStorage:', parsed);
     console.log('[Config Debug] Loaded config aiModel:', parsed.aiModel);
     console.log('[Config Debug] Loaded config simulationSpeed:', parsed.simulationSpeed);
-    
+
     const result = {
       ...parsed,
       typingDelay: parsed.typingDelay || DEFAULT_TYPING_DELAY
     };
-    
+
+    // Save to database and Electron for future use
+    await saveConfigToDatabase(result);
+    await sendConfigToMain(result);
+
     console.log('[Config Debug] Returning processed config:', result);
     return result;
   } catch (error) {
-    console.error("Failed to load config from localStorage:", error);
+    console.error("Failed to load config:", error);
     return null;
   }
 };
@@ -72,19 +106,22 @@ export const loadConfig = (): AppConfig | null => {
  */
 export const initializeConfigWithFallback = async (configPath?: string): Promise<AppConfig> => {
   console.log('[Config Init] Initializing configuration with fallback support...');
-  
+
   try {
-    // Try to load saved configuration first
-    const savedConfig = loadConfig();
-    
+    // Try to load saved configuration first (now async with database support)
+    const savedConfig = await loadConfig();
+
     // Initialize using the config service
     const config = await configInitService.initializeConfig(savedConfig, configPath);
-    
+
+    // Save to database for future use
+    await saveConfigToDatabase(config);
+
     console.log('[Config Init] Configuration initialized successfully');
     return config;
   } catch (error) {
     console.error('[Config Init] Error during config initialization:', error);
-    
+
     // Ultimate fallback - create minimal config
     console.log('[Config Init] Using ultimate fallback configuration');
     return configInitService.createFallbackConfig();
@@ -92,22 +129,43 @@ export const initializeConfigWithFallback = async (configPath?: string): Promise
 };
 
 /**
- * Saves the application configuration to localStorage.
+ * Saves the application configuration to all available storage backends.
+ * Saves to: Electron (if available) > IndexedDB > localStorage
  * @param config The AppConfig object to save.
  */
-export const saveConfig = (config: AppConfig) => {
+export const saveConfig = async (config: AppConfig): Promise<void> => {
   try {
     console.log('[Config Debug] saveConfig called with config:', config);
     console.log('[Config Debug] Config keys:', Object.keys(config));
     console.log('[Config Debug] Config aiModel:', config.aiModel);
     console.log('[Config Debug] Config simulationSpeed:', config.simulationSpeed);
-    
+
     const configString = JSON.stringify(config);
     console.log('[Config Debug] Serialized config length:', configString.length);
-    
+
+    // Save to Electron main process (primary for Electron app)
+    const electronSaved = await sendConfigToMain(config);
+    if (electronSaved) {
+      console.log('[Config Debug] Config saved successfully to Electron');
+    } else {
+      console.log('[Config Debug] Electron save not available or failed');
+    }
+
+    // Save to database (primary for web)
+    const dbSaved = await saveConfigToDatabase(config);
+    if (dbSaved) {
+      console.log('[Config Debug] Config saved successfully to database');
+    } else {
+      console.warn('[Config Debug] Failed to save config to database, will use localStorage');
+    }
+
+    // Also save to localStorage as fallback
     localStorage.setItem(CONFIG_STORAGE_KEY, configString);
     console.log('[Config Debug] Config saved successfully to localStorage');
-    
+
+    // Broadcast config update to all tabs and Electron
+    await broadcastConfigUpdate(config);
+
     // Verify the save worked
     const savedConfig = localStorage.getItem(CONFIG_STORAGE_KEY);
     if (savedConfig) {
@@ -116,16 +174,20 @@ export const saveConfig = (config: AppConfig) => {
       console.error('[Config Debug] Config verification failed, no saved config found');
     }
   } catch (error) {
-    console.error("Failed to save config to localStorage:", error);
+    console.error("Failed to save config:", error);
   }
 };
 
-const MAX_RETRIES = 3;
-const INITIAL_BACKOFF_MS = 2000; // 2 seconds
+const MAX_RETRIES = 2;
+const INITIAL_BACKOFF_MS = 1500; // 1.5 seconds
 
 const isRateLimitError = (error: unknown): boolean => {
   if (error instanceof Error) {
-    return error.message.includes("429") || 
+    // Don't retry if quota is 0 - this is a billing/configuration issue
+    if (error.message.includes('"quota_limit_value":"0"')) {
+      return false;
+    }
+    return error.message.includes("429") ||
            error.message.includes("RESOURCE_EXHAUSTED") ||
            error.message.includes("quota") ||
            error.message.includes("rate limit") ||
@@ -173,16 +235,36 @@ export const withRateLimitAndRetries = async <T>(
         throw new Error(`Network error: Unable to connect to AI service. This may be due to CORS restrictions or network issues. Please check your internet connection and try again.`);
       }
       
-      if (isRateLimitError(error) && attempt < maxRetries) {
-        attempt++;
-        const delay = initialBackoffMs * Math.pow(2, attempt - 1) + Math.random() * 1000; // Add jitter
-        console.warn(`Rate limit hit. Retrying in ${Math.round(delay / 1000)}s... (Attempt ${attempt}/${maxRetries})`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      } else {
+      if (isRateLimitError(error)) {
+        // If this looks like a hard quota exhaustion, don't retry to avoid log/traffic storms
+        const msg = error instanceof Error ? error.message : String(error);
+        const isHardQuota = /RESOURCE_EXHAUSTED|quota exceeded|GenerateRequestsPerDayPerProjectPerModel/i.test(msg);
+        if (isHardQuota) {
+          console.warn(`[API Error] Hard quota/RESOURCE_EXHAUSTED detected. Not retrying.`);
+          // Force exit retry loop by setting attempt to max
+          attempt = maxRetries;
+        } else if (attempt < maxRetries) {
+          attempt++;
+          const delay = initialBackoffMs * Math.pow(2, attempt - 1) + Math.random() * 1000; // Add jitter
+          console.warn(`Rate limit hit. Retrying in ${Math.round(delay / 1000)}s... (Attempt ${attempt}/${maxRetries})`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+      }
+
+      {
         if (error instanceof Error) {
-          if (error.message.includes("RESOURCE_EXHAUSTED")) {
+          // Check for zero quota error (billing/configuration issue)
+          if (error.message.includes('"quota_limit_value":"0"')) {
+            throw new Error(`❌ API Quota Error: Your Gemini API key has 0 quota allocated. This is a billing/configuration issue, not a rate limit.\n\n` +
+              `Solutions:\n` +
+              `1. Check your Google Cloud Console billing settings\n` +
+              `2. Ensure your API key has quota allocated for your region\n` +
+              `3. Try using a different API key\n` +
+              `4. Check: https://console.cloud.google.com/apis/api/generativelanguage.googleapis.com/quotas`);
+          } else if (error.message.includes("RESOURCE_EXHAUSTED") || /GenerateRequestsPerDayPerProjectPerModel/i.test(error.message)) {
             throw new Error(`AI service quota exhausted. Please try again later or check your API key limits.`);
-          } else if (error.message.includes("quota")) {
+          } else if (error.message.match(/quota/i)) {
             throw new Error(`AI service quota exceeded. Please try again later.`);
           } else if (error.message.includes("429")) {
             throw new Error(`Rate limit exceeded. Please wait a moment and try again.`);
@@ -302,6 +384,7 @@ const parseChannels = (channelsString: string, allVirtualUsers: User[], currentU
  */
 export const initializeStateFromConfig = (config: AppConfig) => {
     const nickname = config.currentUserNickname || DEFAULT_NICKNAME;
+    const profilePicture = config.currentUserProfilePicture;
     // Use userObjects if available (for proper persistence), otherwise fall back to text parsing
     const virtualUsers = config.userObjects || (config.virtualUsers ? parseVirtualUsers(config.virtualUsers) : DEFAULT_VIRTUAL_USERS);
     
@@ -314,6 +397,7 @@ export const initializeStateFromConfig = (config: AppConfig) => {
             users: c.users.map(user =>
                 user.nickname === DEFAULT_NICKNAME ? {
                     nickname,
+                    profilePicture,
                     status: 'online' as const,
                     personality: 'The human user',
                     userType: 'virtual' as const,
@@ -334,6 +418,7 @@ export const initializeStateFromConfig = (config: AppConfig) => {
             users: c.users.map(user =>
                 user.nickname === DEFAULT_NICKNAME ? {
                     nickname,
+                    profilePicture,
                     status: 'online' as const,
                     personality: 'The human user',
                     userType: 'virtual' as const,
@@ -352,15 +437,17 @@ export const initializeStateFromConfig = (config: AppConfig) => {
         channels = parseChannels(config.channels, virtualUsers, nickname);
     } else {
         // Use default channels but ensure they have the correct current user nickname
+        // Only include the current user, not the default users from DEFAULT_CHANNELS
         channels = DEFAULT_CHANNELS.map(c => ({
             ...c,
             users: [
-                { 
-                    nickname, 
+                {
+                    nickname,
+                    profilePicture,
                     status: 'online' as const,
                     personality: 'The human user',
                     userType: 'virtual' as const,
-                    languageSkills: { 
+                    languageSkills: {
                         languages: [{
                             language: 'English',
                             fluency: 'native' as const,
@@ -368,8 +455,7 @@ export const initializeStateFromConfig = (config: AppConfig) => {
                         }]
                     },
                     writingStyle: { formality: 'casual' as const, verbosity: 'moderate' as const, humor: 'none' as const, emojiUsage: 'rare' as const, punctuation: 'standard' as const }
-                },
-                ...c.users.filter(u => u.nickname !== DEFAULT_NICKNAME) // Keep original channel users, just update current user
+                }
             ]
         }));
     }
@@ -388,13 +474,13 @@ export const initializeStateFromConfig = (config: AppConfig) => {
         ssl: true
     };
     const imageGeneration = config.imageGeneration || {
-        provider: 'placeholder',
+        provider: 'dalle',
         apiKey: '',
-        model: 'stable-diffusion-xl',
-        baseUrl: 'https://api.nanobanana.ai'
+        model: 'dall-e-3',
+        baseUrl: undefined
     };
 
-    return { nickname, virtualUsers, channels, simulationSpeed, aiModel, typingDelay, typingIndicator, ircExport, imageGeneration };
+    return { nickname, virtualUsers, channels, simulationSpeed, aiModel, typingDelay, typingIndicator, ircExport, imageGeneration, profilePicture };
 };
 
 /**

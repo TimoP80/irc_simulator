@@ -9,8 +9,8 @@
     "declaration": false,
     "sourceMap": true,
     "skipLibCheck": true,
-    "strict": true,
-    "esModuleInterop": false,
+    "strict": false,
+    "esModuleInterop": true,
     "types": ["node", "electron"],
     "allowJs": true,
     "jsx": "react-jsx"

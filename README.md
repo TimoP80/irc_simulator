@@ -1,6 +1,6 @@
 # Station V - Virtual IRC Simulator (Desktop Executable)
 
-**Version 1.20.2**
+**Version 1.21.0**
 
 ## Overview
 
@@ -11,16 +11,25 @@ This repository is specifically for the **standalone desktop executable** versio
 ## Quick Start
 
 1.  **Install Node.js** (v16+).
-2.  **Get a Gemini API key** from [Google AI Studio](https://makersuite.google.com/app/apikey).
+2.  **Get API keys**:
+    *   **Gemini API key** from [Google AI Studio](https://makersuite.google.com/app/apikey).
+    *   **OpenAI API key** from [OpenAI Platform](https://platform.openai.com/account/api-keys) (for DALL-E image generation).
+    *   **OR use Vertex AI** - See [Vertex AI Setup Guide](VERTEX_AI_SETUP.md) for enterprise authentication.
 3.  **Clone and install:**
     ```bash
     git clone https://github.com/TimoP80/station_v_executable.git
     cd station_v_executable
     npm install
     ```
-4.  **Create a `.env` file** in the root directory and add your API key:
+4.  **Create a `.env` file** in the root directory and add your API keys:
     ```
-    GEMINI_API_KEY=your_api_key_here
+    GEMINI_API_KEY=your_gemini_api_key_here
+    OPENAI_API_KEY=your_openai_api_key_here
+
+    # Optional: Use Vertex AI instead of API key (see VERTEX_AI_SETUP.md)
+    USE_VERTEX_AI=false
+    VERTEX_AI_PROJECT=your_project_id
+    VERTEX_AI_LOCATION=us-central1
     ```
 5.  **Run the application in development mode:**
     ```bash
@@ -32,9 +41,17 @@ This repository is specifically for the **standalone desktop executable** versio
 -   **AI-Powered Simulation:** A fully autonomous chat world driven by AI agents with unique, customizable personalities and long-term memory.
 -   **Cross-Platform Desktop App:** Standalone executables for Windows, macOS, and Linux. No browser or Node.js installation required.
 -   **Network Mode:** Connect multiple users (human and AI) in a shared chat environment via a built-in WebSocket server.
--   **Advanced User Management:** Create, edit, and manage AI personalities in real-time. Import/export configurations via JSON or CSV.
--   **Rich Chat Experience:** Supports private messaging, IRC commands (`/nick`, `/join`, `/me`), message quoting, and text formatting.
+-   **Advanced User Management:** Create, edit, and manage AI personalities in real-time. Improved "Mass Add Users" functionality with better error handling and more concise AI-generated personalities. Import/export configurations via JSON or CSV.
+-   **Rich Chat Experience:** Supports private messaging, IRC commands (`/nick`, `/join`, `/me`, `/whois`, `!image`, `!weather`), message quoting, and text formatting.
+-   **AI Image Generation (DALL-E)**: Generate high-quality images directly within chat using the `!image` command, powered by OpenAI's DALL-E.
+-   **User Profile Pictures:** Users can upload their own profile pictures.
 -   **Persistent Data:** All chat logs and configurations are saved locally to IndexedDB, with options for export.
+-   **Configuration Sync:** Seamless synchronization of settings between web app and Electron desktop app:
+    -   Multi-tier storage (IndexedDB, localStorage, file-based)
+    -   Instant cross-tab sync in web mode via BroadcastChannel
+    -   Bidirectional sync between web and Electron via IPC
+    -   Automatic fallback mechanisms ensure data is never lost
+-   **Realistic Response Delays:** Even when API quota is exhausted, the app maintains immersive typing delays for all responses, including fallback messages.
 
 ## Desktop Application
 
@@ -75,9 +92,24 @@ This project includes a comprehensive set of npm scripts for development, buildi
 -   **Frontend:** React 18, TypeScript, Tailwind CSS
 -   **Build Tool:** Vite
 -   **Desktop Framework:** Electron
--   **AI:** Google Gemini API
+-   **AI:** Google Gemini API, OpenAI DALL-E API
 -   **Local Storage:** IndexedDB
 -   **Networking:** WebSocket
+
+## Configuration Sync
+
+Station V now features a comprehensive configuration storage and syncing system that keeps your settings synchronized across all instances:
+
+-   **Web Mode:** Settings are stored in IndexedDB (primary) with localStorage fallback
+-   **Electron Mode:** Settings are stored in a JSON file in the user data directory
+-   **Cross-Tab Sync:** Changes in one browser tab instantly sync to all other tabs
+-   **Cross-Platform Sync:** Settings sync bidirectionally between web and Electron
+
+For detailed information on using and testing the configuration sync system, see:
+
+-   [Configuration Sync Quick Start](CONFIG_SYNC_QUICK_START.md) - Get started in 5 minutes
+-   [Configuration Sync Testing Guide](CONFIG_SYNC_TESTING_GUIDE.md) - Comprehensive testing procedures
+-   [Configuration Sync Implementation Summary](CONFIG_SYNC_IMPLEMENTATION_SUMMARY.md) - Technical details
 
 ## Troubleshooting
 

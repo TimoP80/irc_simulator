@@ -1,9 +1,9 @@
 // Vision Service
 // Handles image analysis and description using Google GenAI
 
-import { GoogleGenAI } from "@google/genai";
 import { visionDebug } from '../utils/debugLogger';
 import { listAvailableModels } from './geminiService'; // Import model listing function
+import { getAIService } from './vertexAIService';
 
 export interface VisionAnalysisRequest {
   imageData: string; // base64 encoded image
@@ -20,13 +20,8 @@ export interface VisionAnalysisResponse {
   };
 }
 
-const API_KEY = process.env.GEMINI_API_KEY;
-
-if (!API_KEY) {
-  throw new Error("GEMINI_API_KEY environment variable not set");
-}
-
-const ai = new GoogleGenAI({ apiKey: API_KEY });
+// Get the AI service instance (supports both Vertex AI and API key)
+const ai = getAIService();
 
 // Get available vision models
 export const getAvailableVisionModels = async (): Promise<string[]> => {

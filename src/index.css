@@ -8,9 +8,19 @@
     @apply bg-irc-bg text-irc-text font-mono;
     overflow-x: hidden;
   }
-  
+
   #root {
     @apply h-screen w-screen;
+  }
+
+  /* Custom theme support */
+  html.custom-theme {
+    --tw-bg-opacity: 1;
+  }
+
+  html.custom-theme body {
+    background-color: var(--custom-bg-primary);
+    color: var(--custom-text-primary);
   }
 }
 
@@ -19,117 +29,253 @@
   .irc-channel {
     @apply bg-gray-800 border border-gray-700 rounded-lg p-4 mb-2;
   }
-  
+
+  html.custom-theme .irc-channel {
+    background-color: var(--custom-bg-secondary);
+    border-color: var(--custom-border-primary);
+  }
+
   .irc-channel-header {
     @apply flex items-center justify-between p-3 border-b border-gray-700 bg-gray-900;
   }
-  
+
+  html.custom-theme .irc-channel-header {
+    background-color: var(--custom-bg-primary);
+    border-color: var(--custom-border-secondary);
+  }
+
   .irc-channel-title {
     @apply text-lg font-semibold text-white truncate;
   }
-  
+
+  html.custom-theme .irc-channel-title {
+    color: var(--custom-text-primary);
+  }
+
   .irc-channel-status {
     @apply flex items-center gap-2 text-xs text-gray-400;
   }
-  
+
+  html.custom-theme .irc-channel-status {
+    color: var(--custom-text-muted);
+  }
+
   .irc-status-dot {
     @apply w-1.5 h-1.5 bg-green-500 rounded-full;
   }
-  
+
+  html.custom-theme .irc-status-dot {
+    background-color: var(--custom-success);
+  }
+
   /* Message Styles */
   .irc-message {
     @apply p-2 border-b border-gray-700 last:border-b-0;
   }
-  
+
+  html.custom-theme .irc-message {
+    border-color: var(--custom-border-secondary);
+  }
+
   .irc-message-header {
     @apply flex items-center gap-2 mb-1;
   }
-  
+
   .irc-message-nick {
     @apply font-semibold text-blue-400;
   }
-  
+
+  html.custom-theme .irc-message-nick {
+    color: var(--custom-nickname);
+  }
+
   .irc-message-time {
     @apply text-xs text-gray-500;
   }
-  
+
+  html.custom-theme .irc-message-time {
+    color: var(--custom-timestamp);
+  }
+
   .irc-message-content {
     @apply text-gray-200 break-words;
   }
-  
+
+  html.custom-theme .irc-message-content {
+    color: var(--custom-text-secondary);
+  }
+
   /* Input Styles */
   .irc-input {
     @apply w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500;
   }
-  
+
+  html.custom-theme .irc-input {
+    background-color: var(--custom-bg-tertiary);
+    border-color: var(--custom-border-primary);
+    color: var(--custom-text-primary);
+  }
+
   .irc-input:focus {
     @apply ring-1 ring-blue-500;
   }
-  
+
+  html.custom-theme .irc-input:focus {
+    border-color: var(--custom-accent-primary);
+    --tw-ring-color: var(--custom-accent-primary);
+  }
+
   /* Button Styles */
   .irc-button {
     @apply bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded transition-colors duration-200;
   }
-  
+
+  html.custom-theme .irc-button {
+    background-color: var(--custom-accent-primary);
+    color: var(--custom-text-primary);
+  }
+
+  html.custom-theme .irc-button:hover {
+    background-color: var(--custom-accent-hover);
+  }
+
   .irc-button-secondary {
     @apply bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded transition-colors duration-200;
   }
-  
+
+  html.custom-theme .irc-button-secondary {
+    background-color: var(--custom-bg-tertiary);
+    color: var(--custom-text-secondary);
+  }
+
+  html.custom-theme .irc-button-secondary:hover {
+    background-color: var(--custom-bg-secondary);
+  }
+
   .irc-button-danger {
     @apply bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded transition-colors duration-200;
   }
-  
+
+  html.custom-theme .irc-button-danger {
+    background-color: var(--custom-error);
+  }
+
   /* Modal Styles */
   .irc-modal {
     @apply fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50;
   }
-  
+
   .irc-modal-content {
     @apply bg-gray-800 border border-gray-700 rounded-lg p-6 max-w-md w-full mx-4;
   }
-  
+
+  html.custom-theme .irc-modal-content {
+    background-color: var(--custom-bg-secondary);
+    border-color: var(--custom-border-primary);
+  }
+
   .irc-modal-header {
     @apply flex items-center justify-between mb-4;
   }
-  
+
   .irc-modal-title {
     @apply text-xl font-semibold text-white;
   }
-  
+
+  html.custom-theme .irc-modal-title {
+    color: var(--custom-text-primary);
+  }
+
   .irc-modal-close {
     @apply text-gray-400 hover:text-white transition-colors;
   }
-  
+
+  html.custom-theme .irc-modal-close {
+    color: var(--custom-text-muted);
+  }
+
+  html.custom-theme .irc-modal-close:hover {
+    color: var(--custom-text-primary);
+  }
+
   /* Form Styles */
   .irc-form-group {
     @apply mb-4;
   }
-  
+
   .irc-form-label {
     @apply block text-sm font-medium text-gray-300 mb-2;
+  }
+
+  html.custom-theme .irc-form-label {
+    color: var(--custom-text-secondary);
   }
   
   .irc-form-input {
     @apply w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500;
   }
-  
+
+  html.custom-theme .irc-form-input {
+    background-color: var(--custom-bg-tertiary);
+    border-color: var(--custom-border-primary);
+    color: var(--custom-text-primary);
+  }
+
+  html.custom-theme .irc-form-input:focus {
+    border-color: var(--custom-accent-primary);
+  }
+
   .irc-form-select {
     @apply w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500;
   }
-  
+
+  html.custom-theme .irc-form-select {
+    background-color: var(--custom-bg-tertiary);
+    border-color: var(--custom-border-primary);
+    color: var(--custom-text-primary);
+  }
+
+  html.custom-theme .irc-form-select:focus {
+    border-color: var(--custom-accent-primary);
+  }
+
   .irc-form-textarea {
     @apply w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 resize-none;
+  }
+
+  html.custom-theme .irc-form-textarea {
+    background-color: var(--custom-bg-tertiary);
+    border-color: var(--custom-border-primary);
+    color: var(--custom-text-primary);
+  }
+
+  html.custom-theme .irc-form-textarea:focus {
+    border-color: var(--custom-accent-primary);
   }
   
   /* List Styles */
   .irc-list {
     @apply bg-gray-800 border border-gray-700 rounded-lg overflow-hidden;
   }
-  
+
+  html.custom-theme .irc-list {
+    background-color: var(--custom-bg-secondary);
+    border-color: var(--custom-border-primary);
+  }
+
   .irc-list-item {
     @apply p-3 border-b border-gray-700 last:border-b-0 hover:bg-gray-700 transition-colors;
   }
-  
+
+  html.custom-theme .irc-list-item {
+    border-color: var(--custom-border-secondary);
+    color: var(--custom-text-secondary);
+  }
+
+  html.custom-theme .irc-list-item:hover {
+    background-color: var(--custom-bg-tertiary);
+  }
+
   .irc-list-item:last-child {
     @apply border-b-0;
   }
@@ -138,30 +284,64 @@
   .irc-nav {
     @apply bg-gray-900 border-b border-gray-700 p-4;
   }
-  
+
+  html.custom-theme .irc-nav {
+    background-color: var(--custom-bg-primary);
+    border-color: var(--custom-border-secondary);
+  }
+
   .irc-nav-item {
     @apply text-gray-300 hover:text-white transition-colors px-3 py-2 rounded;
   }
-  
+
+  html.custom-theme .irc-nav-item {
+    color: var(--custom-text-secondary);
+  }
+
+  html.custom-theme .irc-nav-item:hover {
+    color: var(--custom-text-primary);
+  }
+
   .irc-nav-item.active {
     @apply bg-gray-700 text-white;
   }
-  
+
+  html.custom-theme .irc-nav-item.active {
+    background-color: var(--custom-bg-tertiary);
+    color: var(--custom-text-primary);
+  }
+
   /* Status Indicators */
   .irc-status-online {
     @apply text-green-400;
   }
-  
+
+  html.custom-theme .irc-status-online {
+    color: var(--custom-success);
+  }
+
   .irc-status-away {
     @apply text-yellow-400;
   }
-  
+
+  html.custom-theme .irc-status-away {
+    color: var(--custom-warning);
+  }
+
   .irc-status-busy {
     @apply text-red-400;
   }
-  
+
+  html.custom-theme .irc-status-busy {
+    color: var(--custom-error);
+  }
+
   .irc-status-offline {
     @apply text-gray-400;
+  }
+
+  html.custom-theme .irc-status-offline {
+    color: var(--custom-text-muted);
   }
   
   /* Scrollbar Styles */
@@ -169,22 +349,64 @@
     scrollbar-width: thin;
     scrollbar-color: #4b5563 #1f2937;
   }
-  
+
   .irc-scrollbar::-webkit-scrollbar {
     width: 6px;
   }
-  
+
   .irc-scrollbar::-webkit-scrollbar-track {
     background: #1f2937;
   }
-  
+
   .irc-scrollbar::-webkit-scrollbar-thumb {
     background: #4b5563;
     border-radius: 3px;
   }
-  
+
   .irc-scrollbar::-webkit-scrollbar-thumb:hover {
     background: #6b7280;
+  }
+
+  /* Additional text and element styles for custom theme */
+  html.custom-theme .irc-form-label {
+    color: var(--custom-text-secondary);
+  }
+
+  html.custom-theme .irc-form-textarea {
+    background-color: var(--custom-bg-tertiary);
+    border-color: var(--custom-border-primary);
+    color: var(--custom-text-primary);
+  }
+
+  /* Placeholder text styling */
+  html.custom-theme .irc-input::placeholder,
+  html.custom-theme .irc-form-input::placeholder,
+  html.custom-theme .irc-form-textarea::placeholder {
+    color: var(--custom-text-muted);
+  }
+
+  /* Link styling for custom theme */
+  html.custom-theme a {
+    color: var(--custom-accent-primary);
+  }
+
+  html.custom-theme a:hover {
+    color: var(--custom-accent-hover);
+  }
+
+  /* Disabled state styling */
+  html.custom-theme button:disabled,
+  html.custom-theme input:disabled,
+  html.custom-theme select:disabled,
+  html.custom-theme textarea:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  /* Focus ring styling for custom theme */
+  html.custom-theme *:focus-visible {
+    outline: 2px solid var(--custom-accent-primary);
+    outline-offset: 2px;
   }
 }
 

@@ -2,6 +2,7 @@
 // Supports multiple image generation APIs: Nano Banana, Imagen, and others
 import { imageDebug } from '../utils/debugLogger.js';
 import { listAvailableModels } from './geminiService.js';
+import OpenAI from 'openai'; // Import OpenAI
 // Fetches available image generation models from the Gemini API
 export const getAvailableImageModels = async () => {
     try {
@@ -25,22 +26,46 @@ export const getAvailableImageModels = async () => {
 };
 // Default configuration
 const DEFAULT_CONFIG = {
-    provider: 'gemini', // Default to Gemini for real image generation
-    model: 'gemini-1.5-pro', // Use a modern, capable model
-    baseUrl: undefined, // Gemini uses Google GenAI SDK directly
-    models: undefined
+    provider: 'dalle', // Default to DALL-E for real image generation
+    dalleModel: 'dall-e-3', // Use a modern, capable model
+    baseUrl: undefined, // OpenAI uses its own base URL
+    models: undefined,
+    geminiApiKey: undefined,
+    dalleApiKey: undefined,
+    geminiModel: 'gemini-1.5-flash' // Default Gemini model for description generation
 };
 /**
  * Service for generating images using various providers.
  */
 class ImageGenerationService {
     config;
+    openai = null; // OpenAI client instance
     /**
      * Creates an instance of ImageGenerationService.
      * @param {Partial<ImageGenerationConfig>} [config={}] - Initial configuration.
      */
     constructor(config = {}) {
         this.config = { ...DEFAULT_CONFIG, ...config };
+        this.initializeOpenAI();
+    }
+    /**
+     * Initializes the OpenAI client if the provider is DALL-E and an API key is available.
+     * @private
+     */
+    initializeOpenAI() {
+        if (this.config.provider === 'dalle' && this.config.dalleApiKey) {
+            this.openai = new OpenAI({
+                apiKey: this.config.dalleApiKey,
+            });
+        }
+        else if (this.config.provider === 'gemini' && this.config.dalleApiKey) { // If Gemini is provider, DALL-E is still used for final image
+            this.openai = new OpenAI({
+                apiKey: this.config.dalleApiKey,
+            });
+        }
+        else {
+            this.openai = null;
+        }
     }
     /**
      * Generates an image based on the provided request.
@@ -48,41 +73,34 @@ class ImageGenerationService {
      * @returns {Promise<ImageGenerationResponse>} The response containing the image URL or an error.
      */
     async generateImage(request) {
+        // This method now acts as a simple entry point
+        return this._generateImageInternal(request);
+    }
+    /**
+     * Internal method to handle the actual image generation logic.
+     * @param {ImageGenerationRequest} request - The image generation request.
+     * @returns {Promise<ImageGenerationResponse>} The response containing the image URL or an error.
+     */
+    async _generateImageInternal(request) {
         const startTime = Date.now();
-        // Use the proxy server for all providers except placeholder
-        if (this.config.provider !== 'placeholder') {
-            try {
-                const response = await fetch('http://localhost:3001/generate-image', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        prompt: request.prompt,
-                        config: this.config,
-                    }),
-                });
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-                }
-                const result = await response.json();
-                return {
-                    ...result,
-                    metadata: {
-                        ...result.metadata,
-                        generationTime: Date.now() - startTime,
-                    }
-                };
-            }
-            catch (error) {
-                imageDebug.error('Error calling image generation proxy:', error);
-                // Fallback to placeholder if the proxy fails
-                return this.generatePlaceholder(request);
+        try {
+            switch (this.config.provider) {
+                case 'gemini':
+                    return await this.generateWithGemini(request);
+                case 'imagen':
+                    return await this.generateWithImagen(request);
+                case 'dalle':
+                    return await this.generateWithDALLE(request);
+                case 'placeholder':
+                default:
+                    return await this.generatePlaceholder(request);
             }
         }
-        // Handle placeholder generation locally
-        return this.generatePlaceholder(request);
+        catch (error) {
+            imageDebug.error(`Error generating image with ${this.config.provider}:`, error);
+            // Fallback to placeholder if the selected provider fails
+            return this.generatePlaceholder(request);
+        }
     }
     /**
      * Generates an image using the Gemini provider.
@@ -91,85 +109,75 @@ class ImageGenerationService {
      * @returns {Promise<ImageGenerationResponse>} The response containing the image URL or an error.
      */
     async generateWithGemini(request) {
-        if (!this.config.apiKey) {
-            throw new Error('Gemini API key not configured');
+        if (!this.config.geminiApiKey) {
+            throw new Error('Gemini API key for description generation not configured');
+        }
+        if (!this.config.dalleApiKey) {
+            throw new Error('DALL-E API key for image generation not configured');
         }
         const startTime = Date.now();
         try {
-            // Import GoogleGenAI dynamically to avoid issues in browser
             const { GoogleGenAI } = await import('@google/genai');
-            const ai = new GoogleGenAI({ apiKey: this.config.apiKey });
-            // Use Gemini's image generation model
-            const model = this.config.model || 'gemini-1.5-pro';
-            imageDebug.log(`Attempting to generate image with model: ${model}`);
-            // Try to generate content with the model
-            const response = await ai.models.generateContent({
-                model: model,
-                contents: [{ role: "user", parts: [{ text: `Generate an image of: ${request.prompt}` }] }],
+            const ai = new GoogleGenAI({ apiKey: this.config.geminiApiKey });
+            const geminiModel = this.config.geminiModel || 'gemini-1.5-flash';
+            imageDebug.log(`Attempting to generate image description with Gemini model: ${geminiModel}`);
+            const descriptionResponse = await ai.models.generateContent({
+                model: geminiModel,
+                contents: [{ role: "user", parts: [{ text: `Create a detailed, vivid, and creative image description from the following prompt: "${request.prompt}". Focus on visual details, colors, lighting, and composition. The description should be suitable for an image generation AI. Max 150 words.` }] }],
             });
-            // Extract image data from response
-            if (response.candidates && response.candidates.length > 0) {
-                for (const part of response.candidates[0].content.parts) {
-                    if (part.inlineData) {
-                        // Convert base64 data to data URL
-                        const imageData = part.inlineData.data;
-                        const mimeType = part.inlineData.mimeType || 'image/png';
-                        const dataUrl = `data:${mimeType};base64,${imageData}`;
-                        imageDebug.log(`Successfully generated image with Gemini`);
-                        return {
-                            success: true,
-                            imageUrl: dataUrl,
-                            metadata: {
-                                model: model,
-                                provider: 'gemini',
-                                generationTime: Date.now() - startTime
-                            }
-                        };
-                    }
-                }
-            }
-            // If no image data found, fall back to placeholder
-            imageDebug.warn('No image data received from Gemini, falling back to placeholder');
-            return await this.generatePlaceholder(request);
+            const imageDescription = descriptionResponse.candidates[0].content.parts[0].text;
+            imageDebug.log(`Generated image description: ${imageDescription}`);
+            // Now use DALL-E to generate the image from the description
+            return await this.generateWithDALLE({ ...request, prompt: imageDescription });
         }
         catch (error) {
-            imageDebug.error('Gemini image generation failed:', error);
-            // Check if it's a model not found error
-            if (error instanceof Error && error.message.includes('not found')) {
-                imageDebug.warn('Gemini model not found or doesn\'t support image generation, falling back to placeholder');
-            }
-            // Fall back to placeholder on any error
-            imageDebug.log('Falling back to placeholder image generation');
+            imageDebug.error('Gemini image description generation failed:', error);
             return await this.generatePlaceholder(request);
         }
     }
-    /**
-     * Generates an image using the Imagen provider.
-     * @private
-     * @param {ImageGenerationRequest} request - The image generation request.
-     * @returns {Promise<ImageGenerationResponse>} The response containing the image URL or an error.
-     */
     async generateWithImagen(request) {
-        if (!this.config.apiKey) {
+        if (!this.config.dalleApiKey) { // Assuming Imagen would also use a specific key or DALL-E's for now
             throw new Error('Imagen API key not configured');
         }
-        // Imagen API integration would go here
-        // This is a placeholder implementation
         throw new Error('Imagen integration not yet implemented');
     }
-    /**
-     * Generates an image using the DALLE provider.
-     * @private
-     * @param {ImageGenerationRequest} request - The image generation request.
-     * @returns {Promise<ImageGenerationResponse>} The response containing the image URL or an error.
-     */
     async generateWithDALLE(request) {
-        if (!this.config.apiKey) {
-            throw new Error('DALLE API key not configured');
+        if (!this.openai) {
+            throw new Error('OpenAI client not initialized. DALL-E API key might be missing or provider is not "dalle".');
         }
-        // OpenAI DALLE API integration would go here
-        // This is a placeholder implementation
-        throw new Error('DALLE integration not yet implemented');
+        const startTime = Date.now();
+        const model = this.config.dalleModel || 'dall-e-3'; // Default to dall-e-3
+        try {
+            imageDebug.log(`Attempting to generate image with DALL-E model: ${model}`);
+            const response = await this.openai.images.generate({
+                model: model,
+                prompt: request.prompt,
+                n: 1, // Number of images to generate
+                size: request.width && request.height ? `${request.width}x${request.height}` : '1024x1024', // Default size
+                response_format: 'url', // Request URL for the image
+            });
+            if (response.data && response.data.length > 0 && response.data[0].url) {
+                const imageUrl = response.data[0].url;
+                imageDebug.log(`Successfully generated image with DALL-E: ${imageUrl}`);
+                return {
+                    success: true,
+                    imageUrl: imageUrl,
+                    metadata: {
+                        model: model,
+                        provider: 'dalle',
+                        generationTime: Date.now() - startTime
+                    }
+                };
+            }
+            else {
+                imageDebug.warn('No image URL received from DALL-E, falling back to placeholder');
+                return await this.generatePlaceholder(request);
+            }
+        }
+        catch (error) {
+            imageDebug.error('DALL-E image generation failed:', error);
+            return await this.generatePlaceholder(request);
+        }
     }
     /**
      * Generates a placeholder image.
@@ -184,7 +192,7 @@ class ImageGenerationService {
         const prompt = request.prompt.substring(0, 50);
         // Create a placehold.co URL with custom text and styling
         const encodedText = encodeURIComponent(prompt);
-        const imageUrl = `https://placehold.co/${width}x${height}/4A90E2/FFFFFF/png?text=${encodedText}`;
+        const imageUrl = `https://placehold.co/${width}x${height}/4A90E2/FFFFFF/png?text=${encodedText}&dummy=${Date.now()}`;
         return {
             success: true,
             imageUrl,
@@ -201,6 +209,7 @@ class ImageGenerationService {
      */
     updateConfig(newConfig) {
         this.config = { ...this.config, ...newConfig };
+        this.initializeOpenAI(); // Re-initialize OpenAI client if config changes
     }
     /**
      * Gets the current service configuration.
@@ -232,12 +241,20 @@ export const generateImage = async (prompt, config) => {
     });
 };
 // Configuration helpers
-export const setImageGenerationProvider = (provider, apiKey, model) => {
+export const setImageGenerationProvider = (provider, geminiApiKey, dalleApiKey, geminiModel, dalleModel) => {
     const service = getImageGenerationService();
-    service.updateConfig({ provider, apiKey, model });
+    service.updateConfig({ provider, geminiApiKey, dalleApiKey, geminiModel, dalleModel });
 };
 export const isImageGenerationConfigured = () => {
     const service = getImageGenerationService();
     const config = service.getConfig();
-    return config.provider !== 'placeholder' && !!config.apiKey;
+    // Configuration is considered complete if a provider is set and the corresponding API key is present
+    if (config.provider === 'dalle') {
+        return !!config.dalleApiKey;
+    }
+    if (config.provider === 'gemini') {
+        return !!config.geminiApiKey && !!config.dalleApiKey; // Gemini for description, DALL-E for generation
+    }
+    // Add checks for other providers if they become active
+    return false;
 };

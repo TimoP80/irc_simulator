@@ -6,9 +6,9 @@ export const DEFAULT_NICKNAME = "YourNickname";
 
 // Intervals for background simulation in milliseconds.
 export const SIMULATION_INTERVALS: Record<'fast' | 'normal' | 'slow', number> = {
-  fast: 15000,   // 15 seconds - much slower than before
-  normal: 30000, // 30 seconds - significantly reduced activity
-  slow: 60000,   // 60 seconds - very conservative, API-friendly
+  fast: 15000,   // 15 seconds - more frequent (increased from 10s to reduce API calls)
+  normal: 30000, // 30 seconds - balanced activity (increased from 20s)
+  slow: 60000,   // 60 seconds - conservative (increased from 40s)
 };
 
 // Fallback AI models when API is unavailable

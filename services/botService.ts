@@ -1,16 +1,11 @@
-import { GoogleGenAI } from "@google/genai";
 import type { User, Message, BotCommandType } from '../types';
 import { withRateLimitAndRetries } from '../utils/config';
 import { generateImage, getImageGenerationService } from './imageGenerationService';
 import { generateTranslatedPersonality } from '../services/geminiService';
+import { getAIService } from './vertexAIService';
 
-const API_KEY = process.env.GEMINI_API_KEY;
-
-if (!API_KEY) {
-  throw new Error("GEMINI_API_KEY environment variable not set");
-}
-
-const ai = new GoogleGenAI({ apiKey: API_KEY });
+// Get the AI service instance (supports both Vertex AI and API key)
+const ai = getAIService();
 
 // Bot command handlers
 export const handleBotCommand = async (
@@ -18,12 +13,20 @@ export const handleBotCommand = async (
   user: User,
   channelName: string,
   model: string = 'gemini-2.5-flash',
-  imageConfig?: {
-    provider: 'gemini' | 'imagen' | 'placeholder' | 'dalle';
-    apiKey?: string;
-    model?: string;
-    baseUrl?: string;
-  },
+ imageConfig: {
+   provider: 'gemini' | 'imagen' | 'placeholder' | 'dalle';
+   geminiApiKey?: string;
+   dalleApiKey?: string;
+   geminiModel?: string;
+   dalleModel?: string;
+   baseUrl?: string;
+ } = {
+   provider: 'gemini', // Default to Gemini for description generation
+   geminiApiKey: process.env.GEMINI_API_KEY, // Assuming GEMINI_API_KEY is for text generation
+   dalleApiKey: process.env.DALLE_API_KEY,   // Assuming DALLE_API_KEY is for DALL-E
+   geminiModel: 'gemini-1.5-flash',
+   dalleModel: 'dall-e-3'
+ },
   addMessageToContext?: (message: Message, context: any) => void,
   updateMessageInContext?: (message: Message, context: any) => void,
   generateUniqueMessageId?: () => number,
@@ -121,6 +124,7 @@ export const handleBotCommand = async (
     if (typingMessageId && updateMessageInContext && activeContext) {
       if (botResponse) {
         updateMessageInContext({ ...botResponse, id: typingMessageId, isTyping: false }, activeContext);
+        return null; // Typing message is updated, so no need to return a new message
       } else {
         // If no response, just remove the typing indicator
         updateMessageInContext({
@@ -144,12 +148,14 @@ const generateImageCommand = async (
   user: User,
   channelName: string,
   model: string,
-  imageConfig?: {
-    provider: 'gemini' | 'imagen' | 'placeholder' | 'dalle';
-    apiKey?: string;
-    model?: string;
-    baseUrl?: string;
-  },
+ imageConfig: {
+   provider: 'gemini' | 'imagen' | 'placeholder' | 'dalle';
+   geminiApiKey?: string;
+   dalleApiKey?: string;
+   geminiModel?: string;
+   dalleModel?: string;
+   baseUrl?: string;
+ },
   addMessageToContext?: (message: Message, context: any) => void,
   updateMessageInContext?: (message: Message, context: any) => void,
   generateUniqueMessageId?: () => number,
@@ -183,7 +189,6 @@ const generateImageCommand = async (
           prompt,
           metadata: result.metadata
         },
-        images: [result.imageUrl],
         isTyping: false // Ensure typing is false when response is ready
       };
     } else {
@@ -192,14 +197,10 @@ const generateImageCommand = async (
       // Provide helpful error message based on the error type
       let errorMessage = `❌ Image generation failed: ${result.error || 'Unknown error'}`;
       
-      if (result.error?.includes('CORS')) {
-        errorMessage = `❌ Image generation failed due to CORS restrictions. Please try using the placeholder service or contact your administrator.`;
-      } else if (result.error?.includes('Network')) {
-        errorMessage = `❌ Image generation failed due to network issues. Please check your internet connection.`;
-      } else if (result.error?.includes('404')) {
-        errorMessage = `❌ Image generation service not found. Please check the API endpoint configuration.`;
-      } else if (result.error?.includes('API key')) {
+      if (result.error?.includes('API key')) {
         errorMessage = `❌ Image generation failed: API key not configured. Please check your settings.`;
+      } else if (imageConfig?.provider === 'placeholder') {
+        errorMessage = `❌ Image generation is using placeholders. Configure an image generation provider for real images.`;
       }
       
       return {
@@ -678,7 +679,10 @@ const generateSearchCommand = async (
  */
 export const translateBotPersonality = async (personality: string, language: string): Promise<string> => {
   try {
-    const translatedPersonality = await generateTranslatedPersonality(personality, language);
+    const translatedPersonality = await withRateLimitAndRetries(
+      () => generateTranslatedPersonality(personality, language),
+      `translating bot personality to ${language}`
+    );
     return translatedPersonality;
   } catch (error) {
     console.error(`[Bot Service] Error translating personality:`, error);

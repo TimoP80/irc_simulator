@@ -44,7 +44,7 @@ const defaultCategories = {
 };
 
 let config: DebugConfig = {
-  enabled: process.env.DEBUG?.includes('station-v') || false,
+  enabled: (typeof process !== 'undefined' && process.env?.DEBUG?.includes('station-v')) || false,
   logLevel: 'debug',
   categories: defaultCategories,
 };
@@ -68,7 +68,7 @@ const logLevels = {
 
 function isNamespaceEnabled(namespace: string): boolean {
   if (!config.enabled) return false;
-  const envDebug = process.env.DEBUG || '';
+  const envDebug = (typeof process !== 'undefined' && process.env?.DEBUG) || '';
   if (envDebug === '*') return true;
   const enabledNamespaces = envDebug.split(',');
   return enabledNamespaces.some(ns => ns === '*' || namespace.startsWith(ns.replace(/\*$/, '')));

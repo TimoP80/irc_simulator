@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import type { AppConfig, User, GeminiModel, Channel } from '../types';
-import { loadConfig } from '../utils/config';
+import { loadConfig, saveConfig } from '../utils/config';
 import { DEFAULT_NICKNAME, FALLBACK_AI_MODELS, DEFAULT_AI_MODEL, DEFAULT_TYPING_DELAY, DEFAULT_TYPING_INDICATOR } from '../constants';
-import { generateRandomWorldConfiguration, listAvailableModels } from '../services/geminiService';
+import { generateRandomWorldConfiguration, listAvailableModels, validateAPIKey } from '../services/geminiService';
 import { UserManagement } from './UserManagement';
 import { BotManagement } from './BotManagement';
 import { ChannelManagement } from './ChannelManagement';
@@ -10,6 +10,9 @@ import { getDebugConfig, updateDebugConfig, setDebugEnabled, setLogLevel, toggle
 import { DataExportModal } from './DataExportModal';
 import { ChannelImportExportModal } from './ChannelImportExportModal';
 import { getAvailableImageModels } from '../services/imageGenerationService';
+import { ProfilePicture } from './ProfilePicture';
+import { ThemeEditor, type CustomTheme } from './ThemeEditor';
+import { applyCustomTheme } from '../utils/themeUtils';
 
 interface SettingsModalProps {
   onSave: (config: AppConfig) => void;
@@ -109,37 +112,71 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onImport,
   onThemeChange
 }) => {
-  const [config, setConfig] = useState<AppConfig>(() => {
-    const savedConfig = loadConfig();
-    const aiModel = savedConfig?.aiModel || DEFAULT_AI_MODEL;
-    return {
-      currentUserNickname: savedConfig?.currentUserNickname || DEFAULT_NICKNAME,
-      virtualUsers: savedConfig?.virtualUsers || DEFAULT_USERS_TEXT,
-      channels: savedConfig?.channels || DEFAULT_CHANNELS_TEXT,
-      simulationSpeed: savedConfig?.simulationSpeed || 'normal',
-      aiModel: aiModel || DEFAULT_AI_MODEL, // Ensure it's never undefined
-      typingDelay: savedConfig?.typingDelay || DEFAULT_TYPING_DELAY,
-      typingIndicator: savedConfig?.typingIndicator || DEFAULT_TYPING_INDICATOR,
-      userObjects: savedConfig?.userObjects,
-      imageGeneration: savedConfig?.imageGeneration || {
-        provider: 'placeholder',
-        apiKey: '',
-        model: 'gemini-1.5-pro',
-        baseUrl: 'https://api.nanobanana.ai'
-      },
-      theme: savedConfig?.theme || 'dark',
-      ircExport: savedConfig?.ircExport || {
-        enabled: false,
-        server: 'irc.libera.chat',
-        port: 6697,
-        nickname: 'station-v-user',
-        realname: 'Station V User',
-        channel: '#station-v-testing',
-        ssl: true
-      },
-      perspectives: savedConfig?.perspectives || ['First Person', 'Third Person'],
-    };
+  const [config, setConfig] = useState<AppConfig>({
+    currentUserNickname: DEFAULT_NICKNAME,
+    virtualUsers: DEFAULT_USERS_TEXT,
+    channels: DEFAULT_CHANNELS_TEXT,
+    simulationSpeed: 'normal',
+    aiModel: DEFAULT_AI_MODEL,
+    typingDelay: DEFAULT_TYPING_DELAY,
+    typingIndicator: DEFAULT_TYPING_INDICATOR,
+    imageGeneration: {
+      provider: 'placeholder',
+      apiKey: '',
+      model: 'gemini-1.5-pro',
+      baseUrl: 'https://api.nanobanana.ai'
+    },
+    theme: 'dark',
+    ircExport: {
+      enabled: false,
+      server: 'irc.libera.chat',
+      port: 6697,
+      nickname: 'station-v-user',
+      realname: 'Station V User',
+      channel: '#station-v-testing',
+      ssl: true
+    },
+    perspectives: ['First Person', 'Third Person'],
   });
+
+  // Load config from database on mount
+  useEffect(() => {
+    const loadInitialConfig = async () => {
+      const savedConfig = await loadConfig();
+      if (savedConfig) {
+        const aiModel = savedConfig.aiModel || DEFAULT_AI_MODEL;
+        setConfig({
+          currentUserNickname: savedConfig.currentUserNickname || DEFAULT_NICKNAME,
+          currentUserProfilePicture: savedConfig.currentUserProfilePicture,
+          virtualUsers: savedConfig.virtualUsers || DEFAULT_USERS_TEXT,
+          channels: savedConfig.channels || DEFAULT_CHANNELS_TEXT,
+          simulationSpeed: savedConfig.simulationSpeed || 'normal',
+          aiModel: aiModel || DEFAULT_AI_MODEL,
+          typingDelay: savedConfig.typingDelay || DEFAULT_TYPING_DELAY,
+          typingIndicator: savedConfig.typingIndicator || DEFAULT_TYPING_INDICATOR,
+          userObjects: savedConfig.userObjects,
+          imageGeneration: savedConfig.imageGeneration || {
+            provider: 'placeholder',
+            apiKey: '',
+            model: 'gemini-1.5-pro',
+            baseUrl: 'https://api.nanobanana.ai'
+          },
+          theme: savedConfig.theme || 'dark',
+          ircExport: savedConfig.ircExport || {
+            enabled: false,
+            server: 'irc.libera.chat',
+            port: 6697,
+            nickname: 'station-v-user',
+            realname: 'Station V User',
+            channel: '#station-v-testing',
+            ssl: true
+          },
+          perspectives: savedConfig.perspectives || ['First Person', 'Third Person'],
+        });
+      }
+    };
+    loadInitialConfig();
+  }, []);
 
   const [perspectives, setPerspectives] = useState<string[]>(config.perspectives || ['First Person', 'Third Person']);
   const [selectedPerspective, setSelectedPerspective] = useState<string | null>(null);
@@ -168,10 +205,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [availableModels, setAvailableModels] = useState<GeminiModel[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [modelsError, setModelsError] = useState<string | null>(null);
+  const [apiKeyWarning, setApiKeyWarning] = useState<string | null>(null);
+  const [isValidatingApiKey, setIsValidatingApiKey] = useState(false);
   const [showDataExportModal, setShowDataExportModal] = useState(false);
   const [showChannelImportExportModal, setShowChannelImportExportModal] = useState(false);
   const [imageModels, setImageModels] = useState<string[]>([]);
   const [isLoadingImageModels, setIsLoadingImageModels] = useState(false);
+  const [showThemeEditor, setShowThemeEditor] = useState(false);
   // Handle Escape key to close modal
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -185,6 +225,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   }, [onCancel]);
 
   // Fetch available models on component mount
+  // Validate API key when component mounts or when settings change
+  useEffect(() => {
+    const validateKey = async () => {
+      setIsValidatingApiKey(true);
+      try {
+        const result = await validateAPIKey();
+        if (!result.valid) {
+          setApiKeyWarning(result.error || 'API key validation failed');
+        } else {
+          setApiKeyWarning(null);
+        }
+      } catch (error) {
+        console.error('Error validating API key:', error);
+        setApiKeyWarning('Could not validate API key');
+      } finally {
+        setIsValidatingApiKey(false);
+      }
+    };
+
+    // Validate on mount
+    validateKey();
+  }, []);
+
   useEffect(() => {
     const fetchModels = async () => {
       setIsLoadingModels(true);
@@ -311,6 +374,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     updateDebugConfig(newConfig);
   };
 
+  const handleValidateApiKey = async () => {
+    setIsValidatingApiKey(true);
+    try {
+      const result = await validateAPIKey();
+      if (result.valid) {
+        setApiKeyWarning(null);
+        alert('✅ API key is valid!');
+      } else {
+        setApiKeyWarning(result.error || 'API key validation failed');
+        alert(`❌ ${result.error || 'API key validation failed'}`);
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      setApiKeyWarning(`Validation error: ${errorMsg}`);
+      alert(`❌ Error validating API key: ${errorMsg}`);
+    } finally {
+      setIsValidatingApiKey(false);
+    }
+  };
+
 
   const handleDebugCategoryToggle = (category: keyof typeof debugConfig.categories) => {
     const newConfig = {
@@ -329,34 +412,118 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
       <div className="bg-gray-800 rounded-lg shadow-xl p-4 lg:p-8 w-full max-w-4xl border border-gray-700 max-h-[95vh] overflow-y-auto">
-        <h2 className="text-xl lg:text-2xl font-bold text-white mb-4">Simulation Configuration</h2>
-        <p className="text-gray-400 mb-6 text-sm lg:text-base">Customize the channels, virtual users, and your nickname. Changes are saved locally.</p>
-        
+        <h2 className="text-lg lg:text-xl font-bold text-white mb-3">Simulation Configuration</h2>
+        <p className="text-gray-400 mb-4 text-xs lg:text-sm">Customize the channels, virtual users, and your nickname. Changes are saved locally.</p>
+
+        {apiKeyWarning && (
+          <div className="bg-red-900/30 border border-red-600 rounded-lg p-3 mb-4">
+            <div className="flex items-start gap-2">
+              <span className="text-red-400 text-lg flex-shrink-0">⚠️</span>
+              <div className="flex-grow">
+                <p className="text-red-300 font-semibold text-xs mb-1">API Key Issue Detected</p>
+                <p className="text-red-200 text-[10px] mb-2">{apiKeyWarning}</p>
+                <button
+                  onClick={handleValidateApiKey}
+                  disabled={isValidatingApiKey}
+                  className="text-[10px] bg-red-700 hover:bg-red-600 disabled:bg-gray-600 text-white px-2 py-1 rounded transition-colors"
+                >
+                  {isValidatingApiKey ? 'Validating...' : 'Validate & Fix'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="space-y-6">
           <div>
-            <label htmlFor="currentUserNickname" className="block text-sm font-medium text-gray-300 mb-2">Your Nickname</label>
+            <label htmlFor="currentUserNickname" className="block text-xs font-medium text-gray-300 mb-1">Your Nickname</label>
             <input
               type="text"
               id="currentUserNickname"
               name="currentUserNickname"
               value={config.currentUserNickname}
               onChange={handleChange}
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 lg:px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm lg:text-base"
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 lg:px-3 py-1.5 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-xs lg:text-sm"
             />
           </div>
 
+          <div className="flex items-center gap-4">
+            <div className="flex-shrink-0">
+              <ProfilePicture
+                user={{
+                  nickname: config.currentUserNickname,
+                  profilePicture: config.currentUserProfilePicture,
+                }}
+                size="lg"
+              />
+            </div>
+            <div className="flex-grow">
+              <label htmlFor="currentUserProfilePicture" className="block text-xs font-medium text-gray-300 mb-1">Profile Picture</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  id="currentUserProfilePicture"
+                  name="currentUserProfilePicture"
+                  value={config.currentUserProfilePicture || ''}
+                  onChange={(e) => setConfig(prev => ({ ...prev, currentUserProfilePicture: e.target.value }))}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-xs"
+                  placeholder="Enter image URL or upload"
+                />
+                <input
+                  type="file"
+                  id="profilePictureUpload"
+                  className="hidden"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        setConfig(prev => ({ ...prev, currentUserProfilePicture: reader.result as string }));
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => document.getElementById('profilePictureUpload')?.click()}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-medium"
+                >
+                  Upload
+                </button>
+              </div>
+              <p className="text-[10px] text-gray-500 mt-0.5">Enter a URL or upload an image for your profile picture.</p>
+            </div>
+          </div>
+
           <div>
-            <label htmlFor="theme" className="block text-sm font-medium text-gray-300 mb-2">Theme</label>
-            <select
-              id="theme"
-              name="theme"
-              value={config.theme}
-              onChange={handleChange}
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 lg:px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm lg:text-base"
-            >
-              <option value="dark">Dark</option>
-              <option value="light">Light</option>
-            </select>
+            <label htmlFor="theme" className="block text-xs font-medium text-gray-300 mb-1">Theme</label>
+            <div className="flex gap-2">
+              <select
+                id="theme"
+                name="theme"
+                value={config.theme}
+                onChange={handleChange}
+                className="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-2 lg:px-3 py-1.5 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-xs lg:text-sm"
+              >
+                <option value="dark">Dark</option>
+                <option value="light">Light</option>
+                <option value="custom">Custom</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => setShowThemeEditor(true)}
+                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors duration-200 text-xs font-medium whitespace-nowrap"
+              >
+                🎨 Customize
+              </button>
+            </div>
+            {config.theme === 'custom' && config.customTheme && (
+              <p className="text-[10px] text-gray-400 mt-0.5">
+                Using custom theme: {config.customTheme.name}
+              </p>
+            )}
           </div>
           
           <UserManagement
@@ -392,14 +559,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             allUsers={users} 
           />
           
-          <div className="border-t border-gray-600 pt-6">
-            <h3 className="text-lg font-semibold text-gray-200 mb-4">🎭 Perspective Configuration</h3>
-            <p className="text-sm text-gray-400 mb-4">Manage the different narrative perspectives available for AI users.</p>
-            <div className="space-y-4">
-              <div className="flex gap-4">
+          <div className="border-t border-gray-600 pt-4">
+            <h3 className="text-sm font-semibold text-gray-200 mb-2">🎭 Perspective Configuration</h3>
+            <p className="text-xs text-gray-400 mb-3">Manage the different narrative perspectives available for AI users.</p>
+            <div className="space-y-3">
+              <div className="flex gap-3">
                 <div className="w-1/2">
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Available Perspectives</label>
-                  <ul className="bg-gray-700 border border-gray-600 rounded-lg p-2 space-y-2 h-40 overflow-y-auto">
+                  <label className="block text-xs font-medium text-gray-300 mb-1">Available Perspectives</label>
+                  <ul className="bg-gray-700 border border-gray-600 rounded-lg p-2 space-y-1 h-32 overflow-y-auto text-xs">
                     {perspectives.map((p, index) => (
                       <li
                         key={index}
@@ -407,7 +574,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           setSelectedPerspective(p);
                           setEditingPerspective(p);
                         }}
-                        className={`p-2 rounded-md cursor-pointer ${selectedPerspective === p ? 'bg-indigo-600' : 'hover:bg-gray-600'}`}
+                        className={`p-1.5 rounded-md cursor-pointer ${selectedPerspective === p ? 'bg-indigo-600' : 'hover:bg-gray-600'}`}
                       >
                         {p}
                       </li>
@@ -415,12 +582,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </ul>
                 </div>
                 <div className="w-1/2">
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Edit Perspective</label>
+                  <label className="block text-xs font-medium text-gray-300 mb-1">Edit Perspective</label>
                   <input
                     type="text"
                     value={editingPerspective}
                     onChange={(e) => setEditingPerspective(e.target.value)}
-                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-gray-200"
+                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-gray-200 text-xs"
                     placeholder="Select or create a perspective"
                   />
                   <div className="flex gap-2 mt-2">
@@ -431,7 +598,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           setEditingPerspective('');
                         }
                       }}
-                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm"
+                      className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-xs"
                     >
                       Add New
                     </button>
@@ -444,7 +611,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         }
                       }}
                       disabled={!selectedPerspective}
-                      className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm disabled:opacity-50"
+                      className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs disabled:opacity-50"
                     >
                       Delete Selected
                     </button>
@@ -455,36 +622,36 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Background Simulation Speed</label>
-            <div className="grid grid-cols-2 lg:flex lg:items-center lg:space-x-6 gap-2">
+            <label className="block text-xs font-medium text-gray-300 mb-1">Background Simulation Speed</label>
+            <div className="grid grid-cols-2 lg:flex lg:items-center lg:space-x-4 gap-1.5">
               {(['off', 'slow', 'normal', 'fast'] as const).map((speed) => (
-                <label key={speed} className="flex items-center text-sm text-gray-300 cursor-pointer">
+                <label key={speed} className="flex items-center text-xs text-gray-300 cursor-pointer">
                   <input
                     type="radio"
                     name="simulationSpeed"
                     value={speed}
                     checked={config.simulationSpeed === speed}
                     onChange={handleChange}
-                    className="h-4 w-4 bg-gray-700 border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                    className="h-3 w-3 bg-gray-700 border-gray-600 text-indigo-600 focus:ring-indigo-500"
                   />
-                  <span className="ml-2 capitalize">{speed}</span>
+                  <span className="ml-1.5 capitalize">{speed}</span>
                 </label>
               ))}
             </div>
-            <p className="text-xs text-gray-500 mt-2">"Off" disables autonomous AI messages to conserve API quota. Simulation also pauses when the tab is not visible.</p>
+            <p className="text-[10px] text-gray-500 mt-1">"Off" disables autonomous AI messages to conserve API quota. Simulation also pauses when the tab is not visible.</p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-xs font-medium text-gray-300 mb-1">
               AI Model
-              {isLoadingModels && <span className="ml-2 text-blue-400">(Loading...)</span>}
+              {isLoadingModels && <span className="ml-2 text-blue-400 text-[10px]">(Loading...)</span>}
             </label>
             <select
               name="aiModel"
               value={config.aiModel || DEFAULT_AI_MODEL}
               onChange={handleChange}
               disabled={isLoadingModels}
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 lg:px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 text-sm lg:text-base"
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 lg:px-3 py-1.5 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 text-xs lg:text-sm"
             >
               {availableModels.length > 0 ? (
                 availableModels.map((model) => (
@@ -498,15 +665,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               )}
             </select>
             {/* Debug info */}
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-[10px] text-gray-500 mt-0.5">
               Selected model ID: {config.aiModel}
             </p>
             {modelsError && (
-              <p className="text-xs text-red-400 mt-1">
+              <p className="text-[10px] text-red-400 mt-0.5">
                 ⚠️ {modelsError} (Using fallback models)
               </p>
             )}
-            <p className="text-xs text-gray-500 mt-2">
+            {apiKeyWarning && (
+              <div className="bg-red-900 bg-opacity-30 border border-red-600 rounded-lg p-2 mt-2">
+                <p className="text-[10px] text-red-300 font-semibold mb-1">
+                  🔑 API Key Issue
+                </p>
+                <p className="text-[10px] text-red-200 mb-2">
+                  {apiKeyWarning}
+                </p>
+                <button
+                  onClick={handleValidateApiKey}
+                  disabled={isValidatingApiKey}
+                  className="text-[10px] bg-red-700 hover:bg-red-600 disabled:bg-gray-600 text-white px-2 py-1 rounded transition-colors"
+                >
+                  {isValidatingApiKey ? 'Validating...' : 'Validate API Key'}
+                </button>
+              </div>
+            )}
+            <p className="text-[10px] text-gray-500 mt-1">
               Choose the AI model for message generation. Models are fetched dynamically from the Gemini API.
               {availableModels.length > 0 && (
                 <span> Found {availableModels.length} available models.</span>
@@ -514,13 +698,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </p>
           </div>
 
-          <div className="border-t border-gray-600 pt-6">
-            <h3 className="text-lg font-semibold text-gray-200 mb-4">Typing Settings</h3>
-            <p className="text-sm text-gray-400 mb-4">Configure typing delays and indicator display preferences for a more realistic chat experience.</p>
-            
-            <div className="space-y-4">
+          <div className="border-t border-gray-600 pt-4">
+            <h3 className="text-sm font-semibold text-gray-200 mb-2">Typing Settings</h3>
+            <p className="text-xs text-gray-400 mb-3">Configure typing delays and indicator display preferences for a more realistic chat experience.</p>
+
+            <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-gray-300">Enable Typing Delay</label>
+                <label className="text-xs font-medium text-gray-300">Enable Typing Delay</label>
                 <input
                   type="checkbox"
                   checked={config.typingDelay.enabled}
@@ -528,14 +712,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     ...prev,
                     typingDelay: { ...prev.typingDelay, enabled: e.target.checked }
                   }))}
-                  className="h-4 w-4 bg-gray-700 border-gray-600 text-indigo-600 focus:ring-indigo-500 rounded"
+                  className="h-3 w-3 bg-gray-700 border-gray-600 text-indigo-600 focus:ring-indigo-500 rounded"
                 />
               </div>
-              
+
               {config.typingDelay.enabled && (
                 <>
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <label className="block text-xs font-medium text-gray-300 mb-1">
                       Base Delay: {config.typingDelay.baseDelay}ms
                     </label>
                     <input
@@ -548,16 +732,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         ...prev,
                         typingDelay: { ...prev.typingDelay, baseDelay: parseInt(e.target.value) }
                       }))}
-                      className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                      className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer"
                     />
-                    <div className="flex justify-between text-xs text-gray-500 mt-1">
+                    <div className="flex justify-between text-[10px] text-gray-500 mt-0.5">
                       <span>200ms (Fast)</span>
                       <span>3000ms (Slow)</span>
                     </div>
                   </div>
-                  
+
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <label className="block text-xs font-medium text-gray-300 mb-1">
                       Maximum Delay: {config.typingDelay.maxDelay}ms ({Math.round(config.typingDelay.maxDelay / 1000)}s)
                     </label>
                     <input
@@ -570,35 +754,35 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         ...prev,
                         typingDelay: { ...prev.typingDelay, maxDelay: parseInt(e.target.value) }
                       }))}
-                      className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                      className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer"
                     />
-                    <div className="flex justify-between text-xs text-gray-500 mt-1">
+                    <div className="flex justify-between text-[10px] text-gray-500 mt-0.5">
                       <span>1000ms (1s)</span>
                       <span>30000ms (30s)</span>
                     </div>
                   </div>
-                  
-                  <div className="bg-gray-700 p-3 rounded-lg">
-                    <p className="text-xs text-gray-400">
-                      <strong>How it works:</strong> AI users will wait a random amount of time before sending messages. 
-                      Longer messages take more time to "type". The delay is calculated as: 
+
+                  <div className="bg-gray-700 p-2 rounded-lg">
+                    <p className="text-[10px] text-gray-400">
+                      <strong>How it works:</strong> AI users will wait a random amount of time before sending messages.
+                      Longer messages take more time to "type". The delay is calculated as:
                       base delay + (message length factor × random factor), capped at the maximum delay.
                       <br /><br />
-                      <strong>Realistic typing:</strong> For very long messages (like detailed explanations or stories), 
+                      <strong>Realistic typing:</strong> For very long messages (like detailed explanations or stories),
                       the maximum delay can now be set up to 30 seconds to simulate realistic human typing patterns.
                     </p>
                   </div>
                 </>
               )}
             </div>
-            
+
             {/* Typing Indicator Configuration */}
-            <div className="mt-6">
-              <h4 className="text-md font-semibold text-gray-200 mb-3">Typing Indicator Display</h4>
-              <p className="text-sm text-gray-400 mb-4">Choose when to show typing indicators to indicate when AI users are composing messages.</p>
-              
-              <div className="space-y-3">
-                <label className="flex items-center space-x-3 cursor-pointer">
+            <div className="mt-4">
+              <h4 className="text-xs font-semibold text-gray-200 mb-2">Typing Indicator Display</h4>
+              <p className="text-xs text-gray-400 mb-3">Choose when to show typing indicators to indicate when AI users are composing messages.</p>
+
+              <div className="space-y-2">
+                <label className="flex items-center space-x-2 cursor-pointer">
                   <input
                     type="radio"
                     name="typingIndicatorMode"
@@ -608,15 +792,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       ...prev,
                       typingIndicator: { ...prev.typingIndicator, mode: e.target.value as 'all' | 'private_only' | 'none' }
                     }))}
-                    className="h-4 w-4 bg-gray-700 border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                    className="h-3 w-3 bg-gray-700 border-gray-600 text-indigo-600 focus:ring-indigo-500"
                   />
                   <div>
-                    <div className="text-sm font-medium text-gray-300">Show in all windows</div>
-                    <div className="text-xs text-gray-400">Display typing indicators in both channels and private messages</div>
+                    <div className="text-xs font-medium text-gray-300">Show in all windows</div>
+                    <div className="text-[10px] text-gray-400">Display typing indicators in both channels and private messages</div>
                   </div>
                 </label>
-                
-                <label className="flex items-center space-x-3 cursor-pointer">
+
+                <label className="flex items-center space-x-2 cursor-pointer">
                   <input
                     type="radio"
                     name="typingIndicatorMode"
@@ -626,15 +810,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       ...prev,
                       typingIndicator: { ...prev.typingIndicator, mode: e.target.value as 'all' | 'private_only' | 'none' }
                     }))}
-                    className="h-4 w-4 bg-gray-700 border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                    className="h-3 w-3 bg-gray-700 border-gray-600 text-indigo-600 focus:ring-indigo-500"
                   />
                   <div>
-                    <div className="text-sm font-medium text-gray-300">Show only in private messages</div>
-                    <div className="text-xs text-gray-400">Display typing indicators only in private message windows (recommended)</div>
+                    <div className="text-xs font-medium text-gray-300">Show only in private messages</div>
+                    <div className="text-[10px] text-gray-400">Display typing indicators only in private message windows (recommended)</div>
                   </div>
                 </label>
-                
-                <label className="flex items-center space-x-3 cursor-pointer">
+
+                <label className="flex items-center space-x-2 cursor-pointer">
                   <input
                     type="radio"
                     name="typingIndicatorMode"
@@ -644,24 +828,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       ...prev,
                       typingIndicator: { ...prev.typingIndicator, mode: e.target.value as 'all' | 'private_only' | 'none' }
                     }))}
-                    className="h-4 w-4 bg-gray-700 border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                    className="h-3 w-3 bg-gray-700 border-gray-600 text-indigo-600 focus:ring-indigo-500"
                   />
                   <div>
-                    <div className="text-sm font-medium text-gray-300">Don't show at all</div>
-                    <div className="text-xs text-gray-400">Never display typing indicators</div>
+                    <div className="text-xs font-medium text-gray-300">Don't show at all</div>
+                    <div className="text-[10px] text-gray-400">Never display typing indicators</div>
                   </div>
                 </label>
               </div>
             </div>
           </div>
 
-          <div className="border-t border-gray-600 pt-6">
-            <h3 className="text-lg font-semibold text-gray-200 mb-4">🖼️ Image Generation Settings</h3>
-            <p className="text-sm text-gray-400 mb-4">Configure image generation for bot commands like !image. Choose your preferred service and API key.</p>
-            
-            <div className="space-y-4">
+          <div className="border-t border-gray-600 pt-4">
+            <h3 className="text-sm font-semibold text-gray-200 mb-2">🖼️ Image Generation Settings</h3>
+            <p className="text-xs text-gray-400 mb-3">Configure image generation for bot commands like !image. Choose your preferred service and API key.</p>
+
+            <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Image Generation Provider</label>
+                <label className="block text-xs font-medium text-gray-300 mb-1">Image Generation Provider</label>
                 <select
                   value={config.imageGeneration?.provider || 'gemini'}
                   onChange={(e) => setConfig(prev => ({
@@ -671,7 +855,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       provider: e.target.value as 'gemini' | 'imagen' | 'placeholder' | 'dalle'
                     }
                   }))}
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs"
                 >
                   <option value="gemini">Gemini AI (Default - Real AI-generated images)</option>
                   <option value="placeholder">Placeholder (Simple placeholder images)</option>
@@ -679,11 +863,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <option value="dalle">OpenAI DALLE (Coming Soon)</option>
                 </select>
               </div>
-              
+
               {config.imageGeneration?.provider !== 'placeholder' && (
                 <>
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">API Key</label>
+                    <label className="block text-xs font-medium text-gray-300 mb-1">API Key</label>
                     <input
                       type="password"
                       value={config.imageGeneration?.apiKey || ''}
@@ -694,13 +878,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           apiKey: e.target.value
                         }
                       }))}
-                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs"
                       placeholder="Enter your API key"
                     />
                   </div>
-                  
+
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Model</label>
+                    <label className="block text-xs font-medium text-gray-300 mb-1">Model</label>
                     <select
                       value={config.imageGeneration?.model || 'gemini-1.5-pro'}
                       onChange={(e) => setConfig(prev => ({
@@ -711,7 +895,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         }
                       }))}
                       disabled={isLoadingImageModels}
-                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs"
                     >
                       {isLoadingImageModels ? (
                         <option>Loading models...</option>
@@ -724,10 +908,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       )}
                     </select>
                   </div>
-                  
+
                   {config.imageGeneration?.provider === 'gemini' && (
-                    <div className="bg-blue-900/20 border border-blue-500/30 p-3 rounded-lg">
-                      <p className="text-xs text-blue-300">
+                    <div className="bg-blue-900/20 border border-blue-500/30 p-2 rounded-lg">
+                      <p className="text-[10px] text-blue-300">
                         <strong>ℹ️ Gemini AI Info:</strong> Gemini AI uses the Google GenAI SDK.
                         No base URL configuration is needed as it connects directly to Google's infrastructure.
                       </p>
@@ -735,31 +919,43 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   )}
                 </>
               )}
-              
-              <div className="bg-gray-700 p-3 rounded-lg">
-                <p className="text-xs text-gray-400">
+
+              <div className="bg-gray-700 p-2 rounded-lg">
+                <p className="text-[10px] text-gray-400">
                   <strong>Image Generation Services:</strong><br/>
                   • <strong>Gemini AI:</strong> Provides real AI-generated images using Google's Gemini model (requires an API key).<br/>
                   • <strong>Placeholder:</strong> Displays simple placeholder images (no API key needed and avoids CORS issues).<br/>
                   • <strong>Imagen & DALLE:</strong> Support for Google's Imagen and OpenAI's DALLE is coming soon.
                 </p>
               </div>
-              
-              <div className="bg-blue-900/20 border border-blue-500/30 p-3 rounded-lg">
-                <p className="text-xs text-blue-300">
+
+              <div className="bg-yellow-900/20 border border-yellow-600/50 p-2 rounded-lg">
+                <p className="text-[10px] text-yellow-300">
+                  <strong>💡 API Key Troubleshooting:</strong><br/>
+                  If you see a 400 error or models won't load, your API key may be invalid. Common issues:<br/>
+                  • API key is expired or revoked<br/>
+                  • API key has incorrect permissions<br/>
+                  • API key is for the wrong service<br/>
+                  <br/>
+                  <strong>Solution:</strong> Get a fresh API key from <a href="https://makersuite.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-blue-300 hover:text-blue-200 underline">Google AI Studio</a> and paste it above.
+                </p>
+              </div>
+
+              <div className="bg-blue-900/20 border border-blue-500/30 p-2 rounded-lg">
+                <p className="text-[10px] text-blue-300">
                   <strong>Test Image Generation:</strong> Try typing <code className="bg-gray-800 px-1 rounded">!image a sunset</code> in a channel with a bot to test image generation.
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="border-t border-gray-600 pt-6">
-            <h3 className="text-lg font-semibold text-gray-200 mb-4">🌐 IRC Export Settings</h3>
-            <p className="text-sm text-gray-400 mb-4">Export chat simulation to a real IRC server for monitoring or integration.</p>
-            
-            <div className="space-y-4">
+          <div className="border-t border-gray-600 pt-4">
+            <h3 className="text-sm font-semibold text-gray-200 mb-2">🌐 IRC Export Settings</h3>
+            <p className="text-xs text-gray-400 mb-3">Export chat simulation to a real IRC server for monitoring or integration.</p>
+
+            <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-gray-300">Enable IRC Export</label>
+                <label className="text-xs font-medium text-gray-300">Enable IRC Export</label>
                 <input
                   type="checkbox"
                   checked={config.ircExport?.enabled || false}
@@ -767,14 +963,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     ...prev,
                     ircExport: { ...prev.ircExport, enabled: e.target.checked }
                   }))}
-                  className="h-4 w-4 bg-gray-700 border-gray-600 text-indigo-600 focus:ring-indigo-500 rounded"
+                  className="h-3 w-3 bg-gray-700 border-gray-600 text-indigo-600 focus:ring-indigo-500 rounded"
                 />
               </div>
-              
+
               {config.ircExport?.enabled && (
                 <>
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">IRC Server</label>
+                    <label className="block text-xs font-medium text-gray-300 mb-1">IRC Server</label>
                     <input
                       type="text"
                       value={config.ircExport?.server || ''}
@@ -782,13 +978,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         ...prev,
                         ircExport: { ...prev.ircExport, server: e.target.value }
                       }))}
-                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs"
                       placeholder="e.g., irc.libera.chat"
                     />
                   </div>
-                  
+
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Port</label>
+                    <label className="block text-xs font-medium text-gray-300 mb-1">Port</label>
                     <input
                       type="number"
                       value={config.ircExport?.port || 6697}
@@ -796,12 +992,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         ...prev,
                         ircExport: { ...prev.ircExport, port: parseInt(e.target.value) }
                       }))}
-                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs"
                     />
                   </div>
-                  
+
                   <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium text-gray-300">Use SSL</label>
+                    <label className="text-xs font-medium text-gray-300">Use SSL</label>
                     <input
                       type="checkbox"
                       checked={config.ircExport?.ssl || true}
@@ -809,12 +1005,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         ...prev,
                         ircExport: { ...prev.ircExport, ssl: e.target.checked }
                       }))}
-                      className="h-4 w-4 bg-gray-700 border-gray-600 text-indigo-600 focus:ring-indigo-500 rounded"
+                      className="h-3 w-3 bg-gray-700 border-gray-600 text-indigo-600 focus:ring-indigo-500 rounded"
                     />
                   </div>
-                  
+
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Bot Nickname</label>
+                    <label className="block text-xs font-medium text-gray-300 mb-1">Bot Nickname</label>
                     <input
                       type="text"
                       value={config.ircExport?.nickname || ''}
@@ -822,13 +1018,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         ...prev,
                         ircExport: { ...prev.ircExport, nickname: e.target.value }
                       }))}
-                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs"
                       placeholder="e.g., station-v-bot"
                     />
                   </div>
-                  
+
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Bot Real Name</label>
+                    <label className="block text-xs font-medium text-gray-300 mb-1">Bot Real Name</label>
                     <input
                       type="text"
                       value={config.ircExport?.realname || ''}
@@ -836,13 +1032,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         ...prev,
                         ircExport: { ...prev.ircExport, realname: e.target.value }
                       }))}
-                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs"
                       placeholder="e.g., Station V Bot"
                     />
                   </div>
-                  
+
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Channel to Join</label>
+                    <label className="block text-xs font-medium text-gray-300 mb-1">Channel to Join</label>
                     <input
                       type="text"
                       value={config.ircExport?.channel || ''}
@@ -850,7 +1046,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         ...prev,
                         ircExport: { ...prev.ircExport, channel: e.target.value }
                       }))}
-                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs"
                       placeholder="e.g., #station-v-testing"
                     />
                   </div>
@@ -859,27 +1055,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
 
-          <div className="border-t border-gray-600 pt-6">
-            <h3 className="text-lg font-semibold text-gray-200 mb-4">Debug Logging</h3>
-            <p className="text-sm text-gray-400 mb-4">Control debug logging for troubleshooting and monitoring. Logs appear in the browser console.</p>
-            
-            <div className="space-y-4">
+          <div className="border-t border-gray-600 pt-4">
+            <h3 className="text-sm font-semibold text-gray-200 mb-2">Debug Logging</h3>
+            <p className="text-xs text-gray-400 mb-3">Control debug logging for troubleshooting and monitoring. Logs appear in the browser console.</p>
+
+            <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-gray-300">Enable Debug Logging</label>
+                <label className="text-xs font-medium text-gray-300">Enable Debug Logging</label>
                 <input
                   type="checkbox"
                   checked={debugConfig.enabled}
                   onChange={(e) => handleDebugConfigChange({ enabled: e.target.checked })}
-                  className="h-4 w-4 bg-gray-700 border-gray-600 text-indigo-600 focus:ring-indigo-500 rounded"
+                  className="h-3 w-3 bg-gray-700 border-gray-600 text-indigo-600 focus:ring-indigo-500 rounded"
                 />
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Log Level</label>
+                <label className="block text-xs font-medium text-gray-300 mb-1">Log Level</label>
                 <select
                   value={debugConfig.level}
                   onChange={(e) => handleDebugConfigChange({ level: e.target.value as any })}
-                  className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-xs"
                 >
                   <option value="debug">Debug (All)</option>
                   <option value="info">Info</option>
@@ -887,17 +1083,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <option value="error">Errors Only</option>
                 </select>
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Log Categories</label>
-                <div className="grid grid-cols-2 gap-2">
+                <label className="block text-xs font-medium text-gray-300 mb-1">Log Categories</label>
+                <div className="grid grid-cols-2 gap-1.5">
                   {Object.entries(debugConfig.categories).map(([category, enabled]) => (
-                    <label key={category} className="flex items-center text-sm text-gray-300 cursor-pointer">
+                    <label key={category} className="flex items-center text-xs text-gray-300 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={enabled}
                         onChange={() => handleDebugCategoryToggle(category as keyof typeof debugConfig.categories)}
-                        className="h-4 w-4 bg-gray-700 border-gray-600 text-indigo-600 focus:ring-indigo-500 rounded mr-2"
+                        className="h-3 w-3 bg-gray-700 border-gray-600 text-indigo-600 focus:ring-indigo-500 rounded mr-1.5"
                       />
                       <span className="capitalize">{category}</span>
                     </label>
@@ -908,33 +1104,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
 
 
-          <div className="border-t border-gray-600 pt-6">
-            <h3 className="text-lg font-semibold text-gray-200 mb-4">Data Management</h3>
-            <p className="text-sm text-gray-400 mb-4">Export or import data for backup and sharing.</p>
-            
-            <div className="space-y-4">
+          <div className="border-t border-gray-600 pt-4">
+            <h3 className="text-sm font-semibold text-gray-200 mb-2">Data Management</h3>
+            <p className="text-xs text-gray-400 mb-3">Export or import data for backup and sharing.</p>
+
+            <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-300">Channel Import/Export</p>
-                  <p className="text-xs text-gray-400">Export selected channels or import from a file.</p>
+                  <p className="text-xs font-medium text-gray-300">Channel Import/Export</p>
+                  <p className="text-[10px] text-gray-400">Export selected channels or import from a file.</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowChannelImportExportModal(true)}
-                  className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                  className="bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5"
                 >
                   Manage Channels
                 </button>
               </div>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-300">Full Backup & Restore</p>
-                  <p className="text-xs text-gray-400">Export all data to a JSON file or import from a backup.</p>
+                  <p className="text-xs font-medium text-gray-300">Full Backup & Restore</p>
+                  <p className="text-[10px] text-gray-400">Export all data to a JSON file or import from a backup.</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowDataExportModal(true)}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5"
                 >
                   Manage Full Backup
                 </button>
@@ -942,16 +1138,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
           
-          <div className="flex flex-col sm:flex-row justify-end pt-2 gap-3 sm:gap-4">
+          <div className="flex flex-col sm:flex-row justify-end pt-2 gap-2 sm:gap-3">
              <button
               type="button"
               onClick={handleRandomize}
               disabled={isRandomizing}
-              className="bg-gray-600 text-white rounded-lg px-4 lg:px-6 py-2 font-semibold hover:bg-gray-500 transition-colors disabled:bg-gray-700 disabled:cursor-wait flex items-center justify-center gap-2 text-sm lg:text-base touch-manipulation"
+              className="bg-gray-600 text-white rounded-lg px-3 lg:px-4 py-1.5 font-semibold hover:bg-gray-500 transition-colors disabled:bg-gray-700 disabled:cursor-wait flex items-center justify-center gap-1.5 text-xs lg:text-sm touch-manipulation"
             >
               {isRandomizing ? (
                 <>
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 lg:h-5 lg:w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <svg className="animate-spin -ml-1 mr-1.5 h-3 w-3 lg:h-4 lg:w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
@@ -964,14 +1160,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <button
               type="button"
               onClick={onCancel}
-              className="bg-gray-600 text-white rounded-lg px-4 lg:px-6 py-2 font-semibold hover:bg-gray-500 transition-colors text-sm lg:text-base touch-manipulation"
+              className="bg-gray-600 text-white rounded-lg px-3 lg:px-4 py-1.5 font-semibold hover:bg-gray-500 transition-colors text-xs lg:text-sm touch-manipulation"
             >
               Cancel
             </button>
             <button
               type="button"
               onClick={handleSave}
-              className="bg-indigo-600 text-white rounded-lg px-4 lg:px-6 py-2 font-semibold hover:bg-indigo-500 transition-colors text-sm lg:text-base touch-manipulation"
+              className="bg-indigo-600 text-white rounded-lg px-3 lg:px-4 py-1.5 font-semibold hover:bg-indigo-500 transition-colors text-xs lg:text-sm touch-manipulation"
             >
               Save and Start
             </button>
@@ -997,7 +1193,42 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           onChannelsChange?.(updatedChannels);
         }}
       />
-      
+
+      {/* Theme Editor Modal */}
+      <ThemeEditor
+        isOpen={showThemeEditor}
+        onClose={() => setShowThemeEditor(false)}
+        currentTheme={config.customTheme}
+        onSave={async (theme: CustomTheme) => {
+          // Update local state
+          const newConfig = {
+            ...config,
+            theme: 'custom' as const,
+            customTheme: theme,
+          };
+          setConfig(newConfig);
+
+          // Apply theme immediately (before saving settings)
+          applyCustomTheme(theme);
+          document.documentElement.classList.remove('dark');
+
+          // Save to database and localStorage immediately so theme persists
+          const configToSave = {
+            ...newConfig,
+            virtualUsers: formatUsersToText(users),
+            channels: formatChannelsToText(channels),
+            userObjects: users,
+            channelObjects: currentChannels || channels,
+            perspectives,
+          };
+          await saveConfig(configToSave);
+
+          // Trigger theme change
+          onThemeChange?.('custom');
+          setShowThemeEditor(false);
+        }}
+      />
+
     </div>
     );
   } catch (error) {

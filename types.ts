@@ -28,7 +28,7 @@ export interface User {
   // Bot-specific properties
   botCommands?: string[]; // Available bot commands
   botDescription?: string; // Description of what the bot does
-  botCapabilities?: string[]; // What the bot can do (image generation, weather, etc.)
+  botCapabilities?: string[]; // What the bot can do (image generation, weather, etc., e.g., 'image_generation', 'weather_lookup')
   // Enhanced AI memory system
   relationshipMemory?: UserRelationshipMemory; // Track relationships with other users
 }
@@ -123,6 +123,7 @@ export type ActiveContext =
  */
 export interface AppConfig {
   currentUserNickname: string;
+  currentUserProfilePicture?: string; // Add this line
   // Store users and channels as raw strings for easy editing in a textarea.
   virtualUsers: string; 
   channels: string;
@@ -143,7 +144,7 @@ export interface AppConfig {
   channelObjects?: Channel[];
   // Image generation configuration
   imageGeneration?: {
-    provider: 'nano-banana' | 'imagen' | 'placeholder' | 'dalle';
+    provider: 'gemini' | 'imagen' | 'placeholder' | 'dalle';
     apiKey?: string;
     model?: string;
     baseUrl?: string;
@@ -158,7 +159,36 @@ export interface AppConfig {
     channel: string;
     ssl: boolean;
   };
-  theme?: 'dark' | 'light';
+  // Vertex AI configuration
+  vertexAI?: {
+    enabled: boolean;
+    project: string;
+    location: string;
+  };
+  theme?: 'dark' | 'light' | 'custom';
+  customTheme?: {
+    id: string;
+    name: string;
+    colors: {
+      bgPrimary: string;
+      bgSecondary: string;
+      bgTertiary: string;
+      textPrimary: string;
+      textSecondary: string;
+      textMuted: string;
+      borderPrimary: string;
+      borderSecondary: string;
+      accentPrimary: string;
+      accentHover: string;
+      success: string;
+      warning: string;
+      error: string;
+      info: string;
+      nickname: string;
+      timestamp: string;
+      systemMessage: string;
+    };
+  };
   perspectives?: string[];
 }
 

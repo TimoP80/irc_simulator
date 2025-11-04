@@ -1,17 +1,114 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { Type } from "@google/genai";
 import type { Channel, Message, PrivateMessageConversation, RandomWorldConfig, GeminiModel, ModelsListResponse, User } from '../types.js';
 import { getLanguageFluency, getAllLanguages, getLanguageAccent, isChannelOperator, isPerLanguageFormat, isLegacyFormat, getWritingStyle } from '../types.js';
-import { withRateLimitAndRetries } from '../utils/config.js';
+import { withRateLimitAndRetries, simulateTypingDelay } from '../utils/config.js';
 import { aiDebug } from '../utils/debugLogger.js';
 import { getRelationshipContext } from './relationshipMemoryService.js';
+import { getAIService, getAIServiceConfig } from './vertexAIService.js';
 
-const API_KEY = process.env.GEMINI_API_KEY;
+// Get AI service configuration
+const aiServiceConfig = getAIServiceConfig();
+const API_KEY = aiServiceConfig.apiKey;
 
-if (!API_KEY) {
-  throw new Error("GEMINI_API_KEY environment variable not set");
+// Log authentication status
+if (aiServiceConfig.useVertexAI) {
+  console.log('%c🔑 VERTEX AI AUTHENTICATION', 'background: #4285f4; color: #fff; font-size: 20px; font-weight: bold; padding: 10px;');
+  console.log('%c✅ ENABLED', 'font-size: 16px; font-weight: bold; color: #00ff00');
+  console.log(`   Project: ${aiServiceConfig.vertexAI?.project}`);
+  console.log(`   Location: ${aiServiceConfig.vertexAI?.location}`);
+} else {
+  console.log('%c🔑 GEMINI API KEY STATUS', 'background: #00ff00; color: #000; font-size: 20px; font-weight: bold; padding: 10px;');
+  console.log('%c' + (API_KEY ? `✅ LOADED: ${API_KEY.substring(0, 10)}...${API_KEY.substring(API_KEY.length - 4)} (length: ${API_KEY.length})` : '❌ NOT LOADED'), 'font-size: 16px; font-weight: bold; color: ' + (API_KEY ? '#00ff00' : '#ff0000'));
 }
 
-const ai = new GoogleGenAI({ apiKey: API_KEY });
+// Get the AI service instance (supports both Vertex AI and API key)
+const ai = getAIService();
+
+// Degraded mode state and helpers
+let degradedModeActive = false;
+let degradedModeExpiresAt = 0;
+let rateLimitFailureTimestamps: number[] = [];
+const DEGRADE_FAILURE_WINDOW_MS = 60_000;
+const DEGRADE_FAILURE_THRESHOLD = 10; // Increased from 5 to 10 - only degrade after many failures
+const DEGRADE_COOLDOWN_MS = 60_000; // Reduced from 120s to 60s - shorter cooldown with Tier 1 quota
+
+export const isDegradedMode = (): boolean => {
+  if (degradedModeActive && Date.now() > degradedModeExpiresAt) {
+    degradedModeActive = false;
+    aiDebug.log('Exiting degraded mode (cooldown elapsed).');
+  }
+  return degradedModeActive;
+};
+
+const enterDegradedModeFor = (durationMs: number, reason?: string) => {
+  const now = Date.now();
+  degradedModeActive = true;
+  degradedModeExpiresAt = now + durationMs;
+  rateLimitFailureTimestamps = [];
+  aiDebug.warn(`Entering degraded mode for ${Math.round(durationMs/1000)}s${reason ? ` (${reason})` : ''}.`);
+};
+
+// Check if an error is rate-limit related
+const isRateLimitRelatedError = (error?: any): boolean => {
+  if (!error) return false;
+  const errStr = (error.message || String(error)) || '';
+  return /RESOURCE_EXHAUSTED|quota exceeded|Quota exceeded|exceeded your current quota|429|rate limit|too many requests|503|overloaded|UNAVAILABLE/i.test(errStr);
+};
+
+const recordApiFailure = (error?: any, context?: string) => {
+  const now = Date.now();
+
+  // If this looks like a hard quota/RESOURCE_EXHAUSTED, enter degraded immediately
+  const errStr = (error && (error.message || String(error))) || '';
+  const isResourceExhausted = /RESOURCE_EXHAUSTED|quota exceeded|Quota exceeded|exceeded your current quota/i.test(errStr);
+
+  if (isResourceExhausted) {
+    // Try to parse retry duration from error
+    let retryMs = 120_000; // default 2 minutes
+    const matchRetryDelay = errStr.match(/retryDelay\":\"(\d+)s/);
+    const matchPleaseRetry = errStr.match(/retry in\s+([0-9.]+)s/i);
+    if (matchRetryDelay) {
+      retryMs = parseInt(matchRetryDelay[1], 10) * 1000;
+    } else if (matchPleaseRetry) {
+      retryMs = Math.ceil(parseFloat(matchPleaseRetry[1]) * 1000);
+    }
+    // Add small jitter and a floor of 60s
+    retryMs = Math.max(60_000, retryMs + Math.floor(5_000 + Math.random() * 10_000));
+    enterDegradedModeFor(retryMs, `quota exhausted${context ? ` - ${context}` : ''}`);
+    return;
+  }
+
+  // Only count rate-limit-related errors for the failure threshold
+  // This prevents transient errors from triggering degraded mode
+  if (isRateLimitRelatedError(error)) {
+    rateLimitFailureTimestamps.push(now);
+    const cutoff = now - DEGRADE_FAILURE_WINDOW_MS;
+    rateLimitFailureTimestamps = rateLimitFailureTimestamps.filter(ts => ts > cutoff);
+
+    aiDebug.log(`Rate-limit error recorded (${rateLimitFailureTimestamps.length}/${DEGRADE_FAILURE_THRESHOLD} in last 60s)${context ? ` - ${context}` : ''}`);
+
+    if (!degradedModeActive && rateLimitFailureTimestamps.length >= DEGRADE_FAILURE_THRESHOLD) {
+      enterDegradedModeFor(DEGRADE_COOLDOWN_MS, `repeated rate-limit errors${context ? ` - ${context}` : ''}`);
+    }
+    // Note: We no longer extend degraded mode on every error - only when entering it
+  } else {
+    // Non-rate-limit errors are logged but don't trigger degraded mode
+    aiDebug.log(`Non-rate-limit error recorded${context ? ` - ${context}` : ''}: ${errStr.substring(0, 100)}`);
+  }
+};
+
+export const forceEnterDegradedMode = (durationMs?: number) => {
+  const now = Date.now();
+  degradedModeActive = true;
+  degradedModeExpiresAt = now + (durationMs ?? DEGRADE_COOLDOWN_MS);
+  aiDebug.warn(`Force-entered degraded mode for ${Math.round((degradedModeExpiresAt - now)/1000)}s.`);
+};
+
+export const forceExitDegradedMode = () => {
+  degradedModeActive = false;
+  rateLimitFailureTimestamps = [];
+  aiDebug.log('Force-exited degraded mode.');
+};
 
 // Validate and clean model ID
 const validateModelId = (model: string): string => {
@@ -84,42 +181,106 @@ const extractLinksAndImages = (content: string): { links: string[], images: stri
 const getFallbackResponse = (user: User, context: 'activity' | 'reaction', originalMessage?: string): string => {
   const responses = {
     activity: [
-      "hmm, interesting",
-      "that's cool",
-      "nice!",
-      "I see",
-      "makes sense",
-      "good point",
-      "yeah, I agree",
-      "sounds good",
-      "that's true",
-      "I think so too"
+      "hmm, interesting point",
+      "that's actually pretty cool",
+      "nice! I like that",
+      "I see what you mean",
+      "makes sense to me",
+      "good point there",
+      "yeah, I totally agree",
+      "sounds good to me",
+      "that's definitely true",
+      "I think so too, honestly",
+      "oh yeah, for sure",
+      "interesting take on that",
+      "fair enough",
+      "can't argue with that",
+      "you might be onto something",
+      "never thought of it that way",
+      "that's a solid point",
+      "I can get behind that",
+      "yeah that tracks",
+      "makes a lot of sense actually"
     ],
     reaction: [
       "haha, nice one!",
-      "lol",
-      "that's funny",
-      "good one!",
-      "haha",
-      "lol, true",
-      "exactly!",
-      "I know right?",
-      "totally",
-      "for real"
+      "lol that's great",
+      "that's actually funny",
+      "good one! 😄",
+      "haha love it",
+      "lol, so true",
+      "exactly! couldn't have said it better",
+      "I know right? same here",
+      "totally agree with that",
+      "for real though",
+      "omg yes 😂",
+      "this is so accurate lol",
+      "haha no way",
+      "wait that's hilarious",
+      "lmao facts",
+      "couldn't agree more",
+      "this! exactly this",
+      "you're not wrong there",
+      "big mood honestly",
+      "felt that one"
     ]
   };
-  
+
   const contextResponses = responses[context];
-  const randomResponse = contextResponses[Math.floor(Math.random() * contextResponses.length)];
-  
-  // Add some personality-based variation
+  let randomResponse = contextResponses[Math.floor(Math.random() * contextResponses.length)];
+
+  // Add personality-based variation
   const writingStyle = getWritingStyle(user);
-  if (writingStyle.verbosity === 'extremely_verbose' || writingStyle.verbosity === 'novel_length') {
-    return `${randomResponse} ${randomResponse} ${randomResponse}`;
-  } else if (writingStyle.verbosity === 'terse') {
-    return randomResponse.split(' ')[0];
+
+  // Add emoji based on user's emoji usage preference
+  const emojis = ['😄', '😊', '👍', '✨', '🔥', '💯', '😂', '🎉', '👌', '💪'];
+  if (writingStyle.emojiUsage === 'frequent' || writingStyle.emojiUsage === 'excessive') {
+    const emoji = emojis[Math.floor(Math.random() * emojis.length)];
+    randomResponse = Math.random() < 0.5 ? `${randomResponse} ${emoji}` : `${emoji} ${randomResponse}`;
+  } else if (writingStyle.emojiUsage === 'moderate' && Math.random() < 0.3) {
+    const emoji = emojis[Math.floor(Math.random() * emojis.length)];
+    randomResponse = `${randomResponse} ${emoji}`;
   }
-  
+
+  // Adjust verbosity
+  if (writingStyle.verbosity === 'extremely_verbose' || writingStyle.verbosity === 'novel_length') {
+    const additionalPhrases = [
+      "you know what I mean?",
+      "if you ask me",
+      "just saying",
+      "that's what I think anyway",
+      "in my opinion at least"
+    ];
+    const extra = additionalPhrases[Math.floor(Math.random() * additionalPhrases.length)];
+    randomResponse = `${randomResponse}, ${extra}`;
+  } else if (writingStyle.verbosity === 'terse') {
+    // For terse, use shorter versions
+    const terseVersions: Record<string, string> = {
+      "hmm, interesting point": "interesting",
+      "that's actually pretty cool": "cool",
+      "nice! I like that": "nice",
+      "I see what you mean": "I see",
+      "makes sense to me": "makes sense",
+      "good point there": "good point",
+      "yeah, I totally agree": "agree",
+      "sounds good to me": "sounds good",
+      "that's definitely true": "true",
+      "haha, nice one!": "haha",
+      "lol that's great": "lol",
+      "that's actually funny": "funny",
+      "exactly! couldn't have said it better": "exactly",
+      "I know right? same here": "ikr",
+      "totally agree with that": "totally",
+      "for real though": "fr"
+    };
+    randomResponse = terseVersions[randomResponse] || randomResponse.split(' ')[0];
+  }
+
+  // For reactions, include the nickname prefix to match the expected format "nickname: message"
+  if (context === 'reaction') {
+    return `${user.nickname}: ${randomResponse}`;
+  }
+
   return randomResponse;
 };
 
@@ -267,6 +428,52 @@ const getGreetingPhrases = (): string[] => {
   ];
 };
 
+// Helper function to check if a message is a greeting
+const isGreetingMessage = (content: string): boolean => {
+  const lowerContent = content.toLowerCase();
+  const greetingPhrases = getGreetingPhrases();
+  
+  return greetingPhrases.some(phrase => lowerContent.includes(phrase)) ||
+         // English patterns
+         !!lowerContent.match(/^(hi|hello|hey|welcome|greetings|good morning|good afternoon|good evening|howdy|sup|what's up|how are you|how's it going)/) ||
+         !!lowerContent.match(/\b(welcome|hello|hi|hey|greetings)\b/) ||
+         // Spanish patterns
+         !!lowerContent.match(/^(hola|buenos días|buenas tardes|buenas noches|saludos|bienvenido|bienvenida|bienvenidos|bienvenidas|qué tal|cómo estás|cómo están)/) ||
+         // French patterns
+         !!lowerContent.match(/^(bonjour|bonsoir|salut|bonne journée|bonne soirée|bienvenue|comment allez-vous|comment ça va)/) ||
+         // German patterns
+         !!lowerContent.match(/^(hallo|guten tag|guten morgen|guten abend|gute nacht|willkommen|wie geht es|wie geht's)/) ||
+         // Italian patterns
+         !!lowerContent.match(/^(ciao|buongiorno|buonasera|buonanotte|salve|benvenuto|benvenuta|benvenuti|benvenute|come stai|come state)/) ||
+         // Portuguese patterns
+         !!lowerContent.match(/^(olá|bom dia|boa tarde|boa noite|saudações|bem-vindo|bem-vinda|bem-vindos|bem-vindas|como está|como estão)/) ||
+         // Japanese patterns
+         !!lowerContent.match(/^(こんにちは|こんばんは|おはよう|おやすみ|ようこそ|みなさん|みんな|友達|友だち|元気ですか|元気？)/) ||
+         // Chinese patterns
+         !!lowerContent.match(/^(你好|您好|大家好|早上好|下午好|晚上好|晚安|欢迎|朋友们|朋友们好|你好吗|怎么样)/) ||
+         // Russian patterns
+         !!lowerContent.match(/^(привет|здравствуйте|доброе утро|добрый день|добрый вечер|спокойной ночи|добро пожаловать|всем привет|друзья|как дела|как поживаете)/) ||
+         // Arabic patterns
+         !!lowerContent.match(/^(مرحبا|السلام عليكم|صباح الخير|مساء الخير|أهلا وسهلا|مرحبا بكم|أصدقاء|كيف حالك|كيف الحال)/) ||
+         // Korean patterns
+         !!lowerContent.match(/^(안녕하세요|안녕|좋은 아침|좋은 저녁|환영합니다|모두|친구들|어떻게 지내세요|어떻게 지내)/) ||
+         // Dutch patterns
+         !!lowerContent.match(/^(hallo|goedemorgen|goedemiddag|goedenavond|goedenacht|welkom|hoe gaat het)/) ||
+         // Swedish patterns
+         !!lowerContent.match(/^(hej|god morgon|god eftermiddag|god kväll|god natt|välkommen|hur mår du|hur är det)/) ||
+         // Norwegian patterns
+         !!lowerContent.match(/^(hei|god morgen|god ettermiddag|god kveld|god natt|velkommen|hvordan har du det|hvordan går det)/) ||
+         // Danish patterns
+         !!lowerContent.match(/^(hej|god morgen|god eftermiddag|god aften|god nat|velkommen|hvordan har du det|hvordan går det)/) ||
+         // Finnish patterns
+         !!lowerContent.match(/^(hei|terve|moi|hyvää huomenta|hyvää päivää|hyvää iltaa|hyvää yötä|tervetuloa|hei kaikki|hei kaverit|hei ystävät|miten menee|mitä kuuluu)/) ||
+         // Short message detection for common greetings
+         (lowerContent.length < 20 && (lowerContent.includes('hi') || lowerContent.includes('hello') || lowerContent.includes('hey') || lowerContent.includes('welcome') ||
+                                        lowerContent.includes('hola') || lowerContent.includes('bonjour') || lowerContent.includes('hallo') || lowerContent.includes('ciao') ||
+                                        lowerContent.includes('olá') || lowerContent.includes('こんにちは') || lowerContent.includes('你好') || lowerContent.includes('привет') ||
+                                        lowerContent.includes('مرحبا') || lowerContent.includes('안녕하세요') || lowerContent.includes('hei') || lowerContent.includes('terve') || lowerContent.includes('moi')));
+};
+
 // Helper function to detect repetitive patterns in recent messages
 const detectRepetitivePatterns = (messages: Message[]): string[] => {
   const recentMessages = messages.slice(-10); // Look at last 10 messages
@@ -283,52 +490,11 @@ const detectRepetitivePatterns = (messages: Message[]): string[] => {
     }
     
     // Skip messages that are likely greetings based on content (multilingual)
-    const content = msg.content.toLowerCase();
-    const isGreeting = greetingPhrases.some(phrase => content.includes(phrase)) ||
-                      // English patterns
-                      content.match(/^(hi|hello|hey|welcome|greetings|good morning|good afternoon|good evening|howdy|sup|what's up|how are you|how's it going)/) ||
-                      content.match(/\b(welcome|hello|hi|hey|greetings)\b/) ||
-                      // Spanish patterns
-                      content.match(/^(hola|buenos días|buenas tardes|buenas noches|saludos|bienvenido|bienvenida|bienvenidos|bienvenidas|qué tal|cómo estás|cómo están)/) ||
-                      // French patterns
-                      content.match(/^(bonjour|bonsoir|salut|bonne journée|bonne soirée|bienvenue|comment allez-vous|comment ça va)/) ||
-                      // German patterns
-                      content.match(/^(hallo|guten tag|guten morgen|guten abend|gute nacht|willkommen|wie geht es|wie geht's)/) ||
-                      // Italian patterns
-                      content.match(/^(ciao|buongiorno|buonasera|buonanotte|salve|benvenuto|benvenuta|benvenuti|benvenute|come stai|come state)/) ||
-                      // Portuguese patterns
-                      content.match(/^(olá|bom dia|boa tarde|boa noite|saudações|bem-vindo|bem-vinda|bem-vindos|bem-vindas|como está|como estão)/) ||
-                      // Japanese patterns
-                      content.match(/^(こんにちは|こんばんは|おはよう|おやすみ|ようこそ|みなさん|みんな|友達|友だち|元気ですか|元気？)/) ||
-                      // Chinese patterns
-                      content.match(/^(你好|您好|大家好|早上好|下午好|晚上好|晚安|欢迎|朋友们|朋友们好|你好吗|怎么样)/) ||
-                      // Russian patterns
-                      content.match(/^(привет|здравствуйте|доброе утро|добрый день|добрый вечер|спокойной ночи|добро пожаловать|всем привет|друзья|как дела|как поживаете)/) ||
-                      // Arabic patterns
-                      content.match(/^(مرحبا|السلام عليكم|صباح الخير|مساء الخير|أهلا وسهلا|مرحبا بكم|أصدقاء|كيف حالك|كيف الحال)/) ||
-                      // Korean patterns
-                      content.match(/^(안녕하세요|안녕|좋은 아침|좋은 저녁|환영합니다|모두|친구들|어떻게 지내세요|어떻게 지내)/) ||
-                      // Dutch patterns
-                      content.match(/^(hallo|goedemorgen|goedemiddag|goedenavond|goedenacht|welkom|hoe gaat het)/) ||
-                      // Swedish patterns
-                      content.match(/^(hej|god morgon|god eftermiddag|god kväll|god natt|välkommen|hur mår du|hur är det)/) ||
-                      // Norwegian patterns
-                      content.match(/^(hei|god morgen|god ettermiddag|god kveld|god natt|velkommen|hvordan har du det|hvordan går det)/) ||
-                      // Danish patterns
-                      content.match(/^(hej|god morgen|god eftermiddag|god aften|god nat|velkommen|hvordan har du det|hvordan går det)/) ||
-                      // Finnish patterns
-                      content.match(/^(hei|terve|moi|hyvää huomenta|hyvää päivää|hyvää iltaa|hyvää yötä|tervetuloa|hei kaikki|hei kaverit|hei ystävät|miten menee|mitä kuuluu)/) ||
-                      // Short message detection for common greetings
-                      content.length < 20 && (content.includes('hi') || content.includes('hello') || content.includes('hey') || content.includes('welcome') || 
-                                             content.includes('hola') || content.includes('bonjour') || content.includes('hallo') || content.includes('ciao') ||
-                                             content.includes('olá') || content.includes('こんにちは') || content.includes('你好') || content.includes('привет') ||
-                                             content.includes('مرحبا') || content.includes('안녕하세요') || content.includes('hei') || content.includes('terve') || content.includes('moi'));
-    
-    if (isGreeting) {
+    if (isGreetingMessage(msg.content)) {
       return;
     }
     
-    const words = content.split(/\s+/);
+    const words = msg.content.toLowerCase().split(/\s+/);
     // Check for 2-4 word phrases
     for (let i = 0; i < words.length - 1; i++) {
       for (let len = 2; len <= Math.min(4, words.length - i); len++) {
@@ -642,7 +808,37 @@ ${afterhoursActive ? 'AFTERHOURS PROTOCOL ACTIVE: This is peak time for nocturna
 Social context: ${socialContext}.`;
 };
 
-const getBaseSystemInstruction = (currentUserNickname: string) => `You are an advanced AI simulating an Internet Relay Chat (IRC) environment. 
+// Calculate appropriate token limit based on verbosity and emoji usage
+const getTokenLimit = (verbosity: string, emojiUsage: string): number => {
+  let baseLimit: number;
+  switch (verbosity) {
+    case 'terse': baseLimit = 400; break;
+    case 'brief': baseLimit = 600; break;
+    case 'moderate': baseLimit = 800; break;
+    case 'detailed': baseLimit = 1200; break;
+    case 'verbose': baseLimit = 1600; break;
+    case 'extremely_verbose': baseLimit = 2400; break;
+    case 'novel_length': baseLimit = 4000; break;
+    default: baseLimit = 800;
+  }
+  
+  // Apply emoji usage multiplier
+  let emojiMultiplier: number;
+  switch (emojiUsage) {
+    case 'none': emojiMultiplier = 1.0; break;
+    case 'rare': emojiMultiplier = 1.1; break;
+    case 'occasional': emojiMultiplier = 1.2; break;
+    case 'moderate': emojiMultiplier = 1.5; break;
+    case 'frequent': emojiMultiplier = 2.0; break;
+    case 'excessive': emojiMultiplier = 2.5; break;
+    case 'emoji_only': emojiMultiplier = 3.0; break;
+    default: emojiMultiplier = 1.0;
+  }
+  
+  return Math.round(baseLimit * emojiMultiplier);
+};
+
+const getBaseSystemInstruction = (currentUserNickname: string) => `You are an advanced AI simulating an Internet Relay Chat (IRC) environment.
 Your goal is to generate realistic, brief, and in-character chat messages for various virtual users.
 Adhere strictly to the format 'nickname: message'. 
 Do not add any extra text, explanations, or markdown formatting. 
@@ -711,6 +907,48 @@ REALISTIC IRC CONVERSATION PATTERNS:
 `;
 
 // Specialized system instruction for operator responses with enhanced multilingual support
+// Helper function to create the Gemini API config
+// OPTIMIZATION: Only include systemInstruction when actually generating a message
+// This reduces token usage and prevents rate limiting from unnecessary system instruction sends
+const createApiConfig = (
+  validatedModel: string,
+  tokenLimit: number,
+  systemInstruction: string | null,
+  temperature: number,
+  thinkingBudget: number = 2000, // Default budget
+  responseMimeType?: string,
+  responseSchema?: any
+) => {
+  const config: any = {
+    temperature,
+    maxOutputTokens: tokenLimit,
+  };
+
+  // Only include systemInstruction if provided (not null)
+  // This prevents sending unnecessary system instructions for non-generation API calls
+  if (systemInstruction) {
+    config.systemInstruction = systemInstruction;
+  }
+
+  if (responseMimeType) {
+    config.responseMimeType = responseMimeType;
+  }
+
+  if (responseSchema) {
+    config.responseSchema = responseSchema;
+  }
+
+  // Some models require thinking mode with a budget
+  if (validatedModel.includes('2.5') || validatedModel.includes('pro')) {
+    config.thinkingConfig = { thinkingBudget };
+    config.maxOutputTokens = Math.max(tokenLimit, thinkingBudget);
+    aiDebug.log(` Using thinking mode with budget ${thinkingBudget} for model: ${validatedModel}`);
+    aiDebug.log(` Adjusted maxOutputTokens to: ${config.maxOutputTokens}`);
+  }
+
+  return config;
+};
+
 const getOperatorSystemInstruction = (currentUserNickname: string, operator: User) => {
   const userLanguages = getAllLanguages(operator.languageSkills);
   const primaryLanguage = userLanguages[0] || 'English';
@@ -745,6 +983,211 @@ RESPONSE FORMAT:
 `;
 };
 
+// Helper function to select a user for channel activity
+const selectUserForActivity = (channel: Channel, currentUserNickname: string, usersInChannel: User[]): User => {
+  // Get language context for the channel first
+  let dominantLanguage: string;
+  if (channel.dominantLanguage) {
+    // Use explicitly set dominant language
+    dominantLanguage = channel.dominantLanguage;
+    aiDebug.log(` Channel ${channel.name} explicit dominant language: ${dominantLanguage}`);
+  } else {
+    // Calculate dominant language from users
+    const channelLanguages = channel.users.map(u => getAllLanguages(u.languageSkills)[0]).filter(Boolean);
+    dominantLanguage = channelLanguages.length > 0 ?
+      channelLanguages.reduce((a, b, i, arr) => arr.filter(v => v === a).length >= arr.filter(v => v === b).length ? a : b) :
+      'English';
+    aiDebug.log(` Channel ${channel.name} calculated dominant language: ${dominantLanguage}`);
+  }
+
+  // Prioritize users whose primary language matches the channel's dominant language
+  const usersMatchingLanguage = usersInChannel.filter(user => {
+    const userLanguages = getAllLanguages(user.languageSkills);
+    return userLanguages[0] === dominantLanguage;
+  });
+
+  // If we have users matching the dominant language, use them; otherwise use any user
+  let candidateUsers = usersMatchingLanguage.length > 0 ? usersMatchingLanguage : usersInChannel;
+
+  // Add user rotation to prevent the same users from always being selected
+  // Shuffle the array to add more variety
+  const shuffledUsers = [...candidateUsers].sort(() => Math.random() - 0.5);
+
+  // Prefer users who haven't spoken recently (last 2 messages for better balance)
+  // Exclude current user from recent speakers tracking since we only care about virtual users
+  const recentSpeakers = channel.messages.slice(-2)
+    .filter(msg => msg.nickname !== currentUserNickname)
+    .map(msg => msg.nickname);
+  const lessActiveUsers = shuffledUsers.filter(user => !recentSpeakers.includes(user.nickname));
+
+  // If the last message was from a specific user, strongly avoid them for the next message
+  const lastMessage = channel.messages[channel.messages.length - 1];
+  const lastSpeaker = lastMessage ? lastMessage.nickname : null;
+  const avoidLastSpeaker = lastSpeaker ? shuffledUsers.filter(user => user.nickname !== lastSpeaker) : shuffledUsers;
+
+  // Identify users who haven't spoken in a while (last 5 messages) for priority selection
+  // Exclude current user from long-term recent speakers tracking
+  const longTermRecentSpeakers = channel.messages.slice(-5)
+    .filter(msg => msg.nickname !== currentUserNickname)
+    .map(msg => msg.nickname);
+  const longTermInactiveUsers = shuffledUsers.filter(user => !longTermRecentSpeakers.includes(user.nickname));
+
+  // Time-based user activity patterns with Afterhours Protocol
+  const now = new Date();
+  const hour = now.getHours();
+  const afterhoursActive = isAfterhoursProtocol();
+
+  // Adjust user selection based on time of day and Afterhours Protocol
+  let timeBasedUsers = shuffledUsers;
+
+  if (afterhoursActive) {
+    // Afterhours Protocol: Prefer nocturnal and creative personalities
+    const nocturnalUsers = shuffledUsers.filter(user =>
+      (user.personality && user.personality.toLowerCase().includes('creative')) ||
+      (user.personality && user.personality.toLowerCase().includes('artistic')) ||
+      (user.personality && user.personality.toLowerCase().includes('mysterious')) ||
+      (user.personality && user.personality.toLowerCase().includes('philosophical')) ||
+      (user.personality && user.personality.toLowerCase().includes('rebellious')) ||
+      (user.personality && user.personality.toLowerCase().includes('independent')) ||
+      (user.personality && user.personality.toLowerCase().includes('spontaneous')) ||
+      (user.personality && user.personality.toLowerCase().includes('adventurous')) ||
+      (getWritingStyle(user).verbosity === 'detailed') ||
+      (getWritingStyle(user).verbosity === 'verbose') ||
+      (getWritingStyle(user).verbosity === 'extremely_verbose') ||
+      (getWritingStyle(user).verbosity === 'novel_length')
+    );
+    // Use nocturnal users with 70% probability during afterhours
+    timeBasedUsers = nocturnalUsers.length > 0 && Math.random() < 0.7 ? nocturnalUsers : shuffledUsers;
+    aiDebug.log(` Afterhours Protocol active - using ${nocturnalUsers.length} nocturnal users`);
+  } else if (hour >= 6 && hour < 12) {
+    // Morning: Prefer users with energetic personalities, but include others too
+    const energeticUsers = shuffledUsers.filter(user =>
+      (user.personality && user.personality.toLowerCase().includes('energetic')) ||
+      (user.personality && user.personality.toLowerCase().includes('optimistic')) ||
+      (user.personality && user.personality.toLowerCase().includes('morning')) ||
+      (getWritingStyle(user).verbosity === 'detailed') ||
+      (getWritingStyle(user).verbosity === 'verbose') ||
+      (getWritingStyle(user).verbosity === 'extremely_verbose') ||
+      (getWritingStyle(user).verbosity === 'novel_length')
+    );
+    // If we have energetic users, use them with 60% probability, otherwise use all users
+    timeBasedUsers = energeticUsers.length > 0 && Math.random() < 0.6 ? energeticUsers : shuffledUsers;
+  } else if (hour >= 21 || hour < 6) {
+    // Late night/early morning: Prefer users with introspective personalities, but include others too
+    const introspectiveUsers = shuffledUsers.filter(user =>
+      (user.personality && user.personality.toLowerCase().includes('quiet')) ||
+      (user.personality && user.personality.toLowerCase().includes('introspective')) ||
+      (user.personality && user.personality.toLowerCase().includes('night')) ||
+      (getWritingStyle(user).verbosity === 'terse') ||
+      (getWritingStyle(user).verbosity === 'brief')
+    );
+    // If we have introspective users, use them with 20% probability, otherwise use all users
+    timeBasedUsers = introspectiveUsers.length > 0 && Math.random() < 0.2 ? introspectiveUsers : shuffledUsers;
+  }
+
+  // Much more balanced user selection to allow natural conversation flow
+  // Significantly reduced restrictions to allow all users to participate regularly
+
+  // 30% chance to use completely random selection to ensure diversity
+  if (Math.random() < 0.3) {
+    aiDebug.log(` Using completely random selection for diversity`);
+    candidateUsers = shuffledUsers;
+  } else if (longTermInactiveUsers.length > 0) {
+    // 20% chance to prefer long-term inactive users (users who haven't spoken in last 5 messages)
+    candidateUsers = Math.random() < 0.2 ? longTermInactiveUsers : timeBasedUsers;
+  } else if (lessActiveUsers.length > 0) {
+    // 15% chance to prefer less active users (users who haven't spoken in last 2 messages)
+    candidateUsers = Math.random() < 0.15 ? lessActiveUsers : timeBasedUsers;
+  } else if (avoidLastSpeaker.length > 0 && lastSpeaker) {
+    // If no less active users, avoid the last speaker but allow others
+    candidateUsers = avoidLastSpeaker;
+  } else {
+    // Fallback to time-based selection
+    candidateUsers = timeBasedUsers;
+  }
+
+  // Ensure we always have candidate users
+  if (candidateUsers.length === 0) {
+    candidateUsers = shuffledUsers;
+  }
+
+  // More aggressive user rotation to prevent spam: avoid users who have spoken 2+ times in the last 7 messages
+  const recentUserCounts = channel.messages.slice(-7)
+    .filter(msg => msg.nickname !== currentUserNickname)
+    .reduce((counts, msg) => {
+      counts[msg.nickname] = (counts[msg.nickname] || 0) + 1;
+      return counts;
+    }, {} as Record<string, number>);
+
+  const overactiveUsers = Object.entries(recentUserCounts)
+    .filter(([_, count]) => (count as number) >= 2)
+    .map(([nickname, _]) => nickname);
+
+  if (overactiveUsers.length > 0) {
+    aiDebug.log(` Detected overactive users: ${overactiveUsers.join(', ')} - gentle rotation`);
+    // Only reduce probability, don't completely filter out
+    candidateUsers = candidateUsers.filter(user => !overactiveUsers.includes(user.nickname));
+
+    // If filtering removed all candidates, use all users as fallback
+    if (candidateUsers.length === 0) {
+      aiDebug.warn(` No candidates after overactive filtering, using all users as fallback`);
+      candidateUsers = shuffledUsers;
+    }
+  }
+
+  const randomUser = candidateUsers[Math.floor(Math.random() * candidateUsers.length)];
+
+  // Safety check to ensure we have a valid user
+  if (!randomUser) {
+    aiDebug.error(` No valid user found! candidateUsers.length: ${candidateUsers.length}`);
+    aiDebug.error(` candidateUsers:`, candidateUsers.map(u => u.nickname));
+    aiDebug.error(` shuffledUsers:`, shuffledUsers.map(u => u.nickname));
+    aiDebug.error(` overactiveUsers:`, overactiveUsers);
+    throw new Error('No valid user found for channel activity');
+  }
+
+  return randomUser;
+};
+
+// Helper function to manage typing indicators
+const manageTypingIndicator = (
+  isTyping: boolean,
+  nickname: string,
+  addMessageToContext?: (message: Message, context: any) => void,
+  updateMessageInContext?: (message: Message, context: any) => void,
+  generateUniqueMessageId?: () => number,
+  activeContext?: any,
+  typingMessageId?: number,
+  result?: string
+): number | undefined => {
+  if (isTyping && addMessageToContext && generateUniqueMessageId && activeContext) {
+    const newTypingMessageId = generateUniqueMessageId();
+    const typingMessage: Message = {
+      id: newTypingMessageId,
+      nickname,
+      content: '',
+      timestamp: new Date(),
+      type: 'ai',
+      isTyping: true,
+    };
+    addMessageToContext(typingMessage, activeContext);
+    return newTypingMessageId;
+  } else if (!isTyping && typingMessageId && updateMessageInContext && activeContext) {
+    updateMessageInContext(
+      {
+        id: typingMessageId,
+        nickname,
+        content: result || '',
+        timestamp: new Date(),
+        type: 'ai',
+        isTyping: false,
+      },
+      activeContext
+    );
+  }
+  return undefined;
+};
+
 export const generateChannelActivity = async (
   channel: Channel,
   currentUserNickname: string,
@@ -754,6 +1197,7 @@ export const generateChannelActivity = async (
   generateUniqueMessageId?: () => number,
   activeContext?: any
 ): Promise<string> => {
+  aiDebug.log(`[LOOP DEBUG] generateChannelActivity called for channel: ${channel.name}`);
   aiDebug.log(` generateChannelActivity called for channel: ${channel.name}`);
   aiDebug.log(` Model parameter: "${model}" (type: ${typeof model}, length: ${model.length})`);
   
@@ -782,178 +1226,8 @@ export const generateChannelActivity = async (
     return '';
   }
   
-  // Get language context for the channel first
-  let dominantLanguage: string;
-  if (channel.dominantLanguage) {
-    // Use explicitly set dominant language
-    dominantLanguage = channel.dominantLanguage;
-    aiDebug.log(` Channel ${channel.name} explicit dominant language: ${dominantLanguage}`);
-  } else {
-    // Calculate dominant language from users
-    const channelLanguages = channel.users.map(u => getAllLanguages(u.languageSkills)[0]).filter(Boolean);
-    dominantLanguage = channelLanguages.length > 0 ? 
-      channelLanguages.reduce((a, b, i, arr) => arr.filter(v => v === a).length >= arr.filter(v => v === b).length ? a : b) : 
-      'English';
-    aiDebug.log(` Channel ${channel.name} calculated dominant language: ${dominantLanguage}`);
-  }
-  
-  // Prioritize users whose primary language matches the channel's dominant language
-  const usersMatchingLanguage = usersInChannel.filter(user => {
-    const userLanguages = getAllLanguages(user.languageSkills);
-    return userLanguages[0] === dominantLanguage;
-  });
-  
-  // If we have users matching the dominant language, use them; otherwise use any user
-  let candidateUsers = usersMatchingLanguage.length > 0 ? usersMatchingLanguage : usersInChannel;
-  
-  // Add user rotation to prevent the same users from always being selected
-  // Shuffle the array to add more variety
-  const shuffledUsers = [...candidateUsers].sort(() => Math.random() - 0.5);
-  
-  // Prefer users who haven't spoken recently (last 2 messages for better balance)
-  // Exclude current user from recent speakers tracking since we only care about virtual users
-  const recentSpeakers = channel.messages.slice(-2)
-    .filter(msg => msg.nickname !== currentUserNickname)
-    .map(msg => msg.nickname);
-  const lessActiveUsers = shuffledUsers.filter(user => !recentSpeakers.includes(user.nickname));
-  
-  // If the last message was from a specific user, strongly avoid them for the next message
-  const lastMessage = channel.messages[channel.messages.length - 1];
-  const lastSpeaker = lastMessage ? lastMessage.nickname : null;
-  const avoidLastSpeaker = lastSpeaker ? shuffledUsers.filter(user => user.nickname !== lastSpeaker) : shuffledUsers;
-  
-  // Identify users who haven't spoken in a while (last 5 messages) for priority selection
-  // Exclude current user from long-term recent speakers tracking
-  const longTermRecentSpeakers = channel.messages.slice(-5)
-    .filter(msg => msg.nickname !== currentUserNickname)
-    .map(msg => msg.nickname);
-  const longTermInactiveUsers = shuffledUsers.filter(user => !longTermRecentSpeakers.includes(user.nickname));
-  
-  // Time-based user activity patterns with Afterhours Protocol
-  const now = new Date();
-  const hour = now.getHours();
-  const dayOfWeek = now.getDay();
-  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-  const afterhoursActive = isAfterhoursProtocol();
-  
-  // Adjust user selection based on time of day and Afterhours Protocol
-  let timeBasedUsers = shuffledUsers;
-  
-  if (afterhoursActive) {
-    // Afterhours Protocol: Prefer nocturnal and creative personalities
-    const nocturnalUsers = shuffledUsers.filter(user => 
-      (user.personality && user.personality.toLowerCase().includes('creative')) ||
-      (user.personality && user.personality.toLowerCase().includes('artistic')) ||
-      (user.personality && user.personality.toLowerCase().includes('mysterious')) ||
-      (user.personality && user.personality.toLowerCase().includes('philosophical')) ||
-      (user.personality && user.personality.toLowerCase().includes('rebellious')) ||
-      (user.personality && user.personality.toLowerCase().includes('independent')) ||
-      (user.personality && user.personality.toLowerCase().includes('spontaneous')) ||
-      (user.personality && user.personality.toLowerCase().includes('adventurous')) ||
-      (getWritingStyle(user).verbosity === 'detailed') ||
-      (getWritingStyle(user).verbosity === 'verbose') ||
-      (getWritingStyle(user).verbosity === 'extremely_verbose') ||
-      (getWritingStyle(user).verbosity === 'novel_length')
-    );
-    // Use nocturnal users with 70% probability during afterhours
-    timeBasedUsers = nocturnalUsers.length > 0 && Math.random() < 0.7 ? nocturnalUsers : shuffledUsers;
-    aiDebug.log(` Afterhours Protocol active - using ${nocturnalUsers.length} nocturnal users`);
-  } else if (hour >= 6 && hour < 12) {
-    // Morning: Prefer users with energetic personalities, but include others too
-    const energeticUsers = shuffledUsers.filter(user => 
-      (user.personality && user.personality.toLowerCase().includes('energetic')) ||
-      (user.personality && user.personality.toLowerCase().includes('optimistic')) ||
-      (user.personality && user.personality.toLowerCase().includes('morning')) ||
-      (getWritingStyle(user).verbosity === 'detailed') ||
-      (getWritingStyle(user).verbosity === 'verbose') ||
-      (getWritingStyle(user).verbosity === 'extremely_verbose') ||
-      (getWritingStyle(user).verbosity === 'novel_length')
-    );
-    // If we have energetic users, use them with 60% probability, otherwise use all users
-    timeBasedUsers = energeticUsers.length > 0 && Math.random() < 0.6 ? energeticUsers : shuffledUsers;
-  } else if (hour >= 21 || hour < 6) {
-    // Late night/early morning: Prefer users with introspective personalities, but include others too
-    const introspectiveUsers = shuffledUsers.filter(user => 
-      (user.personality && user.personality.toLowerCase().includes('quiet')) ||
-      (user.personality && user.personality.toLowerCase().includes('introspective')) ||
-      (user.personality && user.personality.toLowerCase().includes('night')) ||
-      (getWritingStyle(user).verbosity === 'terse') ||
-      (getWritingStyle(user).verbosity === 'brief')
-    );
-    // If we have introspective users, use them with 20% probability, otherwise use all users
-    timeBasedUsers = introspectiveUsers.length > 0 && Math.random() < 0.2 ? introspectiveUsers : shuffledUsers;
-  }
-  
-  // Much more balanced user selection to allow natural conversation flow
-  // Significantly reduced restrictions to allow all users to participate regularly
-  
-  // 30% chance to use completely random selection to ensure diversity
-  if (Math.random() < 0.3) {
-    aiDebug.log(` Using completely random selection for diversity`);
-    candidateUsers = shuffledUsers;
-  } else if (longTermInactiveUsers.length > 0) {
-    // 20% chance to prefer long-term inactive users (users who haven't spoken in last 5 messages)
-    candidateUsers = Math.random() < 0.2 ? longTermInactiveUsers : timeBasedUsers;
-  } else if (lessActiveUsers.length > 0) {
-    // 15% chance to prefer less active users (users who haven't spoken in last 2 messages)
-    candidateUsers = Math.random() < 0.15 ? lessActiveUsers : timeBasedUsers;
-  } else if (avoidLastSpeaker.length > 0 && lastSpeaker) {
-    // If no less active users, avoid the last speaker but allow others
-    candidateUsers = avoidLastSpeaker;
-  } else {
-    // Fallback to time-based selection
-    candidateUsers = timeBasedUsers;
-  }
-  
-  // Ensure we always have candidate users
-  if (candidateUsers.length === 0) {
-    candidateUsers = shuffledUsers;
-  }
-  
-  // More aggressive user rotation to prevent spam: avoid users who have spoken 2+ times in the last 7 messages
-  const recentUserCounts = channel.messages.slice(-7)
-    .filter(msg => msg.nickname !== currentUserNickname)
-    .reduce((counts, msg) => {
-      counts[msg.nickname] = (counts[msg.nickname] || 0) + 1;
-      return counts;
-    }, {} as Record<string, number>);
-  
-  const overactiveUsers = Object.entries(recentUserCounts)
-    .filter(([_, count]) => (count as number) >= 2)
-    .map(([nickname, _]) => nickname);
-  
-  if (overactiveUsers.length > 0) {
-    aiDebug.log(` Detected overactive users: ${overactiveUsers.join(', ')} - gentle rotation`);
-    // Only reduce probability, don't completely filter out
-    candidateUsers = candidateUsers.filter(user => !overactiveUsers.includes(user.nickname));
-    
-    // If filtering removed all candidates, use all users as fallback
-    if (candidateUsers.length === 0) {
-      aiDebug.warn(` No candidates after overactive filtering, using all users as fallback`);
-      candidateUsers = shuffledUsers;
-    }
-  }
-  
-  const randomUser = candidateUsers[Math.floor(Math.random() * candidateUsers.length)];
-  
-  // Safety check to ensure we have a valid user
-  if (!randomUser) {
-    aiDebug.error(` No valid user found! candidateUsers.length: ${candidateUsers.length}`);
-    aiDebug.error(` candidateUsers:`, candidateUsers.map(u => u.nickname));
-    aiDebug.error(` shuffledUsers:`, shuffledUsers.map(u => u.nickname));
-    aiDebug.error(` overactiveUsers:`, overactiveUsers);
-    throw new Error('No valid user found for channel activity');
-  }
-  
-  aiDebug.log(` Selected user: ${randomUser.nickname} for channel activity (language: ${getAllLanguages(randomUser.languageSkills)[0]})`);
-  aiDebug.log(` Recent speakers (last 3): ${recentSpeakers.join(', ')}`);
-  aiDebug.log(` Long-term recent speakers (last 10): ${longTermRecentSpeakers.join(', ')}`);
-  aiDebug.log(` Last speaker: ${lastSpeaker || 'none'}`);
-  aiDebug.log(` Less active users: ${lessActiveUsers.map(u => u.nickname).join(', ')}`);
-  aiDebug.log(` Long-term inactive users: ${longTermInactiveUsers.map(u => u.nickname).join(', ')}`);
-  aiDebug.log(` Candidate users: ${candidateUsers.map(u => u.nickname).join(', ')}`);
-  aiDebug.log(` Time-based users: ${timeBasedUsers.map(u => u.nickname).join(', ')}`);
-  aiDebug.log(` Total users in channel: ${usersInChannel.length}`);
+  const randomUser = selectUserForActivity(channel, currentUserNickname, usersInChannel);
+  const dominantLanguage = channel.dominantLanguage || 'English';
 
   // Safety check: ensure user has valid languageSkills
   if (!randomUser.languageSkills) {
@@ -975,35 +1249,6 @@ export const generateChannelActivity = async (
   aiDebug.log(` isPerLanguageFormat check:`, isPerLanguageFormat(randomUser.languageSkills));
   aiDebug.log(` isLegacyFormat check:`, isLegacyFormat(randomUser.languageSkills));
 
-  // Calculate appropriate token limit based on verbosity and emoji usage
-  const getTokenLimit = (verbosity: string, emojiUsage: string): number => {
-    let baseLimit: number;
-    switch (verbosity) {
-      case 'terse': baseLimit = 400; break;
-      case 'brief': baseLimit = 600; break;
-      case 'moderate': baseLimit = 800; break;
-      case 'detailed': baseLimit = 1200; break;
-      case 'verbose': baseLimit = 1600; break;
-      case 'extremely_verbose': baseLimit = 2400; break;
-      case 'novel_length': baseLimit = 4000; break;
-      default: baseLimit = 800;
-    }
-    
-    // Apply emoji usage multiplier
-    let emojiMultiplier: number;
-    switch (emojiUsage) {
-      case 'none': emojiMultiplier = 1.0; break;
-      case 'rare': emojiMultiplier = 1.1; break;
-      case 'occasional': emojiMultiplier = 1.2; break;
-      case 'moderate': emojiMultiplier = 1.5; break;
-      case 'frequent': emojiMultiplier = 2.0; break;
-      case 'excessive': emojiMultiplier = 2.5; break;
-      case 'emoji_only': emojiMultiplier = 3.0; break;
-      default: emojiMultiplier = 1.0;
-    }
-    
-    return Math.round(baseLimit * emojiMultiplier);
-  };
 
   const writingStyle = safeGetUserProperty(randomUser, 'writingStyle');
   const tokenLimit = getTokenLimit(writingStyle.verbosity, writingStyle.emojiUsage);
@@ -1011,47 +1256,7 @@ export const generateChannelActivity = async (
 
   // Check for greeting spam by the selected user
   const userRecentMessages = channel.messages.slice(-5).filter(msg => msg.nickname === randomUser.nickname);
-  const userGreetingCount = userRecentMessages.filter(msg => {
-    const content = msg.content.toLowerCase();
-    const greetingPhrases = getGreetingPhrases();
-    return greetingPhrases.some(phrase => content.includes(phrase)) ||
-           // English patterns
-           content.match(/^(hi|hello|hey|welcome|greetings|good morning|good afternoon|good evening|howdy|sup|what's up|how are you|how's it going)/) ||
-           content.match(/\b(welcome|hello|hi|hey|greetings)\b/) ||
-           // Spanish patterns
-           content.match(/^(hola|buenos días|buenas tardes|buenas noches|saludos|bienvenido|bienvenida|bienvenidos|bienvenidas|qué tal|cómo estás|cómo están)/) ||
-           // French patterns
-           content.match(/^(bonjour|bonsoir|salut|bonne journée|bonne soirée|bienvenue|comment allez-vous|comment ça va)/) ||
-           // German patterns
-           content.match(/^(hallo|guten tag|guten morgen|guten abend|gute nacht|willkommen|wie geht es|wie geht's)/) ||
-           // Italian patterns
-           content.match(/^(ciao|buongiorno|buonasera|buonanotte|salve|benvenuto|benvenuta|benvenuti|benvenute|come stai|come state)/) ||
-           // Portuguese patterns
-           content.match(/^(olá|bom dia|boa tarde|boa noite|saudações|bem-vindo|bem-vinda|bem-vindos|bem-vindas|como está|como estão)/) ||
-           // Japanese patterns
-           content.match(/^(こんにちは|こんばんは|おはよう|おやすみ|ようこそ|みなさん|みんな|友達|友だち|元気ですか|元気？)/) ||
-           // Chinese patterns
-           content.match(/^(你好|您好|大家好|早上好|下午好|晚上好|晚安|欢迎|朋友们|朋友们好|你好吗|怎么样)/) ||
-           // Russian patterns
-           content.match(/^(привет|здравствуйте|доброе утро|добрый день|добрый вечер|спокойной ночи|добро пожаловать|всем привет|друзья|как дела|как поживаете)/) ||
-           // Arabic patterns
-           content.match(/^(مرحبا|السلام عليكم|صباح الخير|مساء الخير|أهلا وسهلا|مرحبا بكم|أصدقاء|كيف حالك|كيف الحال)/) ||
-           // Korean patterns
-           content.match(/^(안녕하세요|안녕|좋은 아침|좋은 저녁|환영합니다|모두|친구들|어떻게 지내세요|어떻게 지내)/) ||
-           // Dutch patterns
-           content.match(/^(hallo|goedemorgen|goedemiddag|goedenavond|goedenacht|welkom|hoe gaat het)/) ||
-           // Swedish patterns
-           content.match(/^(hej|god morgon|god eftermiddag|god kväll|god natt|välkommen|hur mår du|hur är det)/) ||
-           // Norwegian patterns
-           content.match(/^(hei|god morgen|god ettermiddag|god kveld|god natt|velkommen|hvordan har du det|hvordan går det)/) ||
-           // Danish patterns
-           content.match(/^(hej|god morgen|god eftermiddag|god aften|god nat|velkommen|hvordan har du det|hvordan går det)/) ||
-           // Short message detection for common greetings
-           content.length < 20 && (content.includes('hi') || content.includes('hello') || content.includes('hey') || content.includes('welcome') || 
-                                  content.includes('hola') || content.includes('bonjour') || content.includes('hallo') || content.includes('ciao') ||
-                                  content.includes('olá') || content.includes('こんにちは') || content.includes('你好') || content.includes('привет') ||
-                                  content.includes('مرحبا') || content.includes('안녕하세요'));
-  }).length;
+  const userGreetingCount = userRecentMessages.filter(msg => isGreetingMessage(msg.content)).length;
   
   aiDebug.log(` User ${randomUser.nickname} greeting count in last 5 messages: ${userGreetingCount}`);
   
@@ -1059,6 +1264,8 @@ export const generateChannelActivity = async (
   const conversationVariety = Math.random();
   const repetitivePhrases = detectRepetitivePatterns(channel.messages);
   const recentTopics = extractRecentTopics(channel.messages);
+  aiDebug.log(`[LOOP DEBUG] Repetitive phrases detected:`, repetitivePhrases);
+  aiDebug.log(`[LOOP DEBUG] Recent topics:`, recentTopics);
   
   let diversityPrompt = '';
   let repetitionAvoidance = '';
@@ -1072,52 +1279,17 @@ export const generateChannelActivity = async (
   let antiGreetingSpam = '';
   if (userGreetingCount >= 2) {
     antiGreetingSpam = `CRITICAL: You have been greeting too much recently (${userGreetingCount} greetings in last 5 messages). DO NOT greet anyone. Instead, contribute to the conversation with meaningful content, ask questions, share thoughts, or discuss topics. Avoid any form of greeting including "hi", "hello", "hey", "welcome", etc.`;
+    aiDebug.log(`[LOOP DEBUG] Anti-greeting spam activated for ${randomUser.nickname}: ${userGreetingCount} greetings detected`);
     aiDebug.log(` Anti-greeting spam activated for ${randomUser.nickname}: ${userGreetingCount} greetings detected`);
   }
   
-  // Enhanced diversity prompts with higher probability for ambient chatter
-  if (conversationVariety < 0.08) {
-    // 8% chance: Introduce a completely new topic
-    const newTopics = ['technology', 'travel', 'food', 'music', 'movies', 'books', 'sports', 'hobbies', 'current events', 'memories'];
-    const randomTopic = newTopics[Math.floor(Math.random() * newTopics.length)];
-    diversityPrompt = `IMPORTANT: Introduce a completely new topic about ${randomTopic}. Be creative and unexpected.`;
-  } else if (conversationVariety < 0.16) {
-    // 8% chance: Make a general observation or statement
-    diversityPrompt = 'IMPORTANT: Make a general observation or statement about something interesting - don\'t address anyone specifically, just share a thought or observation that others might find interesting.';
-  } else if (conversationVariety < 0.24) {
-    // 8% chance: Share a random thought or musing
-    diversityPrompt = 'IMPORTANT: Share a random thought, musing, or reflection - something that popped into your head that might be interesting to others. Don\'t address anyone specifically.';
-  } else if (conversationVariety < 0.32) {
-    // 8% chance: Ask a general question to the room
-    diversityPrompt = 'IMPORTANT: Ask a general question to the room - something that could spark discussion but doesn\'t address anyone specifically.';
-  } else if (conversationVariety < 0.4) {
-    // 8% chance: Share a personal experience or story
-    diversityPrompt = 'IMPORTANT: Share a brief personal experience or story related to the topic.';
-  } else if (conversationVariety < 0.48) {
-    // 8% chance: Make an observation about the current conversation
-    diversityPrompt = 'IMPORTANT: Make an observation about the current conversation or comment on what others have been discussing.';
-  } else if (conversationVariety < 0.56) {
-    // 8% chance: Change the mood or tone
-    diversityPrompt = 'IMPORTANT: Change the mood or tone of the conversation - be more lighthearted, serious, or different from recent messages.';
-  } else if (conversationVariety < 0.64) {
-    // 8% chance: Introduce humor or wit
-    diversityPrompt = 'IMPORTANT: Add some humor, wit, or clever wordplay to the conversation.';
-  } else if (conversationVariety < 0.72) {
-    // 8% chance: Share a link or image
-    diversityPrompt = 'IMPORTANT: Share a relevant link or image that adds value to the conversation. Use complete, working URLs like https://placehold.co/400x300/0066CC/FFFFFF/png?text=Screenshot or https://github.com/user/repo. Always include file extensions for images. Use only reliable image services: placehold.co (for consistent placeholder images), via.placeholder.com (legacy support). Avoid ad networks, tracking services, and problematic image hosting services. CRITICAL: AVOID sharing YouTube links entirely - they often become outdated, unavailable, or redirect to unwanted content. Instead, share GitHub repos, news articles, tutorials, memes, screenshots, or documentation. If you must share video content, describe it instead of linking to it. CRITICAL: Only share REAL, EXISTING links that actually work - never make up fake URLs or non-existent content. If unsure about a link\'s existence, don\'t share it. NEVER post Rick Astley\'s "Never Gonna Give You Up" or similar overused memes - these are cliché and repetitive. NEVER use YouTube video ID "dQw4w9WgXcQ" or any URLs containing this ID. NEVER post URLs that redirect to Rick Astley content, even if they look legitimate. Share fresh, diverse content instead.';
-  } else if (conversationVariety < 0.8) {
-    // 8% chance: Be more conversational and natural
-    diversityPrompt = 'IMPORTANT: Be more conversational and natural - like you\'re talking to friends in a relaxed setting.';
-  } else if (conversationVariety < 0.88) {
-    // 8% chance: Share a random fact or trivia
-    diversityPrompt = 'IMPORTANT: Share a random fact, trivia, or interesting piece of information - something educational or surprising that others might enjoy learning about.';
-  } else if (conversationVariety < 0.96) {
-    // 8% chance: Make a philosophical or deep observation
-    diversityPrompt = 'IMPORTANT: Make a philosophical observation or share a deep thought about life, experiences, or the world - something that might make others think or reflect.';
-  } else {
-    // 4% chance: Express a random emotion or feeling
-    diversityPrompt = 'IMPORTANT: Express a random emotion, feeling, or mood - something that captures how you\'re feeling right now that others might relate to or find interesting.';
-  }
+  // Simplified diversity prompt
+    diversityPrompt = `To keep the conversation interesting, you could:
+  - Introduce a new, related topic.
+  - Share a personal story or a random thought.
+  - Ask a question to the channel.
+  - Use humor or change the tone of the conversation.
+  - Share a link to an interesting article, image, or repository.`;
   
   // Add topic evolution if conversation is getting stale
   let topicEvolution = '';
@@ -1125,44 +1297,8 @@ export const generateChannelActivity = async (
     topicEvolution = 'IMPORTANT: The conversation has been focused on similar topics recently. Try to bring up something fresh or unexpected.';
   }
 
-  // Add link/image encouragement based on conversation context
-  let linkImagePrompt = '';
-  const hasRecentLinks = channel.messages.slice(-10).some(msg => 
-    msg.content.includes('http') || msg.content.includes('www.')
-  );
-  
-  // Check for recent YouTube links to avoid repetition
-  const recentYouTubeLinks = channel.messages.slice(-10).filter(msg => 
-    msg.content.includes('youtube.com/') || msg.content.includes('youtu.be/')
-  );
-  
-  const hasRecentYouTubeLinks = recentYouTubeLinks.length > 0;
-  
-  // Always include anti-Rick Astley and YouTube avoidance measures in link sharing prompts
-  const antiRickAstleyPrompt = 'CRITICAL: NEVER post Rick Astley\'s "Never Gonna Give You Up" or similar overused memes. NEVER use YouTube video ID "dQw4w9WgXcQ" or any URLs containing this ID. NEVER post URLs that redirect to Rick Astley content, even if they look legitimate. CRITICAL: AVOID sharing YouTube links entirely - they often become outdated, unavailable, or redirect to unwanted content. Instead, share GitHub repos, news articles, tutorials, memes, screenshots, or documentation. If you must share video content, describe it instead of linking to it. These are cliché and repetitive. Share fresh, diverse content instead.';
-  
-  if (!hasRecentLinks && Math.random() < 0.3) {
-    // 30% chance to encourage link/image sharing if none recently
-    linkImagePrompt = `IMPORTANT: Consider sharing a relevant link or image to make the conversation more engaging. Use complete, working URLs like https://placehold.co/400x300/0066CC/FFFFFF/png?text=Screenshot or https://github.com/user/repo. Always include file extensions for images. Use only reliable image services: placehold.co (for consistent placeholder images), via.placeholder.com (legacy support). Avoid ad networks, tracking services, and problematic image hosting services. ${antiRickAstleyPrompt}`;
-  } else if (hasRecentYouTubeLinks && Math.random() < 0.4) {
-    // 40% chance to discourage repetitive YouTube links
-    linkImagePrompt = `IMPORTANT: Avoid posting repetitive links. Share diverse content - different types of links and topics. Consider sharing GitHub repos, news articles, tutorials, or images. CRITICAL: Only share REAL, EXISTING links that actually work - never make up fake URLs or non-existent content. ${antiRickAstleyPrompt}`;
-  } else if (Math.random() < 0.3) {
-    // 30% chance to emphasize real content only
-    linkImagePrompt = `IMPORTANT: If sharing links, only share REAL, EXISTING content that actually works. Never make up fake URLs, video IDs, or non-existent content. Better to share no link than a fake one. ${antiRickAstleyPrompt}`;
-  } else if (Math.random() < 0.2) {
-    // 20% chance to encourage well-known content
-    linkImagePrompt = `IMPORTANT: If sharing links, reference well-known, real content that actually exists. Examples: popular GitHub repos, famous tutorials, or well-known documentation. Never create fake URLs or made-up content. ${antiRickAstleyPrompt}`;
-  } else if (Math.random() < 0.15) {
-    // 15% chance to discourage repetitive content
-    linkImagePrompt = `IMPORTANT: Avoid posting repetitive links. Share diverse content from different sources and topics. Don\'t post the same link multiple times. ${antiRickAstleyPrompt}`;
-  } else if (Math.random() < 0.08) {
-    // 8% chance to discourage outdated YouTube content
-    linkImagePrompt = `IMPORTANT: Avoid sharing old or potentially outdated links that may no longer be available. Prefer recent content or consider sharing other types of links (GitHub, news articles, tutorials) instead. ${antiRickAstleyPrompt}`;
-  } else {
-    // Default prompt with anti-Rick Astley measures
-    linkImagePrompt = `IMPORTANT: If sharing links, only share REAL, EXISTING content that actually works. Never make up fake URLs, video IDs, or non-existent content. Better to share no link than a fake one. ${antiRickAstleyPrompt}`;
-  }
+  // Simplified link/image encouragement
+    const linkImagePrompt = `When sharing links, please prioritize high-quality, relevant content like news articles, GitHub repositories, or interesting blog posts. Ensure all links are real and functional.`;
 
   // Get time-of-day context
   const timeContext = getTimeOfDayContext();
@@ -1207,22 +1343,30 @@ ${topicEvolution}
 
 ${linkImagePrompt}
 
-AMBIENT CHATTER GUIDELINES:
-- Create general statements and observations rather than direct responses to specific users
-- Share random thoughts, musings, or reflections that others might find interesting
-- Ask open-ended questions to the room rather than addressing individuals
-- Make general observations about topics, situations, or experiences
-- Contribute to the overall conversation atmosphere with ambient commentary
-- Avoid creating chains of back-and-forth reactions between users
-- Focus on adding value to the channel's general discussion rather than responding to specific messages
+CRITICAL CHARACTER INSTRUCTIONS:
+You are roleplaying as ${randomUser.nickname}, whose personality is: ${randomUser.personality}
+STAY IN CHARACTER! Everything you say must reflect this personality. Don't be generic or bland.
+- If you're shy, be hesitant and uncertain
+- If you're confident, be bold and assertive
+- If you're playful, be fun and lighthearted
+- If you're sarcastic, add wit and irony
+- If you're intellectual, be thoughtful and analytical
+- If you're energetic, be enthusiastic and dynamic
+Let your personality SHINE through in every message!
 
-IMPORTANT: Create ambient chatter and general statements rather than reactive responses. Don't always reply to specific users - instead, share thoughts, observations, or general comments that others might find interesting. This creates a more natural chat environment with less clutter from back-and-forth reactions. Focus on contributing to the overall conversation atmosphere rather than responding to individual messages.
+AMBIENT CHATTER GUIDELINES:
+- Your primary goal is to make the chat feel alive and natural.
+- Generate comments that add to the atmosphere without needing a direct reply.
+- You can share a random thought, make an observation about the world, or ask a question to the channel as a whole.
+- It's okay to not directly respond to the last message. Instead, contribute a new, relevant thought to the ongoing conversation.
+- Think of it as thinking out loud. What would your character be musing about in this context?
 
 MULTILINGUAL SUPPORT: If ${randomUser.nickname} speaks multiple languages, they may occasionally use words or phrases from their other languages, but should primarily communicate in ${primaryLanguage}. This adds authenticity to their multilingual personality.
 
 Generate a new, single, in-character message from ${randomUser.nickname} that contributes to the channel's atmosphere.
 The message should feel natural for the current time of day and social context.
 The message must be a single line in the format: "nickname: message"
+REMEMBER: Stay true to your ${randomUser.personality} personality - don't be generic!
 
 ${writingStyle.verbosity === 'extremely_verbose' || writingStyle.verbosity === 'novel_length' ? 'IMPORTANT: This user is extremely verbose - write a long, detailed message with multiple sentences and thorough explanations. Do not cut off the message.' : writingStyle.verbosity === 'verbose' || writingStyle.verbosity === 'detailed' ? 'IMPORTANT: This user is verbose - write a moderately detailed message with several sentences.' : ''}
 
@@ -1245,6 +1389,7 @@ ${isChannelOperator(channel, randomUser.nickname) ? `- Role: Channel operator (c
 `;
 
   try {
+    aiDebug.log(`[LOOP DEBUG] Full prompt for ${randomUser.nickname}:\n`, prompt);
     aiDebug.log(` Sending request to Gemini for channel activity in ${channel.name}`);
     aiDebug.log(` Using model ID: "${validatedModel}" for API call`);
     // Add temperature variation for more diverse responses
@@ -1253,65 +1398,51 @@ ${isChannelOperator(channel, randomUser.nickname) ? `- Role: Channel operator (c
     const finalTemperature = Math.min(1.0, baseTemperature + temperatureVariation);
     
     aiDebug.log(` Using temperature: ${finalTemperature.toFixed(2)} for ${randomUser.nickname}`);
-    
-    // If callbacks are provided, manage the typing indicator
-    let typingMessageId: number | undefined;
-    if (addMessageToContext && updateMessageInContext && generateUniqueMessageId && activeContext) {
-      typingMessageId = generateUniqueMessageId();
-      const typingMessage: Message = {
-        id: typingMessageId,
-        nickname: randomUser.nickname,
-        content: '', // Content will be updated later
-        timestamp: new Date(),
-        type: 'ai',
-        isTyping: true
-      };
-      addMessageToContext(typingMessage, activeContext);
-    }
+
+    const typingMessageId = manageTypingIndicator(true, randomUser.nickname, addMessageToContext, updateMessageInContext, generateUniqueMessageId, activeContext);
 
     let result: string;
-    try {
-      // Configure thinking mode based on model requirements
-      const config: any = {
-        systemInstruction: getBaseSystemInstruction(currentUserNickname),
-        temperature: finalTemperature,
-        maxOutputTokens: tokenLimit,
-      };
-      
-      // Some models require thinking mode with a budget
-      if (validatedModel.includes('2.5') || validatedModel.includes('pro')) {
-        config.thinkingConfig = { thinkingBudget: 2000 }; // Increased budget for thinking mode
-        config.maxOutputTokens = Math.max(tokenLimit, 2000); // Ensure minimum output tokens
-        aiDebug.log(` Using thinking mode with budget 2000 for model: ${validatedModel}`);
-        aiDebug.log(` Adjusted maxOutputTokens to: ${config.maxOutputTokens}`);
+  try {
+    // Degraded mode: bypass API and use fallback immediately
+    if (isDegradedMode()) {
+      aiDebug.warn(`[LOOP DEBUG] Degraded mode active; bypassing API for channel activity from ${randomUser.nickname}`);
+      result = getFallbackResponse(randomUser, 'activity');
+
+      // Simulate typing delay for fallback response too
+      if (result && result.trim().length > 0) {
+        aiDebug.debug(`Simulating typing delay for fallback channel activity: "${result}"`);
+        await simulateTypingDelay(result.length, { enabled: true, baseDelay: 30, maxDelay: 100 });
       }
-    
+    } else {
+      const config = createApiConfig(validatedModel, tokenLimit, getBaseSystemInstruction(currentUserNickname), finalTemperature);
+
       const response = await withRateLimitAndRetries(() =>
         ai.models.generateContent({
             model: validatedModel,
             contents: prompt,
-              config: config,
+              config,
           }), `channel activity generation for ${randomUser.nickname}`
       );
-      
-      result = extractTextFromResponse(response);
-      aiDebug.log(` Successfully generated channel activity: "${result}"`);
+
+        result = extractTextFromResponse(response);
+        aiDebug.log(`[LOOP DEBUG] Successfully generated channel activity from AI: "${result}"`);
+        aiDebug.log(` Successfully generated channel activity: "${result}"`);
+    }
     } catch (error) {
+      aiDebug.warn(`[LOOP DEBUG] API call failed, using fallback response for ${randomUser.nickname}:`, error);
       aiDebug.warn(` API call failed, using fallback response for ${randomUser.nickname}:`, error);
+      recordApiFailure(error, 'channel activity');
       result = getFallbackResponse(randomUser, 'activity');
+      aiDebug.log(`[LOOP DEBUG] Using fallback response: "${result}"`);
       aiDebug.log(` Using fallback response: "${result}"`);
-    } finally {
-      // Update the typing message with the actual response or remove it
-      if (typingMessageId && updateMessageInContext && activeContext) {
-        updateMessageInContext({
-          id: typingMessageId,
-          nickname: randomUser.nickname,
-          content: result || '', // Use generated result or empty string
-          timestamp: new Date(),
-          type: 'ai',
-          isTyping: false
-        }, activeContext);
+
+      // Simulate typing delay for fallback response too
+      if (result && result.trim().length > 0) {
+        aiDebug.debug(`Simulating typing delay for fallback channel activity (error): "${result}"`);
+        await simulateTypingDelay(result.length, { enabled: true, baseDelay: 30, maxDelay: 100 });
       }
+    } finally {
+      manageTypingIndicator(false, randomUser.nickname, addMessageToContext, updateMessageInContext, generateUniqueMessageId, activeContext, typingMessageId, result);
     }
     return result;
   } catch (error) {
@@ -1336,6 +1467,7 @@ export const generateReactionToMessage = async (
   generateUniqueMessageId?: () => number,
   activeContext?: any
 ): Promise<string> => {
+    aiDebug.log(`[LOOP DEBUG] generateReactionToMessage called for channel: ${channel.name}, reacting to: "${userMessage.content}" from ${userMessage.nickname}`);
     aiDebug.log(` generateReactionToMessage called for channel: ${channel.name}, reacting to: ${userMessage.nickname}`);
     
     const validatedModel = validateModelId(model);
@@ -1425,49 +1557,7 @@ export const generateReactionToMessage = async (
     
     // Check for greeting spam by the selected user
     const userRecentMessages = channel.messages.slice(-5).filter(msg => msg.nickname === randomUser.nickname);
-    const userGreetingCount = userRecentMessages.filter(msg => {
-      const content = msg.content.toLowerCase();
-      const greetingPhrases = getGreetingPhrases();
-      return greetingPhrases.some(phrase => content.includes(phrase)) ||
-             // English patterns
-             content.match(/^(hi|hello|hey|welcome|greetings|good morning|good afternoon|good evening|howdy|sup|what's up|how are you|how's it going)/) ||
-             content.match(/\b(welcome|hello|hi|hey|greetings)\b/) ||
-             // Spanish patterns
-             content.match(/^(hola|buenos días|buenas tardes|buenas noches|saludos|bienvenido|bienvenida|bienvenidos|bienvenidas|qué tal|cómo estás|cómo están)/) ||
-             // French patterns
-             content.match(/^(bonjour|bonsoir|salut|bonne journée|bonne soirée|bienvenue|comment allez-vous|comment ça va)/) ||
-             // German patterns
-             content.match(/^(hallo|guten tag|guten morgen|guten abend|gute nacht|willkommen|wie geht es|wie geht's)/) ||
-             // Italian patterns
-             content.match(/^(ciao|buongiorno|buonasera|buonanotte|salve|benvenuto|benvenuta|benvenuti|benvenute|come stai|come state)/) ||
-             // Portuguese patterns
-             content.match(/^(olá|bom dia|boa tarde|boa noite|saudações|bem-vindo|bem-vinda|bem-vindos|bem-vindas|como está|como estão)/) ||
-             // Japanese patterns
-             content.match(/^(こんにちは|こんばんは|おはよう|おやすみ|ようこそ|みなさん|みんな|友達|友だち|元気ですか|元気？)/) ||
-             // Chinese patterns
-             content.match(/^(你好|您好|大家好|早上好|下午好|晚上好|晚安|欢迎|朋友们|朋友们好|你好吗|怎么样)/) ||
-             // Russian patterns
-             content.match(/^(привет|здравствуйте|доброе утро|добрый день|добрый вечер|спокойной ночи|добро пожаловать|всем привет|друзья|как дела|как поживаете)/) ||
-             // Arabic patterns
-             content.match(/^(مرحبا|السلام عليكم|صباح الخير|مساء الخير|أهلا وسهلا|مرحبا بكم|أصدقاء|كيف حالك|كيف الحال)/) ||
-             // Korean patterns
-             content.match(/^(안녕하세요|안녕|좋은 아침|좋은 저녁|환영합니다|모두|친구들|어떻게 지내세요|어떻게 지내)/) ||
-             // Dutch patterns
-             content.match(/^(hallo|goedemorgen|goedemiddag|goedenavond|goedenacht|welkom|hoe gaat het)/) ||
-             // Swedish patterns
-             content.match(/^(hej|god morgon|god eftermiddag|god kväll|god natt|välkommen|hur mår du|hur är det)/) ||
-             // Norwegian patterns
-             content.match(/^(hei|god morgen|god ettermiddag|god kveld|god natt|velkommen|hvordan har du det|hvordan går det)/) ||
-             // Danish patterns
-             content.match(/^(hej|god morgen|god eftermiddag|god aften|god nat|velkommen|hvordan har du det|hvordan går det)/) ||
-             // Finnish patterns
-             content.match(/^(hei|terve|moi|hyvää huomenta|hyvää päivää|hyvää iltaa|hyvää yötä|tervetuloa|hei kaikki|hei kaverit|hei ystävät|miten menee|mitä kuuluu)/) ||
-             // Short message detection for common greetings
-             content.length < 20 && (content.includes('hi') || content.includes('hello') || content.includes('hey') || content.includes('welcome') || 
-                                    content.includes('hola') || content.includes('bonjour') || content.includes('hallo') || content.includes('ciao') ||
-                                    content.includes('olá') || content.includes('こんにちは') || content.includes('你好') || content.includes('привет') ||
-                                    content.includes('مرحبا') || content.includes('안녕하세요') || content.includes('hei') || content.includes('terve') || content.includes('moi'));
-    }).length;
+    const userGreetingCount = userRecentMessages.filter(msg => isGreetingMessage(msg.content)).length;
     
     aiDebug.log(` Reaction - User ${randomUser.nickname} greeting count in last 5 messages: ${userGreetingCount}`);
     
@@ -1475,35 +1565,6 @@ export const generateReactionToMessage = async (
     const primaryLanguage = userLanguages[0] || 'English';
     const writingStyle = safeGetUserProperty(randomUser, 'writingStyle');
     
-    // Calculate appropriate token limit based on verbosity and emoji usage
-    const getTokenLimit = (verbosity: string, emojiUsage: string): number => {
-      let baseLimit: number;
-      switch (verbosity) {
-        case 'terse': baseLimit = 400; break;
-        case 'brief': baseLimit = 600; break;
-        case 'moderate': baseLimit = 800; break;
-        case 'detailed': baseLimit = 1200; break;
-        case 'verbose': baseLimit = 1600; break;
-        case 'extremely_verbose': baseLimit = 2400; break;
-        case 'novel_length': baseLimit = 4000; break;
-        default: baseLimit = 800;
-      }
-      
-      // Apply emoji usage multiplier
-      let emojiMultiplier: number;
-      switch (emojiUsage) {
-        case 'none': emojiMultiplier = 1.0; break;
-        case 'rare': emojiMultiplier = 1.1; break;
-        case 'occasional': emojiMultiplier = 1.2; break;
-        case 'moderate': emojiMultiplier = 1.5; break;
-        case 'frequent': emojiMultiplier = 2.0; break;
-        case 'excessive': emojiMultiplier = 2.5; break;
-        case 'emoji_only': emojiMultiplier = 3.0; break;
-        default: emojiMultiplier = 1.0;
-      }
-      
-      return Math.round(baseLimit * emojiMultiplier);
-    };
 
     const tokenLimit = getTokenLimit(writingStyle.verbosity, writingStyle.emojiUsage);
     aiDebug.log(` Token limit for reaction from ${randomUser.nickname} (${writingStyle.verbosity}, ${writingStyle.emojiUsage}): ${tokenLimit}`);
@@ -1514,6 +1575,7 @@ export const generateReactionToMessage = async (
 
     // Enhanced reaction diversity and repetition prevention
     const repetitivePhrases = detectRepetitivePatterns(channel.messages);
+    aiDebug.log(`[LOOP DEBUG] Repetitive phrases detected for reaction:`, repetitivePhrases);
     let reactionRepetitionAvoidance = '';
     let reactionAntiGreetingSpam = '';
     
@@ -1524,6 +1586,7 @@ export const generateReactionToMessage = async (
     // Anti-greeting spam protection for reactions
     if (userGreetingCount >= 2) {
       reactionAntiGreetingSpam = `CRITICAL: You have been greeting too much recently (${userGreetingCount} greetings in last 5 messages). DO NOT greet anyone. Instead, contribute to the conversation with meaningful content, ask questions, share thoughts, or discuss topics. Avoid any form of greeting including "hi", "hello", "hey", "welcome", etc.`;
+      aiDebug.log(`[LOOP DEBUG] Reaction - Anti-greeting spam activated for ${randomUser.nickname}: ${userGreetingCount} greetings detected`);
       aiDebug.log(` Reaction - Anti-greeting spam activated for ${randomUser.nickname}: ${userGreetingCount} greetings detected`);
     }
 
@@ -1550,6 +1613,17 @@ ${relationshipContext}
 
     ${Math.random() < 0.2 ? 'IMPORTANT: Consider sharing a relevant link or image in your reaction to make it more engaging. Use complete, working URLs like https://placehold.co/400x300/0066CC/FFFFFF/png?text=Screenshot or https://github.com/user/repo. Always include file extensions for images. Use only reliable image services: placehold.co (for consistent placeholder images), via.placeholder.com (legacy support). Avoid ad networks, tracking services, and problematic image hosting services. CRITICAL: AVOID sharing YouTube links entirely - they often become outdated, unavailable, or redirect to unwanted content. Instead, share GitHub repos, news articles, tutorials, memes, screenshots, or documentation. If you must share video content, describe it instead of linking to it. CRITICAL: Only share REAL, EXISTING links that actually work - never make up fake URLs or non-existent content. If unsure about a link\'s existence, don\'t share it. NEVER post Rick Astley\'s "Never Gonna Give You Up" or similar overused memes - these are cliché and repetitive. NEVER use YouTube video ID "dQw4w9WgXcQ" or any URLs containing this ID. NEVER post URLs that redirect to Rick Astley content, even if they look legitimate. Share fresh, diverse content instead.' : ''}
 
+    CRITICAL CHARACTER INSTRUCTIONS:
+    You are roleplaying as ${randomUser.nickname}, whose personality is: ${randomUser.personality}
+    STAY IN CHARACTER! Your reaction must reflect this personality. Don't be generic or bland.
+    - If you're shy, be hesitant and uncertain in your reaction
+    - If you're confident, be bold and assertive
+    - If you're playful, be fun and lighthearted
+    - If you're sarcastic, add wit and irony
+    - If you're intellectual, be thoughtful and analytical
+    - If you're energetic, be enthusiastic and dynamic
+    Let your personality SHINE through in your reaction!
+
     IMPORTANT: Reply to ONE person at a time, not multiple people. Focus on the most recent or most relevant message. Avoid addressing multiple users in one sentence - this is unrealistic IRC behavior. Keep your response natural and conversational, like a real IRC user would.
 
     QUOTING SYSTEM: You can naturally reference or quote previous messages when responding:
@@ -1562,6 +1636,7 @@ ${relationshipContext}
 Generate a realistic and in-character reaction from ${randomUser.nickname}.
 The reaction should feel natural for the current time of day and social context.
 The reaction must be a single line in the format: "nickname: message"
+REMEMBER: Stay true to your ${randomUser.personality} personality - don't be generic!
 ${writingStyle.verbosity === 'extremely_verbose' || writingStyle.verbosity === 'novel_length' ? 'IMPORTANT: This user is extremely verbose - write a long, detailed reaction with multiple sentences and thorough explanations. Do not cut off the message.' : writingStyle.verbosity === 'verbose' || writingStyle.verbosity === 'detailed' ? 'IMPORTANT: This user is verbose - write a moderately detailed reaction with several sentences.' : ''}
 
 CRITICAL: Respond ONLY in ${primaryLanguage}. Do not use any other language.
@@ -1582,6 +1657,7 @@ ${isChannelOperator(channel, randomUser.nickname) ? `- Role: Channel operator (c
 `;
     
     try {
+        aiDebug.log(`[LOOP DEBUG] Full prompt for reaction from ${randomUser.nickname}:\n`, prompt);
         aiDebug.log(` Sending request to Gemini for reaction in ${channel.name}`);
         
         // Add temperature variation for reactions too
@@ -1590,66 +1666,51 @@ ${isChannelOperator(channel, randomUser.nickname) ? `- Role: Channel operator (c
         const finalTemperature = Math.min(1.0, baseTemperature + temperatureVariation);
         
         aiDebug.log(` Using temperature: ${finalTemperature.toFixed(2)} for reaction from ${randomUser.nickname}`);
-        
-        // If callbacks are provided, manage the typing indicator
-        let typingMessageId: number | undefined;
-        if (addMessageToContext && updateMessageInContext && generateUniqueMessageId && activeContext) {
-          typingMessageId = generateUniqueMessageId();
-          const typingMessage: Message = {
-            id: typingMessageId,
-            nickname: randomUser.nickname,
-            content: '', // Content will be updated later
-            timestamp: new Date(),
-            type: 'ai',
-            isTyping: true
-          };
-          addMessageToContext(typingMessage, activeContext);
-        }
+
+        const typingMessageId = manageTypingIndicator(true, randomUser.nickname, addMessageToContext, updateMessageInContext, generateUniqueMessageId, activeContext);
 
         let result: string;
         try {
-          // Configure thinking mode based on model requirements
-          const config: any = {
-            systemInstruction: getBaseSystemInstruction(currentUserNickname),
-            temperature: finalTemperature,
-            maxOutputTokens: tokenLimit,
-          };
-          
-          // Some models require thinking mode with a budget
-          if (validatedModel.includes('2.5') || validatedModel.includes('pro')) {
-            config.thinkingConfig = { thinkingBudget: 2000 }; // Increased budget for thinking mode
-            config.maxOutputTokens = Math.max(tokenLimit, 2000); // Ensure minimum output tokens
-            aiDebug.log(` Using thinking mode with budget 2000 for reaction model: ${validatedModel}`);
-            aiDebug.log(` Adjusted maxOutputTokens to: ${config.maxOutputTokens}`);
+          // Degraded mode: bypass API and use fallback immediately
+          if (isDegradedMode()) {
+            aiDebug.warn(`[LOOP DEBUG] Degraded mode active; bypassing API for reaction from ${randomUser.nickname}`);
+            result = getFallbackResponse(randomUser, 'reaction', userMessage?.content);
+
+            // Simulate typing delay for fallback response too
+            if (result && result.trim().length > 0) {
+              aiDebug.debug(`Simulating typing delay for fallback reaction: "${result}"`);
+              await simulateTypingDelay(result.length, { enabled: true, baseDelay: 30, maxDelay: 100 });
+            }
+          } else {
+            const config = createApiConfig(validatedModel, tokenLimit, getBaseSystemInstruction(currentUserNickname), finalTemperature);
+
+            const response = await withRateLimitAndRetries(() =>
+                ai.models.generateContent({
+                    model: validatedModel,
+                    contents: prompt,
+                      config,
+                  }), `reaction generation from ${randomUser.nickname}`
+            );
+
+            result = extractTextFromResponse(response);
+            aiDebug.log(`[LOOP DEBUG] Successfully generated reaction from AI: "${result}"`);
+            aiDebug.log(` Successfully generated reaction: "${result}"`);
           }
-        
-          const response = await withRateLimitAndRetries(() =>
-              ai.models.generateContent({
-                  model: validatedModel,
-                  contents: prompt,
-                    config: config,
-                }), `reaction generation from ${randomUser.nickname}`
-          );
-          
-          result = extractTextFromResponse(response);
-          aiDebug.log(` Successfully generated reaction: "${result}"`);
         } catch (apiError) {
+          aiDebug.warn(`[LOOP DEBUG] API call failed, using fallback response for reaction from ${randomUser.nickname}:`, apiError);
           aiDebug.warn(` API call failed, using fallback response for reaction from ${randomUser.nickname}:`, apiError);
+          recordApiFailure(apiError, 'reaction');
           result = getFallbackResponse(randomUser, 'reaction', userMessage.content);
+          aiDebug.log(`[LOOP DEBUG] Using fallback reaction: "${result}"`);
           aiDebug.log(` Using fallback reaction: "${result}"`);
-        } finally {
-          // Update the typing message with the actual response or remove it
-          if (typingMessageId && updateMessageInContext && activeContext) {
-            updateMessageInContext({
-              ...userMessage, // Preserve original message properties
-              id: typingMessageId,
-              nickname: randomUser.nickname,
-              content: result || '', // Use generated result or empty string
-              timestamp: new Date(),
-              type: 'ai',
-              isTyping: false
-            }, activeContext);
+
+          // Simulate typing delay for fallback response too
+          if (result && result.trim().length > 0) {
+            aiDebug.debug(`Simulating typing delay for fallback reaction (error): "${result}"`);
+            await simulateTypingDelay(result.length, { enabled: true, baseDelay: 30, maxDelay: 100 });
           }
+        } finally {
+          manageTypingIndicator(false, randomUser.nickname, addMessageToContext, updateMessageInContext, generateUniqueMessageId, activeContext, typingMessageId, result);
         }
         return result;
     } catch (error) {
@@ -1679,13 +1740,13 @@ interface ConversationContext {
 
 // Build contextual prompt based on conversation analysis
 const buildContextualPrompt = (
-    context: ConversationContext, 
-    aiUser: User, 
-    currentUserNickname: string, 
-    userMessage: Message, 
-    timeContext: string, 
-    primaryLanguage: string, 
-    userLanguages: string[], 
+    context: ConversationContext,
+    aiUser: User,
+    currentUserNickname: string,
+    userMessage: Message | null,
+    timeContext: string,
+    primaryLanguage: string,
+    userLanguages: string[],
     writingStyle: any
 ): string => {
     let contextualGuidance = '';
@@ -1693,7 +1754,7 @@ const buildContextualPrompt = (
     // Relationship-based guidance
     switch (context.relationshipLevel) {
         case 'new':
-            contextualGuidance += 'This is a new conversation. Be welcoming and introduce yourself naturally. Ask about their interests to get to know them better.';
+            contextualGuidance += `This is a new conversation - you're initiating contact. Start with something that reflects YOUR personality (${aiUser.personality}). Share a thought, observation, or question that shows who you are. Don't just say "hi" - be interesting and authentic to your character. Make them curious about you.`;
             break;
         case 'acquaintance':
             contextualGuidance += 'You have chatted a few times before. Be friendly and reference previous conversations if relevant. Show interest in their life.';
@@ -1885,35 +1946,6 @@ export const generatePrivateMessageResponse = async (
     aiDebug.log(` Conversation context analysis: ${JSON.stringify(conversationContext)}`);
     aiDebug.log(` Conversation summary: ${conversationSummary}`);
     
-    // Calculate appropriate token limit based on verbosity and emoji usage
-    const getTokenLimit = (verbosity: string, emojiUsage: string): number => {
-      let baseLimit: number;
-      switch (verbosity) {
-        case 'terse': baseLimit = 400; break;
-        case 'brief': baseLimit = 600; break;
-        case 'moderate': baseLimit = 800; break;
-        case 'detailed': baseLimit = 1200; break;
-        case 'verbose': baseLimit = 1600; break;
-        case 'extremely_verbose': baseLimit = 2400; break;
-        case 'novel_length': baseLimit = 4000; break;
-        default: baseLimit = 800;
-      }
-      
-      // Apply emoji usage multiplier
-      let emojiMultiplier: number;
-      switch (emojiUsage) {
-        case 'none': emojiMultiplier = 1.0; break;
-        case 'rare': emojiMultiplier = 1.1; break;
-        case 'occasional': emojiMultiplier = 1.2; break;
-        case 'moderate': emojiMultiplier = 1.5; break;
-        case 'frequent': emojiMultiplier = 2.0; break;
-        case 'excessive': emojiMultiplier = 2.5; break;
-        case 'emoji_only': emojiMultiplier = 3.0; break;
-        default: emojiMultiplier = 1.0;
-      }
-      
-      return Math.round(baseLimit * emojiMultiplier);
-    };
 
     const tokenLimit = getTokenLimit(writingStyle.verbosity, writingStyle.emojiUsage);
     aiDebug.log(` Token limit for private message from ${aiUser.nickname} (${writingStyle.verbosity}, ${writingStyle.emojiUsage}): ${tokenLimit}`);
@@ -1950,7 +1982,7 @@ You are in a private message conversation with '${currentUserNickname}'.
 The conversation history (last 20 messages) is:
 ${formatEnhancedMessageHistory(conversation.messages)}
 
-${userMessage ? `'${currentUserNickname}' just sent you this message: "${userMessage.content}"` : 'You are initiating this conversation, or continuing it after a pause. Be proactive and engaging.'}
+${userMessage ? `'${currentUserNickname}' just sent you this message: "${userMessage.content}"` : `You are INITIATING this private message conversation. Don't just say "hi" or "hey" - that's boring! Start with something interesting that reflects your ${aiUser.personality} personality. Share a thought, ask an intriguing question, make an observation, or bring up something you're passionate about. Be authentic to YOUR character and make them want to respond.`}
 
 IMPORTANT CONVERSATION GUIDELINES:
 - Be proactive: Ask questions, share personal anecdotes, and try to build a deeper connection. Don't just give passive responses.
@@ -1959,6 +1991,7 @@ IMPORTANT CONVERSATION GUIDELINES:
 - Don't repeat greetings if you've already exchanged them.
 - Build on what was previously discussed.
 - Match the conversation's energy and tone.
+- CRITICAL: Stay in character! Your personality is ${aiUser.personality} - let this guide everything you say.
 
 CRITICAL: Respond ONLY in ${primaryLanguage}. Do not use any other language.
 ${userLanguages.length > 1 ? `Available languages: ${userLanguages.join(', ')}. Use ${primaryLanguage} only.` : ''}
@@ -1982,49 +2015,42 @@ ${writingStyle.verbosity === 'extremely_verbose' || writingStyle.verbosity === '
 
     try {
         aiDebug.log(` Sending request to Gemini for private message response from ${aiUser.nickname}`);
-        
-        // If callbacks are provided, manage the typing indicator
-        let typingMessageId: number | undefined;
-        if (addMessageToContext && updateMessageInContext && generateUniqueMessageId && activeContext) {
-          typingMessageId = generateUniqueMessageId();
-          const typingMessage: Message = {
-            id: typingMessageId,
-            nickname: aiUser.nickname,
-            content: '', // Content will be updated later
-            timestamp: new Date(),
-            type: 'pm',
-            isTyping: true
-          };
-          addMessageToContext(typingMessage, activeContext);
-        }
+
+        // Always manage typing indicator, even in degraded mode
+        const typingMessageId = manageTypingIndicator(true, aiUser.nickname, addMessageToContext, updateMessageInContext, generateUniqueMessageId, activeContext);
 
         let result: string;
         try {
-          // Configure thinking mode based on model requirements
-          const config: any = {
-            systemInstruction: getBaseSystemInstruction(currentUserNickname),
-            temperature: 0.8 + (Math.random() * 0.2), // Increased temperature for more engaging PMs
-            maxOutputTokens: tokenLimit,
-          };
-          
-          // Some models require thinking mode with a budget
-          if (validatedModel.includes('2.5') || validatedModel.includes('pro')) {
-            config.thinkingConfig = { thinkingBudget: 2000 }; // Increased budget for thinking mode
-            config.maxOutputTokens = Math.max(tokenLimit, 2000); // Ensure minimum output tokens
-            aiDebug.log(` Using thinking mode with budget 2000 for private message model: ${validatedModel}`);
-            aiDebug.log(` Adjusted maxOutputTokens to: ${config.maxOutputTokens}`);
+          // Degraded mode: bypass API and use fallback immediately
+          if (isDegradedMode()) {
+            if (!userMessage) {
+              aiDebug.warn(`[LOOP DEBUG] Degraded mode active; skipping autonomous PM from ${aiUser.nickname}`);
+              result = '';
+            } else {
+              aiDebug.warn(`[LOOP DEBUG] Degraded mode active; using fallback PM for ${aiUser.nickname}`);
+              result = getFallbackResponse(aiUser, 'activity');
+
+              // Simulate typing delay for fallback response too
+              if (result && result.trim().length > 0) {
+                aiDebug.debug(`Simulating typing delay for fallback PM response: "${result}"`);
+                await simulateTypingDelay(result.length, { enabled: true, baseDelay: 30, maxDelay: 100 });
+              }
+            }
+          } else {
+            const temperature = 0.8 + (Math.random() * 0.2);
+            const config = createApiConfig(validatedModel, tokenLimit, getBaseSystemInstruction(currentUserNickname), temperature);
+
+            const response = await withRateLimitAndRetries(() =>
+                ai.models.generateContent({
+                    model: validatedModel,
+                    contents: prompt,
+                    config,
+                }), `private message response from ${conversation.user.nickname}`
+            );
+
+            result = extractTextFromResponse(response);
+            aiDebug.log(` Successfully generated private message response: "${result}"`);
           }
-          
-          const response = await withRateLimitAndRetries(() =>
-              ai.models.generateContent({
-                  model: validatedModel,
-                  contents: prompt,
-                  config: config,
-              }), `private message response from ${conversation.user.nickname}`
-          );
-          
-          result = extractTextFromResponse(response);
-          aiDebug.log(` Successfully generated private message response: "${result}"`);
         } catch (error) {
           aiDebug.error(` Error generating private message response from ${aiUser.nickname}:`, {
               error: error instanceof Error ? error.message : 'Unknown error',
@@ -2034,20 +2060,27 @@ ${writingStyle.verbosity === 'extremely_verbose' || writingStyle.verbosity === '
               messageContent: userMessage?.content,
               conversationLength: conversation.messages.length
           });
-          result = getFallbackResponse(aiUser, 'activity'); // Fallback for PMs
-          aiDebug.log(` Using fallback response for PM: "${result}"`);
-        } finally {
-          // Update the typing message with the actual response or remove it
-          if (typingMessageId && updateMessageInContext && activeContext) {
-            updateMessageInContext({
-              id: typingMessageId,
-              nickname: aiUser.nickname,
-              content: result || '', // Use generated result or empty string
-              timestamp: new Date(),
-              type: 'pm',
-              isTyping: false
-            }, activeContext);
+
+          recordApiFailure(error, 'private message');
+
+          // For autonomous PMs (no trigger message), don't use fallback - just skip this message
+          // This prevents spam of generic responses
+          if (!userMessage) {
+            aiDebug.log(` Skipping autonomous PM from ${aiUser.nickname} due to API error (no fallback for autonomous messages)`);
+            result = ''; // Return empty string to signal failure
+          } else {
+            // For user-triggered PMs, use fallback to maintain conversation flow
+            result = getFallbackResponse(aiUser, 'activity'); // Fallback for PMs
+            aiDebug.log(` Using fallback response for PM: "${result}"`);
+
+            // Simulate typing delay for fallback response too
+            if (result && result.trim().length > 0) {
+              aiDebug.debug(`Simulating typing delay for fallback PM response (error): "${result}"`);
+              await simulateTypingDelay(result.length, { enabled: true, baseDelay: 30, maxDelay: 100 });
+            }
           }
+        } finally {
+          manageTypingIndicator(false, aiUser.nickname, addMessageToContext, updateMessageInContext, generateUniqueMessageId, activeContext, typingMessageId, result);
         }
         return result;
     } catch (error) {
@@ -2190,63 +2223,48 @@ Make your decision and respond as ${operator.nickname}:
  
   try {
     aiDebug.log(`Sending request to Gemini for operator response from ${operator.nickname}`);
-    
-    // If callbacks are provided, manage the typing indicator
-    let typingMessageId: number | undefined;
-    if (addMessageToContext && updateMessageInContext && generateUniqueMessageId && activeContext) {
-      typingMessageId = generateUniqueMessageId();
-      const typingMessage: Message = {
-        id: typingMessageId,
-        nickname: operator.nickname,
-        content: '', // Content will be updated later
-        timestamp: new Date(),
-        type: 'ai', // Operator responses are also AI-generated
-        isTyping: true
-      };
-      addMessageToContext(typingMessage, activeContext);
-    }
+
+    const typingMessageId = manageTypingIndicator(true, operator.nickname, addMessageToContext, updateMessageInContext, generateUniqueMessageId, activeContext);
 
     let result: string;
     try {
-      const config: any = {
-        systemInstruction: getOperatorSystemInstruction(requestingUser, operator),
-        temperature: 0.8, // Higher temperature for more varied responses
-        maxOutputTokens: tokenLimit,
-      };
-      
-      // Some models require thinking mode with a budget
-      if (validatedModel.includes('2.5') || validatedModel.includes('pro')) {
-        config.thinkingConfig = { thinkingBudget: 1000 };
-        config.maxOutputTokens = Math.max(tokenLimit, 1000);
-        aiDebug.log(`Using thinking mode with budget 1000 for operator response model: ${validatedModel}`);
+      // Degraded mode: bypass API and use fallback immediately
+      if (isDegradedMode()) {
+        aiDebug.warn(`Degraded mode active; bypassing API for operator response from ${operator.nickname}`);
+        result = `${operator.nickname}: I'm unable to process that request right now. Please try again later.`;
+
+        // Simulate typing delay for fallback response too
+        if (result && result.trim().length > 0) {
+          aiDebug.debug(`Simulating typing delay for fallback operator response: "${result}"`);
+          await simulateTypingDelay(result.length, { enabled: true, baseDelay: 30, maxDelay: 100 });
+        }
+      } else {
+        const config = createApiConfig(validatedModel, tokenLimit, getOperatorSystemInstruction(requestingUser, operator), 0.8, 1000);
+
+        const response = await withRateLimitAndRetries(() =>
+          ai.models.generateContent({
+            model: validatedModel,
+            contents: prompt,
+            config,
+          }), `operator response from ${operator.nickname}`
+        );
+
+        result = extractTextFromResponse(response);
+        aiDebug.log(`Successfully generated operator response: "${result}"`);
       }
-      
-      const response = await withRateLimitAndRetries(() =>
-        ai.models.generateContent({
-          model: validatedModel,
-          contents: prompt,
-          config: config,
-        }), `operator response from ${operator.nickname}`
-      );
-      
-      result = extractTextFromResponse(response);
-      aiDebug.log(`Successfully generated operator response: "${result}"`);
     } catch (apiError) {
       aiDebug.warn(`API call failed, using fallback response for operator response from ${operator.nickname}:`, apiError);
+      recordApiFailure(apiError, 'operator response');
       result = `${operator.nickname}: I'm unable to process that request right now. Please try again later.`; // Fallback for operator
       aiDebug.log(`Using fallback operator response: "${result}"`);
-    } finally {
-      // Update the typing message with the actual response or remove it
-      if (typingMessageId && updateMessageInContext && activeContext) {
-        updateMessageInContext({
-          id: typingMessageId,
-          nickname: operator.nickname,
-          content: result || '', // Use generated result or empty string
-          timestamp: new Date(),
-          type: 'ai',
-          isTyping: false
-        }, activeContext);
+
+      // Simulate typing delay for fallback response too
+      if (result && result.trim().length > 0) {
+        aiDebug.debug(`Simulating typing delay for fallback operator response (error): "${result}"`);
+        await simulateTypingDelay(result.length, { enabled: true, baseDelay: 30, maxDelay: 100 });
       }
+    } finally {
+      manageTypingIndicator(false, operator.nickname, addMessageToContext, updateMessageInContext, generateUniqueMessageId, activeContext, typingMessageId, result);
     }
     return result;
   } catch (error) {
@@ -2274,7 +2292,7 @@ export const generateBatchUsers = async (count: number, model: string = 'gemini-
     ? `CRITICAL: Generate ALL personality descriptions in ${options.personalityLanguage} ONLY. Do not use English.
 
 PERSONALITY DIVERSITY REQUIREMENTS (${options.personalityLanguage}):
-- Create 500-character detailed personalities with rich cultural backgrounds
+- Create 1000-character detailed personalities with rich cultural backgrounds
 - Include specific interests, quirks, communication styles, and cultural traits
 - Vary personality types: introverts, extroverts, technical experts, artists, gamers, students, professionals
 - Add cultural references, regional characteristics, and authentic personality traits
@@ -2298,7 +2316,7 @@ Generate diverse, authentic personalities that feel natural in ${options.persona
 Generate ${count} unique IRC users with diverse personalities, language skills, and writing styles.
 Each user should have:
 - A unique nickname (lowercase, creative, tech-inspired)
-- A detailed personality description (aim for 400-500 characters with rich detail)
+- A detailed personality description (aim for 200-300 characters with rich detail)
 - Language skills with fluency level, languages spoken, and optional accent
 - Writing style preferences for formality, verbosity, humor, emoji usage, and punctuation
 
@@ -2327,7 +2345,7 @@ Provide the output in JSON format.
     
     // Configure thinking mode based on model requirements
     const config: any = {
-          systemInstruction: "You are a creative character generator for an IRC simulation. Generate diverse, detailed users with rich, complex personalities and authentic communication styles. Create detailed personality descriptions (400-500 characters) that include cultural backgrounds, specific interests, personality quirks, and unique characteristics. Generate a realistic mix of languages including English, Finnish, Spanish, French, German, Japanese, Chinese, and others. Include both monolingual and multilingual users with authentic cultural traits. Make each personality feel like a real person with depth and authenticity. Provide a valid JSON response.",
+          systemInstruction: "You are a creative character generator for an IRC simulation. Generate diverse, detailed users with rich, complex personalities and authentic communication styles. Create detailed personality descriptions (200-300 characters) that include cultural backgrounds, specific interests, personality quirks, and unique characteristics. Generate a realistic mix of languages including English, Finnish, Spanish, French, German, Japanese, Chinese, and others. Include both monolingual and multilingual users with authentic cultural traits. Make each personality feel like a real person with depth and authenticity. Provide a valid JSON response.",
           temperature: 1.0,
           maxOutputTokens: 4000,
           responseMimeType: "application/json",
@@ -2506,13 +2524,13 @@ Provide the output in JSON format.
                                                             type: Type.STRING,
                                                             description: "The language name (e.g., 'English', 'Finnish', 'Spanish')."
                                                         },
-                                            fluency: {
-                                                type: Type.STRING,
-                                                enum: ['beginner', 'intermediate', 'advanced', 'native'],
+                                                        fluency: {
+                                                            type: Type.STRING,
+                                                            enum: ['beginner', 'intermediate', 'advanced', 'native'],
                                                             description: "Fluency level in this specific language."
-                                            },
-                                            accent: {
-                                                type: Type.STRING,
+                                                        },
+                                                        accent: {
+                                                            type: Type.STRING,
                                                             description: "Optional accent or dialect for this language."
                                                         }
                                                     },
@@ -2819,29 +2837,133 @@ Provide the output in JSON format.
 };
 
 /**
+ * Validates if the API key is valid by making a test request
+ * @returns Promise<{valid: boolean, error?: string}>
+ */
+export const validateAPIKey = async (): Promise<{valid: boolean, error?: string}> => {
+    aiDebug.log("🔐 Validating API key...");
+
+    try {
+        if (aiServiceConfig.useVertexAI) {
+            aiDebug.log("✅ Using Vertex AI authentication (no API key validation needed)");
+            return { valid: true };
+        }
+
+        if (!API_KEY) {
+            aiDebug.error("❌ API key is not set");
+            return { valid: false, error: 'API key is not configured' };
+        }
+
+        // Make a simple request to validate the API key
+        const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models?key=' + API_KEY);
+
+        if (response.status === 400) {
+            aiDebug.error("❌ API key validation failed: Invalid API key (400 Bad Request)");
+            return {
+                valid: false,
+                error: 'Invalid API key. Please check your Gemini API key in settings.'
+            };
+        }
+
+        if (response.status === 401) {
+            aiDebug.error("❌ API key validation failed: Unauthorized (401)");
+            return {
+                valid: false,
+                error: 'API key is not authorized. Please verify your API key.'
+            };
+        }
+
+        if (response.status === 403) {
+            aiDebug.error("❌ API key validation failed: Forbidden (403)");
+            return {
+                valid: false,
+                error: 'API key does not have permission to access this resource.'
+            };
+        }
+
+        if (!response.ok) {
+            aiDebug.error(`❌ API key validation failed: ${response.status} ${response.statusText}`);
+            return {
+                valid: false,
+                error: `API validation failed: ${response.status} ${response.statusText}`
+            };
+        }
+
+        aiDebug.log("✅ API key is valid");
+        return { valid: true };
+    } catch (error) {
+        aiDebug.error("❌ Error validating API key:", error);
+        return {
+            valid: false,
+            error: `Validation error: ${error instanceof Error ? error.message : 'Unknown error'}`
+        };
+    }
+};
+
+/**
  * Lists all available Gemini models from the API.
  * @returns Promise<GeminiModel[]> Array of available models
  */
 export const listAvailableModels = async (): Promise<GeminiModel[]> => {
     aiDebug.log("🔍 Fetching available Gemini models...");
-    
+
     try {
+        // Note: When using Vertex AI, the API key is not used for authentication
+        // Vertex AI uses Application Default Credentials (ADC) or service account credentials
+        if (aiServiceConfig.useVertexAI) {
+            aiDebug.log("⚠️ Model listing via API is not available when using Vertex AI authentication");
+            aiDebug.log("   Returning default model list for Vertex AI");
+
+            // Return a default list of common Vertex AI models
+            return [
+                {
+                    name: 'models/gemini-1.5-flash',
+                    displayName: 'Gemini 1.5 Flash',
+                    description: 'Fast and versatile performance across a diverse variety of tasks',
+                    supportedGenerationMethods: ['generateContent']
+                },
+                {
+                    name: 'models/gemini-1.5-flash-001',
+                    displayName: 'Gemini 1.5 Flash 001',
+                    description: 'Fast and versatile performance across a diverse variety of tasks',
+                    supportedGenerationMethods: ['generateContent']
+                },
+                {
+                    name: 'models/gemini-1.5-pro',
+                    displayName: 'Gemini 1.5 Pro',
+                    description: 'Complex reasoning tasks requiring more intelligence',
+                    supportedGenerationMethods: ['generateContent']
+                },
+                {
+                    name: 'models/gemini-2.0-flash',
+                    displayName: 'Gemini 2.0 Flash',
+                    description: 'Latest generation fast model',
+                    supportedGenerationMethods: ['generateContent']
+                }
+            ] as GeminiModel[];
+        }
+
         const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models?key=' + API_KEY);
-        
+
+        if (response.status === 400) {
+            aiDebug.error("❌ Failed to fetch models: Invalid API key (400)");
+            throw new Error('Invalid API key. Please check your Gemini API key in settings.');
+        }
+
         if (!response.ok) {
             throw new Error(`Failed to fetch models: ${response.status} ${response.statusText}`);
         }
-        
+
         const data: ModelsListResponse = await response.json();
         aiDebug.log(`✅ Successfully fetched ${data.models.length} models`);
-        
+
         // Filter for models that support generateContent
-        const supportedModels = data.models.filter(model => 
+        const supportedModels = data.models.filter(model =>
             model.supportedGenerationMethods?.includes('generateContent')
         );
-        
+
         aiDebug.log(`📝 Found ${supportedModels.length} models supporting generateContent`);
-        
+
         return supportedModels;
     } catch (error) {
         aiDebug.error("❌ Error fetching available models:", error);
@@ -2856,17 +2978,28 @@ export const listAvailableModels = async (): Promise<GeminiModel[]> => {
  */
 export const getModelInfo = async (modelId: string): Promise<GeminiModel> => {
     aiDebug.log(`🔍 Fetching info for model: ${modelId}`);
-    
+
     try {
+        if (aiServiceConfig.useVertexAI) {
+            aiDebug.log("⚠️ Model info via API is not available when using Vertex AI authentication");
+            // Return basic model info for Vertex AI
+            return {
+                name: `models/${modelId}`,
+                displayName: modelId,
+                description: 'Vertex AI model',
+                supportedGenerationMethods: ['generateContent']
+            } as GeminiModel;
+        }
+
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelId}?key=` + API_KEY);
-        
+
         if (!response.ok) {
             throw new Error(`Failed to fetch model info: ${response.status} ${response.statusText}`);
         }
-        
+
         const model: GeminiModel = await response.json();
         aiDebug.log(`✅ Successfully fetched info for model: ${model.displayName}`);
-        
+
         return model;
     } catch (error) {
         aiDebug.error(`❌ Error fetching model info for ${modelId}:`, error);
@@ -2955,7 +3088,7 @@ export const generatePersonalityFromTraits = async (
   aiDebug.log(`generatePersonalityFromTraits called for language: ${language}`);
   const validatedModel = validateModelId(model);
 
-  const prompt = `Generate a detailed, 500-character personality description in ${language} based on these traits: ${traits.join(', ')}.
+  const prompt = `Generate a detailed, 200-300-character personality description in ${language} based on these traits: ${traits.join(', ')}.
   The description should be rich, nuanced, and feel like a real person.
   Include cultural context, hobbies, quirks, and communication style.
   CRITICAL: Respond ONLY in ${language}.`;

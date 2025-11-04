@@ -34,7 +34,7 @@ const defaultCategories = {
     'station-v:audio': true,
 };
 let config = {
-    enabled: process.env.DEBUG?.includes('station-v') || false,
+    enabled: (typeof process !== 'undefined' && process.env?.DEBUG?.includes('station-v')) || false,
     logLevel: 'debug',
     categories: defaultCategories,
 };
@@ -54,7 +54,7 @@ const logLevels = {
 function isNamespaceEnabled(namespace) {
     if (!config.enabled)
         return false;
-    const envDebug = process.env.DEBUG || '';
+    const envDebug = (typeof process !== 'undefined' && process.env?.DEBUG) || '';
     if (envDebug === '*')
         return true;
     const enabledNamespaces = envDebug.split(',');

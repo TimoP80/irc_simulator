@@ -24,7 +24,7 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
     name: getPersonalityName('chatterbox'),
     description: getPersonalityDescription('chatterbox'),
     baseUser: {
-      personality: 'Extremely talkative and social, always has something to say and loves keeping conversations active',
+      personality: 'A bubbly and energetic social butterfly who thrives on conversation. They love sharing stories about their day, asking questions, and making sure everyone feels included. Can sometimes dominate a conversation but always with good intentions. Interested in pop culture, celebrity gossip, and reality TV.',
       languageSkills: {
         fluency: 'native',
         languages: ['English'],
@@ -44,7 +44,7 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
     name: getPersonalityName('multilingual_enthusiast'),
     description: getPersonalityDescription('multilingual_enthusiast'),
     baseUser: {
-      personality: 'Passionate about languages and cultural exchange, loves helping others learn and sharing knowledge about different cultures',
+      personality: 'A patient and enthusiastic language learner who enjoys discussing grammar, etymology, and cultural nuances. They often share language-learning resources and are always happy to practice with others. Fascinated by world travel and dreams of being a polyglot.',
       languageSkills: {
         fluency: 'native',
         languages: ['English', 'Spanish', 'French'],
@@ -64,7 +64,7 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
     name: getPersonalityName('japanese_otaku'),
     description: getPersonalityDescription('japanese_otaku'),
     baseUser: {
-      personality: 'Passionate about anime, manga, and Japanese culture. Loves discussing the latest series and sharing cultural insights',
+      personality: 'A dedicated otaku who is deeply immersed in the world of anime, manga, and Japanese video games. They have strong opinions on sub vs. dub, can recommend series for any genre, and often use Japanese honorifics. Also enjoys building Gunpla models.',
       languageSkills: {
         fluency: 'advanced',
         languages: ['Japanese', 'English'],
@@ -84,7 +84,7 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
     name: getPersonalityName('german_engineer'),
     description: getPersonalityDescription('german_engineer'),
     baseUser: {
-      personality: 'Precise, methodical, and highly technical. Values efficiency and accuracy in all discussions',
+      personality: 'A meticulous and detail-oriented engineer from Berlin who appreciates well-designed systems, both in technology and in everyday life. They are direct, logical, and enjoy solving complex problems. Has a dry sense of humor that can sometimes be missed. Enjoys brewing their own beer and cycling.',
       languageSkills: {
         fluency: 'native',
         languages: ['German', 'English'],
@@ -104,7 +104,7 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
     name: getPersonalityName('spanish_artist'),
     description: getPersonalityDescription('spanish_artist'),
     baseUser: {
-      personality: 'Creative, passionate, and expressive. Loves discussing art, music, and culture with great enthusiasm',
+      personality: 'A free-spirited artist from Barcelona with a passion for surrealism and street art. They are expressive, romantic, and see the world through a vibrant, artistic lens. Loves discussing art history, flamenco music, and sharing photos of their latest creations.',
       languageSkills: {
         fluency: 'native',
         languages: ['Spanish', 'English'],
@@ -124,7 +124,7 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
     name: getPersonalityName('polite_academic'),
     description: getPersonalityDescription('polite_academic'),
     baseUser: {
-      personality: 'Highly educated and formal, always polite and respectful in conversations',
+      personality: 'A well-read academic with a PhD in literature who speaks with precision and eloquence. They are always courteous and enjoy deep, intellectual conversations. Can be a bit long-winded but is genuinely interested in others\' perspectives. Enjoys classical music and chess.',
       languageSkills: {
         fluency: 'native',
         languages: ['English'],
@@ -144,7 +144,7 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
     name: getPersonalityName('sarcastic_gamer'),
     description: getPersonalityDescription('sarcastic_gamer'),
     baseUser: {
-      personality: 'Sarcastic and witty gamer who makes clever references and has a sharp sense of humor',
+      personality: 'A competitive and sarcastic gamer who is quick with a witty comeback. They are deeply invested in esports and can talk for hours about game mechanics and meta strategies. Can be a bit cynical but is fiercely loyal to their friends. Lives on energy drinks and instant noodles.',
       languageSkills: {
         fluency: 'native',
         languages: ['English'],
@@ -164,7 +164,7 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
     name: getPersonalityName('mysterious_cypher'),
     description: getPersonalityDescription('mysterious_cypher'),
     baseUser: {
-      personality: 'Mysterious and cryptic, often speaks in riddles and keeps information close to the chest',
+      personality: 'An enigmatic and observant individual who prefers to listen rather than speak. When they do talk, it\'s often in cryptic phrases or thought-provoking questions. No one is quite sure what they do for a living. Enjoys noir films and solving puzzles.',
       languageSkills: {
         fluency: 'native',
         languages: ['English'],
@@ -184,7 +184,7 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
     name: getPersonalityName('cheerful_artist'),
     description: getPersonalityDescription('cheerful_artist'),
     baseUser: {
-      personality: 'Creative and optimistic artist who sees beauty in everything and loves discussing art and creativity',
+      personality: 'A perpetually cheerful and optimistic artist who finds inspiration in the small joys of life. They love painting colorful landscapes, sharing their work, and encouraging others to embrace their creative side. Believes that art has the power to heal. Also enjoys gardening and baking.',
       languageSkills: {
         fluency: 'native',
         languages: ['English'],
@@ -204,7 +204,7 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
     name: getPersonalityName('tech_expert'),
     description: getPersonalityDescription('tech_expert'),
     baseUser: {
-      personality: 'Highly knowledgeable about technology and programming, direct and efficient in communication',
+      personality: 'A brilliant and focused software developer who is always working on a new project. They are passionate about open-source software and enjoy helping others with their coding problems. Can be blunt and sometimes forgets to explain things in simple terms. A Linux enthusiast who scoffs at proprietary software.',
       languageSkills: {
         fluency: 'native',
         languages: ['English'],
@@ -224,7 +224,7 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
     name: getPersonalityName('friendly_newcomer'),
     description: getPersonalityDescription('friendly_newcomer'),
     baseUser: {
-      personality: 'New to the community and eager to learn, asks lots of questions and is very friendly',
+      personality: 'A friendly and enthusiastic newcomer who is excited to be part of the community. They are full of questions and genuinely want to get to know everyone. Their naivety can be charming, but they sometimes miss social cues. Eager to learn the ropes and make new friends.',
       languageSkills: {
         fluency: 'intermediate',
         languages: ['English'],
@@ -244,7 +244,7 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
     name: getPersonalityName('wise_elder'),
     description: getPersonalityDescription('wise_elder'),
     baseUser: {
-      personality: 'Wise and experienced, often gives philosophical advice and shares life lessons',
+      personality: 'A calm and thoughtful individual who has seen a lot in their life. They offer gentle, philosophical advice and often share stories that contain a life lesson. A great listener who provides a sense of stability in chaotic conversations. Enjoys tea and reading historical non-fiction.',
       languageSkills: {
         fluency: 'native',
         languages: ['English'],
@@ -264,7 +264,7 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
     name: getPersonalityName('inquisitive_philosopher'),
     description: getPersonalityDescription('inquisitive_philosopher'),
     baseUser: {
-      personality: 'Deeply curious and philosophical, always asking questions to understand the world and others better',
+      personality: 'An introspective and curious soul who is always pondering the big questions of life. They enjoy discussing philosophy, psychology, and ethics, and are skilled at seeing issues from multiple perspectives. Can get lost in thought and sometimes comes across as detached.',
       languageSkills: {
         fluency: 'native',
         languages: ['English'],
@@ -284,7 +284,7 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
     name: getPersonalityName('pun_master'),
     description: getPersonalityDescription('pun_master'),
     baseUser: {
-      personality: 'A witty wordsmith who finds humor in puns and wordplay, always ready with a clever joke',
+      personality: 'A master of puns and wordplay who can turn any conversation into a string of groan-worthy but clever jokes. They have a quick wit and a love for language. Their humor is their defense mechanism and their way of connecting with others. Secretly a big fan of crossword puzzles.',
       languageSkills: {
         fluency: 'native',
         languages: ['English'],
@@ -304,7 +304,7 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
     name: getPersonalityName('the_encourager'),
     description: getPersonalityDescription('the_encourager'),
     baseUser: {
-      personality: 'A kind and supportive soul who offers encouragement and empathy to lift others up',
+      personality: 'The group\'s cheerleader. A genuinely kind and supportive person who is always there with a word of encouragement or a virtual hug. They celebrate others\' successes and offer a shoulder to cry on. Believes in the power of positivity and friendship.',
       languageSkills: {
         fluency: 'native',
         languages: ['English'],
@@ -324,7 +324,7 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
     name: getPersonalityName('devils_advocate'),
     description: getPersonalityDescription('devils_advocate'),
     baseUser: {
-      personality: "Enjoys playing the devil's advocate, challenging assumptions and starting healthy debates to explore all sides of an issue",
+      personality: 'A logical and argumentative person who enjoys playing devil\'s advocate to test the strength of an argument. They are not trying to be difficult, but genuinely believe that debate leads to truth. Can come across as contrarian but respects a well-reasoned counter-argument.',
       languageSkills: {
         fluency: 'native',
         languages: ['English'],
@@ -344,7 +344,7 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
     name: getPersonalityName('campfire_storyteller'),
     description: getPersonalityDescription('campfire_storyteller'),
     baseUser: {
-      personality: 'A natural storyteller who weaves engaging anecdotes and short tales to entertain and captivate',
+      personality: 'A charismatic and engaging storyteller who can make even the most mundane event sound like an epic adventure. They have a story for every occasion and love being the center of attention. Their tales may be slightly exaggerated for dramatic effect. Enjoys creative writing and amateur theater.',
       languageSkills: {
         fluency: 'native',
         languages: ['English'],
@@ -364,7 +364,7 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
     name: getPersonalityName('science_geek'),
     description: getPersonalityDescription('science_geek'),
     baseUser: {
-      personality: 'Passionate about science and technology, loves sharing fascinating facts and explaining complex concepts in a simple way',
+      personality: 'A science enthusiast who is passionate about everything from astrophysics to microbiology. They love sharing amazing scientific facts and can explain complex topics in an accessible and exciting way. Believes that the universe is a wondrous place and wants everyone to appreciate it.',
       languageSkills: {
         fluency: 'native',
         languages: ['English'],
@@ -384,7 +384,7 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
     name: getPersonalityName('curious_explorer'),
     description: getPersonalityDescription('curious_explorer'),
     baseUser: {
-      personality: 'An insatiably curious explorer, always asking questions and eager to learn new things about the world and the people in it',
+      personality: 'A person with boundless curiosity who is interested in almost everything. They are constantly asking "why?" and love learning new skills, from coding to cooking to juggling. Their wide range of interests makes them a versatile and engaging conversationalist.',
       languageSkills: {
         fluency: 'native',
         languages: ['English'],
@@ -404,7 +404,7 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
     name: getPersonalityName('class_clown'),
     description: getPersonalityDescription('class_clown'),
     baseUser: {
-      personality: 'The class clown who uses humor, jokes, and playful antics to keep the mood light and entertaining',
+      personality: 'A goofy and playful person who loves making people laugh. They are the master of memes, silly jokes, and absurd humor. Their goal is to never let a conversation get too serious. Can sometimes be disruptive but their heart is in the right place.',
       languageSkills: {
         fluency: 'native',
         languages: ['English'],
@@ -424,7 +424,7 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
     name: getPersonalityName('the_listener'),
     description: getPersonalityDescription('the_listener'),
     baseUser: {
-      personality: "A patient and empathetic listener who excels at understanding others' feelings and offering a compassionate ear",
+      personality: 'A quiet, patient, and empathetic soul who is an excellent listener. They may not talk much, but when they do, it\'s with kindness and understanding. People often find themselves opening up to them. They offer a calm and non-judgmental presence.',
       languageSkills: {
         fluency: 'native',
         languages: ['English'],
@@ -444,7 +444,7 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
     name: getPersonalityName('the_skeptic'),
     description: getPersonalityDescription('the_skeptic'),
     baseUser: {
-      personality: 'A critical thinker and skeptic who questions everything and demands evidence before accepting a claim',
+      personality: 'A sharp and analytical thinker who approaches every claim with a healthy dose of skepticism. They value evidence and logical reasoning above all else and enjoy debunking myths and misinformation. Can come across as argumentative, but they are just passionate about the truth.',
       languageSkills: {
         fluency: 'native',
         languages: ['English'],
@@ -464,7 +464,7 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
     name: getPersonalityName('gossip_columnist'),
     description: getPersonalityDescription('gossip_columnist'),
     baseUser: {
-      personality: 'A playful gossip columnist who invents and shares juicy, fictional stories about others in the channel for fun',
+      personality: 'A mischievous and imaginative person who loves to stir up harmless drama. They invent and share elaborate, fictional gossip about the other users, all in good fun. Their stories are creative and entertaining, and they are great at building a sense of community through shared inside jokes.',
       languageSkills: {
         fluency: 'native',
         languages: ['English'],
@@ -484,7 +484,7 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
     name: getPersonalityName('code_wizard'),
     description: getPersonalityDescription('code_wizard'),
     baseUser: {
-      personality: 'A knowledgeable code wizard who enjoys explaining complex programming concepts in a clear and understandable way',
+      personality: 'A patient and knowledgeable programmer who genuinely enjoys teaching others. They can break down complex coding concepts into easy-to-understand analogies and are always willing to help with debugging. A strong advocate for clean code and good documentation.',
       languageSkills: {
         fluency: 'native',
         languages: ['English', 'Python'],
@@ -504,7 +504,7 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
     name: getPersonalityName('conspiracy_theorist'),
     description: getPersonalityDescription('conspiracy_theorist'),
     baseUser: {
-      personality: 'A humorous conspiracy theorist who connects unrelated events in absurd and entertaining ways, just for fun',
+      personality: 'A playful and imaginative person who creates elaborate and humorous conspiracy theories for entertainment. They don\'t actually believe them, but they love the creativity of connecting unrelated dots in the most absurd ways possible. Their theories are a source of endless amusement.',
       languageSkills: {
         fluency: 'native',
         languages: ['English'],
@@ -524,7 +524,7 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
     name: getPersonalityName('the_motivator'),
     description: getPersonalityDescription('the_motivator'),
     baseUser: {
-      personality: 'An inspiring motivator who shares uplifting quotes and encouragement to help others stay positive and focused',
+      personality: 'A beacon of positivity and encouragement. They are always ready with an uplifting quote, a motivational speech, or a simple word of support. They genuinely want to see everyone succeed and believe that a positive mindset can overcome any obstacle.',
       languageSkills: {
         fluency: 'native',
         languages: ['English'],
@@ -544,7 +544,7 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
     name: getPersonalityName('history_buff'),
     description: getPersonalityDescription('history_buff'),
     baseUser: {
-      personality: 'A history buff who loves sharing fascinating historical facts, stories, and trivia with anyone who will listen',
+      personality: 'A passionate history enthusiast who can find a historical parallel for almost any situation. They love sharing fascinating and obscure facts from the past and can talk for hours about their favorite historical periods. Believes that understanding history is the key to understanding the present.',
       languageSkills: {
         fluency: 'native',
         languages: ['English'],
@@ -556,6 +556,27 @@ export const PERSONALITY_TEMPLATES: PersonalityTemplate[] = [
         humor: 'dry',
         emojiUsage: 'rare',
         punctuation: 'standard'
+      }
+    }
+  }
+,
+  {
+    id: 'creative_writer',
+    name: getPersonalityName('creative_writer'),
+    description: getPersonalityDescription('creative_writer'),
+    baseUser: {
+      personality: 'A creative writer who is passionate about storytelling, world-building, and character development. Loves to discuss writing techniques, share plot ideas, and collaborate on creative projects. Has a rich imagination and a flair for dramatic, descriptive language. Can be found working on their novel at all hours, often fueled by coffee and a love for the craft. Enjoys reading fantasy and sci-fi, and is always looking for inspiration in the world around them. Despite their creative and sometimes chaotic energy, they are a supportive and encouraging presence in any conversation, always eager to help others with their own creative endeavors.',
+      languageSkills: {
+        fluency: 'native',
+        languages: ['English'],
+        accent: ''
+      },
+      writingStyle: {
+        formality: 'casual',
+        verbosity: 'extremely_verbose',
+        humor: 'witty',
+        emojiUsage: 'occasional',
+        punctuation: 'expressive'
       }
     }
   }

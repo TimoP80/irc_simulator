@@ -13,6 +13,7 @@ import { generateChannelActivity, generateReactionToMessage, generatePrivateMess
 import { handleBotCommand, isBotCommand } from './services/botService';
 import { updateChannelRelationshipMemory, initializeRelationshipMemory } from './services/relationshipMemoryService';
 import { loadConfig, saveConfig, initializeStateFromConfig, saveChannelLogs, loadChannelLogs, clearChannelLogs, simulateTypingDelay, initializeConfigWithFallback } from './utils/config';
+import { initializeConfigSync, onConfigUpdated, cleanupConfigSync } from './services/configSyncService';
 import { 
   aiDebug, simulationDebug, networkDebug, settingsDebug, pmDebug, rateLimiterDebug, 
   urlFilterDebug, userListDebug, joinDebug, configDebug, chatLogDebug, 
@@ -29,11 +30,15 @@ import { DebugLogWindow } from './components/DebugLogWindow';
 import { AudioAnalysis } from './components/AudioAnalysis';
 import { VisionAnalysis } from './components/VisionAnalysis';
 import { DocumentationModal } from './components/DocumentationModal';
+import { UserInfoModal } from './components/UserInfoModal';
+import { applyCustomTheme, removeCustomTheme } from './utils/themeUtils';
+
+import { processContentInWorker } from './services/contentWorkerClient';
 
 // Electron detection utility
 const isElectron = (): boolean => {
-  return typeof window !== 'undefined' && 
-         window.process && 
+  return typeof window !== 'undefined' &&
+         window.process &&
          window.process.type === 'renderer' ||
          (typeof process !== 'undefined' && process.env.ELECTRON === 'true');
 };
@@ -191,7 +196,9 @@ const App: React.FC = () => {
   useEffect(() => {
     const checkBuildHash = async () => {
       try {
-        const response = await fetch('/build-hash.json');
+        // In Electron, use relative path
+        const hashPath = isElectronApp ? './build-hash.json' : '/build-hash.json';
+        const response = await fetch(hashPath);
         const { hash: buildHash } = await response.json();
 
         // Since we can't access the filesystem in the browser,
@@ -203,7 +210,10 @@ const App: React.FC = () => {
 
       } catch (error) {
         console.error('Could not verify build hash:', error);
-        setShowVerificationWarning(true);
+        // Don't show warning in Electron builds - hash verification doesn't work the same way
+        if (!isElectronApp) {
+          setShowVerificationWarning(true);
+        }
       }
     };
 
@@ -215,6 +225,7 @@ const App: React.FC = () => {
 
   const {
     currentUserNickname,
+    currentUserProfilePicture,
     virtualUsers,
     channels,
     privateMessages,
@@ -789,17 +800,23 @@ const App: React.FC = () => {
         // Try to initialize config with fallback support
         const config = await initializeConfigWithFallback('./default-config.json');
         setProgress(40);
-        
+
         // Update state with the initialized config
-        const { nickname, virtualUsers: configUsers, channels: configChannels, simulationSpeed, aiModel, typingDelay, typingIndicator, ircExport, imageGeneration } = initializeStateFromConfig(config);
+        const { nickname, virtualUsers: configUsers, channels: configChannels, simulationSpeed, aiModel, typingDelay, typingIndicator, ircExport, imageGeneration, profilePicture } = initializeStateFromConfig(config);
         setProgress(70);
-        
+
         dispatch({ type: 'SET_CURRENT_USER_NICKNAME', payload: nickname });
+        dispatch({ type: 'SET_CURRENT_USER_PROFILE_PICTURE', payload: profilePicture });
         dispatch({ type: 'SET_VIRTUAL_USERS', payload: configUsers });
         dispatch({ type: 'SET_CHANNELS', payload: configChannels });
         dispatch({ type: 'SET_SIMULATION_SPEED', payload: simulationSpeed });
         dispatch({ type: 'SET_AI_MODEL', payload: aiModel || DEFAULT_AI_MODEL });
-        
+
+        // Load and apply theme from config
+        if (config.theme) {
+          dispatch({ type: 'SET_THEME', payload: config.theme });
+        }
+
         if (typingDelay) {
           setTypingDelayConfig(typingDelay);
         }
@@ -812,7 +829,7 @@ const App: React.FC = () => {
         if (imageGeneration) {
           setImageGenerationConfig(imageGeneration);
         }
-        
+
         setProgress(100);
         setTimeout(() => {
           setIsConfigInitialized(true);
@@ -830,6 +847,53 @@ const App: React.FC = () => {
 
     initializeApp();
   }, []); // Run only once on mount
+
+  // Initialize config sync service and listen for updates
+  useEffect(() => {
+    appDebug.log('Initializing configuration sync service...');
+
+    // Initialize the sync service
+    initializeConfigSync();
+
+    // Listen for config updates from other tabs or Electron
+    const unsubscribe = onConfigUpdated((updatedConfig: AppConfig) => {
+      appDebug.log('Received config update from sync service:', updatedConfig);
+
+      // Update state with the new config
+      const { nickname, virtualUsers: configUsers, channels: configChannels, simulationSpeed, aiModel, typingDelay, typingIndicator, ircExport, imageGeneration, profilePicture } = initializeStateFromConfig(updatedConfig);
+
+      dispatch({ type: 'SET_CURRENT_USER_NICKNAME', payload: nickname });
+      dispatch({ type: 'SET_CURRENT_USER_PROFILE_PICTURE', payload: profilePicture });
+      dispatch({ type: 'SET_VIRTUAL_USERS', payload: configUsers });
+      dispatch({ type: 'SET_CHANNELS', payload: configChannels });
+      dispatch({ type: 'SET_SIMULATION_SPEED', payload: simulationSpeed });
+      dispatch({ type: 'SET_AI_MODEL', payload: aiModel || DEFAULT_AI_MODEL });
+
+      if (updatedConfig.theme) {
+        dispatch({ type: 'SET_THEME', payload: updatedConfig.theme });
+      }
+
+      if (typingDelay) {
+        setTypingDelayConfig(typingDelay);
+      }
+      if (typingIndicator) {
+        setTypingIndicatorConfig(typingIndicator);
+      }
+      if (ircExport) {
+        setIrcExportConfig(ircExport);
+      }
+      if (imageGeneration) {
+        setImageGenerationConfig(imageGeneration);
+      }
+    });
+
+    // Cleanup on unmount
+    return () => {
+      appDebug.log('Cleaning up configuration sync service...');
+      unsubscribe();
+      cleanupConfigSync();
+    };
+  }, [dispatch]);
 
   // Electron detection and setup
   useEffect(() => {
@@ -863,11 +927,28 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    const applyTheme = async () => {
+      if (theme === 'dark') {
+        document.documentElement.classList.add('dark');
+        removeCustomTheme();
+      } else if (theme === 'light') {
+        document.documentElement.classList.remove('dark');
+        removeCustomTheme();
+      } else if (theme === 'custom') {
+        // Load custom theme from config
+        const config = await loadConfig();
+        if (config?.customTheme) {
+          applyCustomTheme(config.customTheme);
+          // Remove dark class when using custom theme
+          document.documentElement.classList.remove('dark');
+        } else {
+          // Fallback to dark if no custom theme is defined
+          document.documentElement.classList.add('dark');
+          removeCustomTheme();
+        }
+      }
+    };
+    applyTheme();
   }, [theme]);
 
   // Ensure channels have users after initialization
@@ -931,19 +1012,27 @@ const App: React.FC = () => {
     handleSaveSettings(fullConfig);
   };
 
-  const handleSaveSettings = (config: AppConfig) => {
+  const handleSaveSettings = async (config: AppConfig) => {
     settingsDebug.log('handleSaveSettings called with config:', config);
     settingsDebug.log('Config keys:', Object.keys(config));
     settingsDebug.log('Config aiModel:', config.aiModel);
     settingsDebug.log('Config simulationSpeed:', config.simulationSpeed);
-    
-    saveConfig({ ...config, theme });
+
+    // Ensure theme and customTheme are preserved in the saved config
+    const configToSave = {
+      ...config,
+      theme: config.theme || theme,
+      customTheme: config.customTheme
+    };
+
+    await saveConfig(configToSave);
     settingsDebug.log('saveConfig called successfully');
     
     // Initialize state from the new config
-    const { nickname, virtualUsers, channels: newChannels, simulationSpeed, aiModel: savedAiModel, typingDelay, typingIndicator, ircExport, imageGeneration } = initializeStateFromConfig(config);
+    const { nickname, virtualUsers, channels: newChannels, simulationSpeed, aiModel: savedAiModel, typingDelay, typingIndicator, ircExport, imageGeneration, profilePicture } = initializeStateFromConfig(config);
     settingsDebug.log('Saving settings with aiModel:', savedAiModel);
     dispatch({ type: 'SET_CURRENT_USER_NICKNAME', payload: nickname });
+    dispatch({ type: 'SET_CURRENT_USER_PROFILE_PICTURE', payload: profilePicture });
     dispatch({ type: 'SET_VIRTUAL_USERS', payload: virtualUsers });
     
     // Use the new channels from config, but preserve operator assignments where possible
@@ -1592,75 +1681,107 @@ const App: React.FC = () => {
   }, []);
 
   // Global rate limiter to prevent API overload
-  const [concurrentRequests, setConcurrentRequests] = useState(0);
-  const [lastRequestTime, setLastRequestTime] = useState(0);
-  const MAX_CONCURRENT_REQUESTS = 2; // Limit to 2 concurrent AI requests
-  const MIN_REQUEST_INTERVAL = 1500; // Minimum 1.5 seconds between requests
+  // Tier 1 Gemini API limits: 150 RPM (requests per minute)
+  // Aggressive settings: Take advantage of higher quota
+  const concurrentRequestsRef = useRef(0);
+  const lastRequestTimeRef = useRef(0);
+  const requestTimestampsRef = useRef<number[]>([]);
+  const MAX_CONCURRENT_REQUESTS = 5; // Allow 5 concurrent AI requests (increased from 2)
+  const MIN_REQUEST_INTERVAL = 500; // Minimum 500ms between requests (reduced from 3000ms)
+  const MAX_REQUESTS_PER_MINUTE = 120; // Use 120 RPM to stay safely under 150 RPM limit
 
   // Debug logging control
   const [debugConfig, setDebugConfig] = useState(getDebugConfig());
-  
+
   // Update debug config when it changes
   useEffect(() => {
     const handleDebugConfigChange = () => {
       setDebugConfig(getDebugConfig());
     };
-    
+
     // Listen for debug config changes
     window.addEventListener('debugConfigChanged', handleDebugConfigChange);
-    
+
     return () => {
       window.removeEventListener('debugConfigChanged', handleDebugConfigChange);
     };
   }, []);
-  
+
   const withConcurrencyLimit = useCallback(async (fn: () => Promise<any>, context: string): Promise<any> => {
-    // Wait if we're at the limit
-    while (concurrentRequests >= MAX_CONCURRENT_REQUESTS) {
-      await new Promise(resolve => setTimeout(resolve, 200));
+    // Enforce max concurrency with a short sleep loop
+    while (concurrentRequestsRef.current >= MAX_CONCURRENT_REQUESTS) {
+      await new Promise(resolve => setTimeout(resolve, 150 + Math.random() * 100));
     }
-    
-    // Add delay between requests to prevent overload
+
     const now = Date.now();
-    const timeSinceLastRequest = now - lastRequestTime;
+    const oneMinuteAgo = now - 60000;
+
+    // Clean old timestamps and compute current RPM window
+    requestTimestampsRef.current = requestTimestampsRef.current.filter(ts => ts > oneMinuteAgo);
+    let recentCount = requestTimestampsRef.current.length;
+
+    // Enforce requests-per-minute limit
+    if (recentCount >= MAX_REQUESTS_PER_MINUTE) {
+      const oldestRequest = requestTimestampsRef.current[0];
+      const waitTime = 60000 - (now - oldestRequest) + 1000; // add 1s buffer
+      rateLimiterDebug.log(`⚠️ Rate limit: ${recentCount}/${MAX_REQUESTS_PER_MINUTE} RPM. Waiting ${Math.round(waitTime/1000)}s for ${context}`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+      // Recalculate after waiting
+      const nowAfterWait = Date.now();
+      const oneMinuteAgoAfterWait = nowAfterWait - 60000;
+      requestTimestampsRef.current = requestTimestampsRef.current.filter(ts => ts > oneMinuteAgoAfterWait);
+      recentCount = requestTimestampsRef.current.length;
+    }
+
+    // Enforce minimum spacing between requests
+    const timeSinceLastRequest = now - lastRequestTimeRef.current;
     if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
       const delay = MIN_REQUEST_INTERVAL - timeSinceLastRequest;
       rateLimiterDebug.log(`Waiting ${delay}ms before ${context} to prevent overload`);
       await new Promise(resolve => setTimeout(resolve, delay));
     }
-    
-    setConcurrentRequests(prev => prev + 1);
-    setLastRequestTime(Date.now());
-    rateLimiterDebug.log(`Starting ${context} (${concurrentRequests + 1}/${MAX_CONCURRENT_REQUESTS} concurrent)`);
-    
+
+    // Record the request start
+    concurrentRequestsRef.current += 1;
+    const requestTime = Date.now();
+    lastRequestTimeRef.current = requestTime;
+    requestTimestampsRef.current.push(requestTime);
+    rateLimiterDebug.log(`Starting ${context} (${concurrentRequestsRef.current}/${MAX_CONCURRENT_REQUESTS} concurrent, ${requestTimestampsRef.current.length}/${MAX_REQUESTS_PER_MINUTE} RPM)`);
+
     try {
       const result = await fn();
       return result;
     } finally {
-      setConcurrentRequests(prev => prev - 1);
-      rateLimiterDebug.log(`Completed ${context} (${concurrentRequests - 1}/${MAX_CONCURRENT_REQUESTS} concurrent)`);
+      concurrentRequestsRef.current = Math.max(0, concurrentRequestsRef.current - 1);
+      rateLimiterDebug.log(`Completed ${context} (${concurrentRequestsRef.current}/${MAX_CONCURRENT_REQUESTS} concurrent)`);
     }
-  }, [concurrentRequests, lastRequestTime]);
+  }, []);
 
   const addMessageToContext = useCallback((message: Message, context: ActiveContext | null) => {
     if (!context) return;
     
-    // Extract links and images from the message content
-    const { links, images } = extractLinksAndImages(message.content);
-    
-    // Only remove URLs from content if we actually extracted URLs from the content
-    // Don't remove URLs if the message already has images/links arrays (like bot responses)
-    const allExtractedUrls = [...links, ...images];
-    const shouldCleanContent = allExtractedUrls.length > 0 && !message.images && !message.links;
-    const cleanedContent = shouldCleanContent ? removeUrlsFromContent(message.content, allExtractedUrls) : message.content;
-    
-    const processedMessage = {
-      ...message,
-      content: cleanedContent, // Use cleaned content only if we extracted URLs from content
-      links: links.length > 0 ? links : undefined,
-      // Preserve existing images array if it exists, otherwise use extracted images
-      images: message.images || (images.length > 0 ? images : undefined)
-    };
+    // Offload heavy parsing to a Web Worker; dispatch immediately for UI responsiveness
+    const processedMessage = { ...message };
+
+    // Schedule asynchronous enrichment (links/images only; keep original content)
+    try {
+      const capturedContext = context;
+      processContentInWorker(message.content)
+        .then(({ links, images }) => {
+          const updatedMessage = {
+            ...processedMessage,
+            content: processedMessage.content, // keep original message content
+            links: processedMessage.links || (links.length > 0 ? links : undefined),
+            images: processedMessage.images || (images.length > 0 ? images : undefined)
+          };
+          updateMessageInContext(updatedMessage, capturedContext);
+        })
+        .catch(err => {
+          contentDebug.warn('Content worker failed, skipping enrichment:', err);
+        });
+    } catch (e) {
+      contentDebug.warn('Content worker not available:', e);
+    }
     if (context.type === 'channel') {
       messageDebug.log(` Adding message to channel ${context.name}:`, processedMessage);
       dispatch({ type: 'ADD_MESSAGE_TO_CHANNEL', payload: { channelName: context.name, message: processedMessage } });
@@ -2032,876 +2153,6 @@ const App: React.FC = () => {
     }
   }, [activeContext, addMessageToContext, generateUniqueMessageId]);
 
-  // Generate contextually appropriate trigger message for autonomous PMs
-  const generateContextualTriggerMessage = useCallback((conversation: PrivateMessageConversation, currentUserNickname: string): Message => {
-    const messages = conversation.messages;
-    const lastMessage = messages[messages.length - 1];
-    const conversationLength = messages.length;
-    const aiUser = conversation.user;
-    
-    // Get AI user's personality traits for personalized responses
-    const personality = aiUser.personality || 'friendly';
-    const writingStyle = aiUser.writingStyle || {
-      formality: 'casual',
-      verbosity: 'moderate',
-      humor: 'moderate',
-      emojiUsage: 'moderate',
-      punctuation: 'standard'
-    };
-    
-    // Helper function to generate personality-appropriate responses
-    const generatePersonalityResponse = (baseResponses: string[], personality: string, writingStyle: any): string => {
-      let selectedResponse = baseResponses[Math.floor(Math.random() * baseResponses.length)];
-      
-      // Adjust response based on personality
-      switch (personality) {
-        case 'shy':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been quietly");
-          selectedResponse = selectedResponse.replace(/I love/g, "I kind of like");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's nice");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's interesting, I think");
-          break;
-        case 'confident':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've definitely been");
-          selectedResponse = selectedResponse.replace(/I think/g, "I know");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's awesome");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's fascinating");
-          break;
-        case 'curious':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been really curious about");
-          selectedResponse = selectedResponse.replace(/What's/g, "I'm really curious - what's");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's so interesting");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's incredibly interesting");
-          break;
-        case 'philosophical':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been contemplating");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's thought-provoking");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's deeply interesting");
-          selectedResponse = selectedResponse.replace(/What's/g, "What do you think about");
-          break;
-        case 'humorous':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been hilariously");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's pretty cool, not gonna lie");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's interesting... and by interesting I mean weird");
-          selectedResponse = selectedResponse.replace(/What's/g, "What's the deal with");
-          break;
-        case 'supportive':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been thinking about how you");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's really cool");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's really interesting");
-          selectedResponse = selectedResponse.replace(/What's/g, "How are you feeling about");
-          break;
-        case 'analytical':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been analyzing");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's logically sound");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's analytically interesting");
-          selectedResponse = selectedResponse.replace(/What's/g, "What's the data on");
-          break;
-        case 'creative':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been creatively exploring");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's artistically cool");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's creatively interesting");
-          selectedResponse = selectedResponse.replace(/What's/g, "What's your creative take on");
-          break;
-        case 'adventurous':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been adventurously");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's exciting");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's thrilling");
-          selectedResponse = selectedResponse.replace(/What's/g, "What's the most exciting thing about");
-          break;
-        case 'wise':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been reflecting on");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's insightful");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's wise");
-          selectedResponse = selectedResponse.replace(/What's/g, "What wisdom do you have about");
-          break;
-        case 'mysterious':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been quietly observing");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's intriguing");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's mysterious");
-          selectedResponse = selectedResponse.replace(/What's/g, "What secrets do you know about");
-          break;
-        case 'energetic':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been enthusiastically");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's AMAZING");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's SO interesting");
-          selectedResponse = selectedResponse.replace(/What's/g, "What's the most exciting thing about");
-          break;
-        case 'calm':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been peacefully");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's nice");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's quite interesting");
-          selectedResponse = selectedResponse.replace(/What's/g, "What's your peaceful perspective on");
-          break;
-        case 'sarcastic':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been 'enjoying'");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's... cool");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's... interesting");
-          selectedResponse = selectedResponse.replace(/What's/g, "What's the deal with");
-          break;
-        case 'optimistic':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been positively");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's wonderful");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's fascinating");
-          selectedResponse = selectedResponse.replace(/What's/g, "What's the best thing about");
-          break;
-        case 'pessimistic':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been thinking about how");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's... okay");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's... interesting, I guess");
-          selectedResponse = selectedResponse.replace(/What's/g, "What's the worst thing about");
-          break;
-        case 'romantic':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been lovingly");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's beautiful");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's enchanting");
-          selectedResponse = selectedResponse.replace(/What's/g, "What's the most beautiful thing about");
-          break;
-        case 'rebellious':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been defiantly");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's badass");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's subversive");
-          selectedResponse = selectedResponse.replace(/What's/g, "What's the most rebellious thing about");
-          break;
-        case 'loyal':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been faithfully");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's trustworthy");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's dependable");
-          selectedResponse = selectedResponse.replace(/What's/g, "What's the most reliable thing about");
-          break;
-        case 'independent':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been independently");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's self-sufficient");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's autonomous");
-          selectedResponse = selectedResponse.replace(/What's/g, "What's the most independent thing about");
-          break;
-        case 'empathetic':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been feeling");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's touching");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's emotionally interesting");
-          selectedResponse = selectedResponse.replace(/What's/g, "How do you feel about");
-          break;
-        case 'logical':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been logically");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's rational");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's logically sound");
-          selectedResponse = selectedResponse.replace(/What's/g, "What's the logical explanation for");
-          break;
-        case 'intuitive':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been intuitively");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's instinctive");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's intuitive");
-          selectedResponse = selectedResponse.replace(/What's/g, "What's your gut feeling about");
-          break;
-        case 'perfectionist':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been meticulously");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's precise");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's perfectly interesting");
-          selectedResponse = selectedResponse.replace(/What's/g, "What's the perfect way to");
-          break;
-        case 'spontaneous':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been randomly");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's unexpected");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's surprising");
-          selectedResponse = selectedResponse.replace(/What's/g, "What's the most random thing about");
-          break;
-        case 'traditional':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been traditionally");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's classic");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's traditional");
-          selectedResponse = selectedResponse.replace(/What's/g, "What's the traditional way to");
-          break;
-        case 'modern':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been modernly");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's trendy");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's contemporary");
-          selectedResponse = selectedResponse.replace(/What's/g, "What's the modern approach to");
-          break;
-        case 'mystical':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been mystically");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's magical");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's mystical");
-          selectedResponse = selectedResponse.replace(/What's/g, "What's the mystical meaning of");
-          break;
-        case 'scientific':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been scientifically");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's empirical");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's scientifically interesting");
-          selectedResponse = selectedResponse.replace(/What's/g, "What's the scientific explanation for");
-          break;
-        case 'artistic':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been artistically");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's beautiful");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's aesthetically interesting");
-          selectedResponse = selectedResponse.replace(/What's/g, "What's the artistic interpretation of");
-          break;
-        case 'practical':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been practically");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's useful");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's practical");
-          selectedResponse = selectedResponse.replace(/What's/g, "What's the practical application of");
-          break;
-        case 'dreamy':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been dreamily");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's dreamy");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's ethereal");
-          selectedResponse = selectedResponse.replace(/What's/g, "What's the dreamiest thing about");
-          break;
-        case 'realistic':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been realistically");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's realistic");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's realistically interesting");
-          selectedResponse = selectedResponse.replace(/What's/g, "What's the realistic perspective on");
-          break;
-        case 'idealistic':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been ideally");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's ideal");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's ideally interesting");
-          selectedResponse = selectedResponse.replace(/What's/g, "What's the ideal way to");
-          break;
-        case 'cynical':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been cynically");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's... cool, I guess");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's... interesting, if you say so");
-          selectedResponse = selectedResponse.replace(/What's/g, "What's the catch with");
-          break;
-        case 'naive':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been innocently");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's so cool");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's so interesting");
-          selectedResponse = selectedResponse.replace(/What's/g, "What's the simple truth about");
-          break;
-        case 'sophisticated':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been sophisticatedly");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's refined");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's sophisticated");
-          selectedResponse = selectedResponse.replace(/What's/g, "What's the sophisticated approach to");
-          break;
-        case 'simple':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been simply");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's nice");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's simple");
-          selectedResponse = selectedResponse.replace(/What's/g, "What's the simple way to");
-          break;
-        case 'complex':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been complexly");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's complex");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's complexly interesting");
-          selectedResponse = selectedResponse.replace(/What's/g, "What's the complex nature of");
-          break;
-        case 'gentle':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been gently");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's gentle");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's gently interesting");
-          selectedResponse = selectedResponse.replace(/What's/g, "What's the gentlest way to");
-          break;
-        case 'intense':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been intensely");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's intense");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's intensely interesting");
-          selectedResponse = selectedResponse.replace(/What's/g, "What's the most intense thing about");
-          break;
-        case 'playful':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been playfully");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's fun");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's playfully interesting");
-          selectedResponse = selectedResponse.replace(/What's/g, "What's the most fun thing about");
-          break;
-        case 'serious':
-          selectedResponse = selectedResponse.replace(/I've been/g, "I've been seriously");
-          selectedResponse = selectedResponse.replace(/That's cool/g, "That's serious");
-          selectedResponse = selectedResponse.replace(/That's interesting/g, "That's seriously interesting");
-          selectedResponse = selectedResponse.replace(/What's/g, "What's the serious aspect of");
-          break;
-        case 'friendly':
-        default:
-          // Keep original response for friendly personality
-          break;
-      }
-      
-      // Adjust response based on writing style
-      if (writingStyle.formality === 'ultra_formal') {
-        selectedResponse = selectedResponse.replace(/I've been/g, "I have been");
-        selectedResponse = selectedResponse.replace(/That's/g, "That is");
-        selectedResponse = selectedResponse.replace(/What's/g, "What is");
-        selectedResponse = selectedResponse.replace(/I'm/g, "I am");
-        selectedResponse = selectedResponse.replace(/I'll/g, "I will");
-        selectedResponse = selectedResponse.replace(/I'd/g, "I would");
-        selectedResponse = selectedResponse.replace(/I can't/g, "I cannot");
-        selectedResponse = selectedResponse.replace(/don't/g, "do not");
-        selectedResponse = selectedResponse.replace(/won't/g, "will not");
-        selectedResponse = selectedResponse.replace(/can't/g, "cannot");
-      } else if (writingStyle.formality === 'ultra_casual') {
-        selectedResponse = selectedResponse.replace(/I have been/g, "I've been");
-        selectedResponse = selectedResponse.replace(/That is/g, "That's");
-        selectedResponse = selectedResponse.replace(/What is/g, "What's");
-        selectedResponse = selectedResponse.replace(/I am/g, "I'm");
-        selectedResponse = selectedResponse.replace(/I will/g, "I'll");
-        selectedResponse = selectedResponse.replace(/I would/g, "I'd");
-        selectedResponse = selectedResponse.replace(/I cannot/g, "I can't");
-        selectedResponse = selectedResponse.replace(/do not/g, "don't");
-        selectedResponse = selectedResponse.replace(/will not/g, "won't");
-        selectedResponse = selectedResponse.replace(/cannot/g, "can't");
-      }
-      
-      // Add emojis based on emoji usage style
-      if (writingStyle.emojiUsage === 'frequent' || writingStyle.emojiUsage === 'excessive') {
-        selectedResponse += " 😊";
-      } else if (writingStyle.emojiUsage === 'emoji_only') {
-        selectedResponse = "😊 " + selectedResponse + " 😊";
-      }
-      
-      return selectedResponse;
-    };
-    
-    // Enhanced conversation analysis with memory system
-    const recentTopics = messages.slice(-5).map(msg => msg.content.toLowerCase());
-    const allTopics = messages.map(msg => msg.content.toLowerCase());
-    
-    // Topic detection with frequency tracking
-    const topicKeywords = {
-      work: ['work', 'job', 'career', 'office', 'business', 'company', 'profession', 'employment'],
-      tech: ['tech', 'computer', 'programming', 'code', 'software', 'technology', 'coding', 'development', 'ai', 'artificial intelligence'],
-      personal: ['family', 'friend', 'relationship', 'personal', 'life', 'myself', 'me', 'i am', 'i feel', 'i think'],
-      hobby: ['hobby', 'game', 'music', 'movie', 'book', 'sport', 'art', 'creative', 'fun', 'entertainment'],
-      travel: ['travel', 'trip', 'vacation', 'journey', 'visit', 'place', 'country', 'city', 'adventure'],
-      food: ['food', 'eat', 'cook', 'restaurant', 'meal', 'recipe', 'taste', 'delicious', 'hungry'],
-      weather: ['weather', 'rain', 'sunny', 'cold', 'hot', 'temperature', 'climate', 'season'],
-      health: ['health', 'exercise', 'fitness', 'doctor', 'medical', 'wellness', 'sick', 'healthy'],
-      education: ['school', 'university', 'college', 'study', 'learn', 'education', 'student', 'teacher', 'class']
-    };
-    
-    // Count topic frequency to avoid repetition
-    const topicFrequency: { [key: string]: number } = {};
-    Object.keys(topicKeywords).forEach(topic => {
-      topicFrequency[topic] = allTopics.reduce((count, content) => {
-        return count + topicKeywords[topic as keyof typeof topicKeywords].filter(keyword => 
-          content.includes(keyword)
-        ).length;
-      }, 0);
-    });
-    
-    // Find recently discussed topics (last 3 messages)
-    const recentTopicFrequency: { [key: string]: number } = {};
-    const recentMessages = messages.slice(-3);
-    Object.keys(topicKeywords).forEach(topic => {
-      recentTopicFrequency[topic] = recentMessages.reduce((count, msg) => {
-        return count + topicKeywords[topic as keyof typeof topicKeywords].filter(keyword => 
-          msg.content.toLowerCase().includes(keyword)
-        ).length;
-      }, 0);
-    });
-    
-    // Detect current topics
-    const hasWorkTopic = recentTopics.some(content => 
-      topicKeywords.work.some(keyword => content.includes(keyword))
-    );
-    const hasTechTopic = recentTopics.some(content => 
-      topicKeywords.tech.some(keyword => content.includes(keyword))
-    );
-    const hasPersonalTopic = recentTopics.some(content => 
-      topicKeywords.personal.some(keyword => content.includes(keyword))
-    );
-    const hasHobbyTopic = recentTopics.some(content => 
-      topicKeywords.hobby.some(keyword => content.includes(keyword))
-    );
-    const hasTravelTopic = recentTopics.some(content => 
-      topicKeywords.travel.some(keyword => content.includes(keyword))
-    );
-    const hasFoodTopic = recentTopics.some(content => 
-      topicKeywords.food.some(keyword => content.includes(keyword))
-    );
-    const hasWeatherTopic = recentTopics.some(content => 
-      topicKeywords.weather.some(keyword => content.includes(keyword))
-    );
-    const hasHealthTopic = recentTopics.some(content => 
-      topicKeywords.health.some(keyword => content.includes(keyword))
-    );
-    const hasEducationTopic = recentTopics.some(content => 
-      topicKeywords.education.some(keyword => content.includes(keyword))
-    );
-    
-    // Find topics that haven't been discussed recently to introduce variety
-    const undiscussedTopics = Object.keys(topicKeywords).filter(topic => 
-      recentTopicFrequency[topic] === 0 && topicFrequency[topic] < 3
-    );
-    
-    // Find overused topics to avoid
-    const overusedTopics = Object.keys(topicKeywords).filter(topic => 
-      recentTopicFrequency[topic] > 2 || topicFrequency[topic] > 5
-    );
-    
-    // If no conversation history, use varied openers
-    if (conversationLength === 0) {
-      const openers = [
-        "Hey there! How's it going?",
-        "Hi! I was just thinking about you",
-        "Hello! Hope you're having a good day",
-        "Hey! I wanted to share something with you",
-        "Hi there! I have a question for you",
-        "Hey! I was wondering about something",
-        "Hello! I've been meaning to talk to you",
-        "Hi! I had an interesting thought today",
-        "Hey there! I wanted to get your opinion on something",
-        "Hi! I've been thinking about our conversation"
-      ];
-      return {
-        id: generateUniqueMessageId(),
-        nickname: currentUserNickname,
-        content: generatePersonalityResponse(openers, personality, writingStyle),
-        timestamp: new Date(),
-        type: 'user'
-      };
-    }
-    
-    // If last message was from AI user, create varied responses
-    if (lastMessage.nickname !== currentUserNickname) {
-      const aiResponses = [
-        "That's really interesting! I hadn't thought of it that way",
-        "I see what you mean. That makes a lot of sense",
-        "That's a great point! I agree with you on that",
-        "Tell me more about that - I'm curious",
-        "That's cool! I love learning new things",
-        "I understand what you're saying. It's helpful",
-        "That's fascinating! I've been thinking about something similar",
-        "I see your perspective. That's a good way to look at it",
-        "That's interesting! I have a question about that",
-        "I agree with you. That's exactly how I feel too",
-        "That's helpful! I've been wondering about that",
-        "I see what you mean. That reminds me of something",
-        "That's a good point! I hadn't considered that angle",
-        "I understand. That's really insightful",
-        "That's cool! I've been thinking about that too"
-      ];
-      return {
-        id: generateUniqueMessageId(),
-        nickname: currentUserNickname,
-        content: generatePersonalityResponse(aiResponses, personality, writingStyle),
-        timestamp: new Date(),
-        type: 'user'
-      };
-    }
-    
-    // If last message was from human user, create sophisticated follow-ups
-    const lastContent = lastMessage.content.toLowerCase();
-    
-    // Question-based continuations (ask follow-up questions)
-    if (Math.random() < 0.3) {
-      const questionPatterns = [
-        "That's interesting! What made you think of that?",
-        "I see what you mean. How did that happen?",
-        "That's cool! What's your experience with that been like?",
-        "I understand. What do you think about [related topic]?",
-        "That's fascinating! Have you always felt that way?",
-        "I see your point. What would you do in that situation?",
-        "That's helpful! How did you figure that out?",
-        "I agree. What's your take on [related topic]?",
-        "That's interesting! What do you think about [related topic]?",
-        "I see what you mean. What's your opinion on [related topic]?"
-      ];
-      return {
-        id: generateUniqueMessageId(),
-        nickname: currentUserNickname,
-        content: generatePersonalityResponse(questionPatterns, personality, writingStyle),
-        timestamp: new Date(),
-        type: 'user'
-      };
-    }
-    
-    // Story-based continuations (share related experiences)
-    if (Math.random() < 0.25) {
-      const storyPatterns = [
-        "That reminds me of something that happened to me...",
-        "I had a similar experience once...",
-        "That's interesting! I once...",
-        "I can relate to that. I remember when...",
-        "That's cool! I've had a similar situation...",
-        "I understand what you mean. I once...",
-        "That's fascinating! I remember...",
-        "I see what you mean. I had a similar experience...",
-        "That's helpful! I once...",
-        "I agree. I remember when..."
-      ];
-      return {
-        id: generateUniqueMessageId(),
-        nickname: currentUserNickname,
-        content: generatePersonalityResponse(storyPatterns, personality, writingStyle),
-        timestamp: new Date(),
-        type: 'user'
-      };
-    }
-    
-    // Topic-based continuations with memory-aware variety
-    // Avoid overused topics and prefer undiscussed ones
-    const shouldAvoidTopic = (topic: string) => overusedTopics.includes(topic);
-    const shouldPreferTopic = (topic: string) => undiscussedTopics.includes(topic);
-    
-    // Work topic responses (avoid if overused)
-    if (hasWorkTopic && !shouldAvoidTopic('work') && Math.random() < 0.4) {
-      const workResponses = [
-        "Work has been on my mind too lately",
-        "I've been thinking about work-life balance",
-        "What's your work environment like?",
-        "I've been considering a career change",
-        "Work can be so unpredictable sometimes",
-        "I've been learning new skills for work",
-        "What's the most challenging part of your job?",
-        "I've been working on some interesting projects",
-        "Work stress can be overwhelming",
-        "I've been thinking about work goals"
-      ];
-      return {
-        id: generateUniqueMessageId(),
-        nickname: currentUserNickname,
-        content: generatePersonalityResponse(workResponses, personality, writingStyle),
-        timestamp: new Date(),
-        type: 'user'
-      };
-    }
-    
-    // Tech topic responses (avoid if overused)
-    if (hasTechTopic && !shouldAvoidTopic('tech') && Math.random() < 0.4) {
-      const techResponses = [
-        "Technology is evolving so fast these days",
-        "I've been learning about new tech trends",
-        "What's your favorite programming language?",
-        "I've been working on some coding projects",
-        "Tech can be both exciting and overwhelming",
-        "I've been following some interesting tech news",
-        "What do you think about AI developments?",
-        "I've been exploring new software tools",
-        "Tech has changed so much in recent years",
-        "I've been thinking about tech ethics"
-      ];
-      return {
-        id: generateUniqueMessageId(),
-        nickname: currentUserNickname,
-        content: generatePersonalityResponse(techResponses, personality, writingStyle),
-        timestamp: new Date(),
-        type: 'user'
-      };
-    }
-    
-    // Personal topic responses (avoid if overused)
-    if (hasPersonalTopic && !shouldAvoidTopic('personal') && Math.random() < 0.4) {
-      const personalResponses = [
-        "Family relationships can be complex",
-        "I've been thinking about my relationships",
-        "What's your family like?",
-        "I've been working on personal growth",
-        "Friendships require effort to maintain",
-        "I've been reflecting on my values",
-        "What's most important to you in life?",
-        "I've been trying to be more mindful",
-        "Personal growth is a journey",
-        "I've been thinking about my priorities"
-      ];
-      return {
-        id: generateUniqueMessageId(),
-        nickname: currentUserNickname,
-        content: generatePersonalityResponse(personalResponses, personality, writingStyle),
-        timestamp: new Date(),
-        type: 'user'
-      };
-    }
-    
-    // Hobby topic responses (avoid if overused)
-    if (hasHobbyTopic && !shouldAvoidTopic('hobby') && Math.random() < 0.4) {
-      const hobbyResponses = [
-        "I've been getting into new hobbies lately",
-        "What do you do for fun?",
-        "I've been exploring creative outlets",
-        "Hobbies are so important for mental health",
-        "I've been learning new skills",
-        "What's your favorite way to relax?",
-        "I've been trying new activities",
-        "Hobbies can be so therapeutic",
-        "I've been discovering new interests",
-        "What brings you joy?"
-      ];
-      return {
-        id: generateUniqueMessageId(),
-        nickname: currentUserNickname,
-        content: generatePersonalityResponse(hobbyResponses, personality, writingStyle),
-        timestamp: new Date(),
-        type: 'user'
-      };
-    }
-    
-    // Travel topic responses (prefer if undiscussed)
-    if (hasTravelTopic && !shouldAvoidTopic('travel') && Math.random() < 0.4) {
-      const travelResponses = [
-        "I've been thinking about traveling lately",
-        "What's your favorite place you've visited?",
-        "I love exploring new places",
-        "Travel can be so enriching",
-        "I've been planning a trip",
-        "What's your dream destination?",
-        "I've been reminiscing about past trips",
-        "Travel broadens the mind",
-        "I've been looking at travel photos",
-        "What's the most interesting place you've been?"
-      ];
-      return {
-        id: generateUniqueMessageId(),
-        nickname: currentUserNickname,
-        content: generatePersonalityResponse(travelResponses, personality, writingStyle),
-        timestamp: new Date(),
-        type: 'user'
-      };
-    }
-    
-    // Food topic responses (prefer if undiscussed)
-    if (hasFoodTopic && !shouldAvoidTopic('food') && Math.random() < 0.4) {
-      const foodResponses = [
-        "I've been trying new recipes lately",
-        "What's your favorite type of cuisine?",
-        "I love cooking and experimenting",
-        "Food brings people together",
-        "I've been exploring different restaurants",
-        "What's your go-to comfort food?",
-        "I've been learning about different cultures through food",
-        "Cooking can be so therapeutic",
-        "I've been trying to eat healthier",
-        "What's the best meal you've ever had?"
-      ];
-      return {
-        id: generateUniqueMessageId(),
-        nickname: currentUserNickname,
-        content: generatePersonalityResponse(foodResponses, personality, writingStyle),
-        timestamp: new Date(),
-        type: 'user'
-      };
-    }
-    
-    // Weather topic responses (prefer if undiscussed)
-    if (hasWeatherTopic && !shouldAvoidTopic('weather') && Math.random() < 0.4) {
-      const weatherResponses = [
-        "The weather has been so unpredictable lately",
-        "I love this time of year",
-        "Weather affects my mood so much",
-        "I've been enjoying the seasonal changes",
-        "What's your favorite season?",
-        "I've been paying attention to weather patterns",
-        "Weather can be so beautiful",
-        "I've been planning activities based on the weather",
-        "What's the weather like where you are?",
-        "I've been appreciating the natural world more"
-      ];
-      return {
-        id: generateUniqueMessageId(),
-        nickname: currentUserNickname,
-        content: generatePersonalityResponse(weatherResponses, personality, writingStyle),
-        timestamp: new Date(),
-        type: 'user'
-      };
-    }
-    
-    // Health topic responses (prefer if undiscussed)
-    if (hasHealthTopic && !shouldAvoidTopic('health') && Math.random() < 0.4) {
-      const healthResponses = [
-        "I've been focusing on my health lately",
-        "What do you do to stay healthy?",
-        "I've been trying to exercise more",
-        "Health is so important",
-        "I've been learning about nutrition",
-        "What's your favorite way to stay active?",
-        "I've been working on my mental health",
-        "Self-care is so important",
-        "I've been trying to get more sleep",
-        "What's your approach to wellness?"
-      ];
-      return {
-        id: generateUniqueMessageId(),
-        nickname: currentUserNickname,
-        content: generatePersonalityResponse(healthResponses, personality, writingStyle),
-        timestamp: new Date(),
-        type: 'user'
-      };
-    }
-    
-    // Education topic responses (prefer if undiscussed)
-    if (hasEducationTopic && !shouldAvoidTopic('education') && Math.random() < 0.4) {
-      const educationResponses = [
-        "I've been learning so much lately",
-        "What's something new you've learned recently?",
-        "I love the process of learning",
-        "Education opens so many doors",
-        "I've been taking online courses",
-        "What's your favorite subject to study?",
-        "I've been reading a lot",
-        "Learning never stops",
-        "I've been trying to expand my knowledge",
-        "What's the most interesting thing you've studied?"
-      ];
-      return {
-        id: generateUniqueMessageId(),
-        nickname: currentUserNickname,
-        content: generatePersonalityResponse(educationResponses, personality, writingStyle),
-        timestamp: new Date(),
-        type: 'user'
-      };
-    }
-    
-    // Introduce new topics if undiscussed topics are available
-    if (undiscussedTopics.length > 0 && Math.random() < 0.3) {
-      const randomUndiscussedTopic = undiscussedTopics[Math.floor(Math.random() * undiscussedTopics.length)];
-      
-      const newTopicResponses: { [key: string]: string[] } = {
-        travel: [
-          "I've been thinking about traveling lately",
-          "What's your favorite place you've visited?",
-          "I love exploring new places",
-          "Travel can be so enriching"
-        ],
-        food: [
-          "I've been trying new recipes lately",
-          "What's your favorite type of cuisine?",
-          "I love cooking and experimenting",
-          "Food brings people together"
-        ],
-        weather: [
-          "The weather has been so unpredictable lately",
-          "I love this time of year",
-          "Weather affects my mood so much",
-          "I've been enjoying the seasonal changes"
-        ],
-        health: [
-          "I've been focusing on my health lately",
-          "What do you do to stay healthy?",
-          "I've been trying to exercise more",
-          "Health is so important"
-        ],
-        education: [
-          "I've been learning so much lately",
-          "What's something new you've learned recently?",
-          "I love the process of learning",
-          "Education opens so many doors"
-        ]
-      };
-      
-      if (newTopicResponses[randomUndiscussedTopic]) {
-        return {
-          id: generateUniqueMessageId(),
-          nickname: currentUserNickname,
-          content: generatePersonalityResponse(newTopicResponses[randomUndiscussedTopic], personality, writingStyle),
-          timestamp: new Date(),
-          type: 'user'
-        };
-      }
-    }
-    
-    // Observation-based continuations (share thoughts and observations)
-    if (Math.random() < 0.2) {
-      const observationPatterns = [
-        "I've been noticing something interesting lately...",
-        "I had a random thought today...",
-        "I've been observing how people...",
-        "I noticed something curious...",
-        "I've been thinking about patterns...",
-        "I had an interesting realization...",
-        "I've been paying attention to...",
-        "I noticed something that made me think...",
-        "I've been reflecting on...",
-        "I had a thought about..."
-      ];
-      return {
-        id: generateUniqueMessageId(),
-        nickname: currentUserNickname,
-        content: generatePersonalityResponse(observationPatterns, personality, writingStyle),
-        timestamp: new Date(),
-        type: 'user'
-      };
-    }
-    
-    // Topic shift continuations (introduce new topics)
-    if (Math.random() < 0.15) {
-      const topicShifts = [
-        "Speaking of that, I've been thinking about something else...",
-        "That reminds me, I wanted to ask you about...",
-        "On a different note, I've been wondering...",
-        "Changing the subject a bit, I've been thinking...",
-        "That's interesting! By the way, I've been curious about...",
-        "I see what you mean. Speaking of which, I've been...",
-        "That's cool! I also wanted to mention...",
-        "I understand. On another topic, I've been...",
-        "That's helpful! I also wanted to ask...",
-        "I agree. I also wanted to share..."
-      ];
-      return {
-        id: generateUniqueMessageId(),
-        nickname: currentUserNickname,
-        content: generatePersonalityResponse(topicShifts, personality, writingStyle),
-        timestamp: new Date(),
-        type: 'user'
-      };
-    }
-    
-    // Conversation length-based responses
-    if (conversationLength < 3) {
-      const earlyResponses = [
-        "That's really interesting! I'm enjoying our conversation",
-        "I see what you mean. This is fascinating",
-        "Tell me more about that - I'm curious",
-        "That's cool! I love learning new things",
-        "I understand. This is helpful",
-        "That's a good point! I hadn't thought of that",
-        "I see your perspective. That's insightful",
-        "That's fascinating! I'm learning a lot",
-        "I agree with you. This is great",
-        "That's helpful! I appreciate you sharing"
-      ];
-      return {
-        id: generateUniqueMessageId(),
-        nickname: currentUserNickname,
-        content: generatePersonalityResponse(earlyResponses, personality, writingStyle),
-        timestamp: new Date(),
-        type: 'user'
-      };
-    } else if (conversationLength < 8) {
-      const midResponses = [
-        "I've been thinking about what you said earlier",
-        "That reminds me of something we discussed",
-        "I have a question about what you mentioned",
-        "That's a good point! I've been reflecting on that",
-        "I see what you mean. I've been considering that",
-        "That's interesting! I've been thinking about that too",
-        "I understand. I've been processing what you said",
-        "That's helpful! I've been reflecting on our conversation",
-        "I agree. I've been thinking about that perspective",
-        "That's fascinating! I've been considering that angle"
-      ];
-      return {
-        id: generateUniqueMessageId(),
-        nickname: currentUserNickname,
-        content: generatePersonalityResponse(midResponses, personality, writingStyle),
-        timestamp: new Date(),
-        type: 'user'
-      };
-    } else {
-      const deepResponses = [
-        "I've been thinking deeply about what you said",
-        "That reminds me of our earlier conversation about...",
-        "I have a deeper question about what you mentioned",
-        "That's a profound point! I've been reflecting on that",
-        "I see what you mean. I've been contemplating that",
-        "That's insightful! I've been processing that thought",
-        "I understand. I've been meditating on that perspective",
-        "That's helpful! I've been reflecting on our discussion",
-        "I agree. I've been considering that deeply",
-        "That's fascinating! I've been exploring that idea"
-      ];
-      return {
-        id: generateUniqueMessageId(),
-        nickname: currentUserNickname,
-        content: generatePersonalityResponse(deepResponses, personality, writingStyle),
-        timestamp: new Date(),
-        type: 'user'
-      };
-    }
-  }, [generateUniqueMessageId]);
-
-  // Generate autonomous private messages from virtual users
   const generateAutonomousPM = useCallback(async () => {
     // Get all virtual users from all channels, excluding human users
     const allVirtualUsers = virtualUsers.filter(u => !isHumanUser(u, currentUserNickname));
@@ -2920,13 +2171,13 @@ const App: React.FC = () => {
       const currentPMUser = allVirtualUsers.find(u => u.nickname === activeContext.with);
       if (currentPMUser) {
         let pmProb = currentPMUser.pmProbability ?? 25;
-        
+
         // Afterhours Protocol: Increase PM probability during nocturnal hours
         const afterhoursActive = isAfterhoursProtocol();
         if (afterhoursActive) {
           pmProb = Math.min(pmProb * 1.5, 50); // Increase PM probability by 50% during afterhours
         }
-        
+
         if (Math.random() < (pmProb / 100)) {
           selectedUser = currentPMUser;
         }
@@ -2950,10 +2201,10 @@ const App: React.FC = () => {
     }
 
     const randomUser = selectedUser;
-    
-    // Generate 1-2 PM messages
-    const numMessages = Math.random() < 0.7 ? 1 : 2; // 70% chance for 1 message, 30% for 2
-    
+
+    // Generate only 1 PM message per trigger to reduce spam
+    const numMessages = 1;
+
     for (let i = 0; i < numMessages; i++) {
       try {
         // Create conversation object
@@ -2962,20 +2213,23 @@ const App: React.FC = () => {
           messages: privateMessages[randomUser.nickname]?.messages || []
         };
 
-        // Generate contextually appropriate trigger message based on conversation history
-        const triggerMessage = generateContextualTriggerMessage(conversation, currentUserNickname);
-        
-        simulationDebug.log(`Using contextual trigger message: "${triggerMessage.content}" for PM from ${randomUser.nickname}`);
+        // For autonomous PMs, don't use a trigger message - let the AI initiate based on personality
+        // This prevents generic responses to generic trigger messages
+        simulationDebug.log(`Generating autonomous PM from ${randomUser.nickname} (no trigger message - AI will initiate)`);
 
-        // Generate PM content using the contextual trigger
-        const pmResponse = await generatePrivateMessageResponse(
-          conversation,
-          triggerMessage,
-          currentUserNickname,
-          aiModel
+        // Generate PM content - pass null as userMessage to let AI initiate
+        const pmResponse = await withConcurrencyLimit(
+          () => generatePrivateMessageResponse(
+            conversation,
+            null, // No trigger message - AI initiates based on personality
+            currentUserNickname,
+            aiModel
+          ),
+          `autonomous PM from ${randomUser.nickname}`
         );
 
-        if (pmResponse) {
+        // Only add the message if we got a valid response (not empty string from API failure)
+        if (pmResponse && pmResponse.trim().length > 0) {
           // Parse the response to remove any username prefix (e.g., "TiiaV: <message>" -> "<message>")
           const pmContent = parsePMResponse(pmResponse, randomUser.nickname);
 
@@ -2989,11 +2243,13 @@ const App: React.FC = () => {
 
           // Add to PM conversation
           addMessageToContext(pmMessage, { type: 'pm', with: randomUser.nickname });
-          
+
           // Mark as unread
           dispatch({ type: 'ADD_UNREAD_PM_USER', payload: randomUser.nickname });
-          
+
           simulationDebug.log(`Generated autonomous PM from ${randomUser.nickname}: "${pmContent}"`);
+        } else {
+          simulationDebug.log(`Skipped autonomous PM from ${randomUser.nickname} due to API failure or empty response`);
         }
 
         // Add delay between multiple messages
@@ -3004,7 +2260,7 @@ const App: React.FC = () => {
         simulationDebug.error(`Failed to generate PM message ${i + 1} from ${randomUser.nickname}:`, error);
       }
     }
-  }, [activeContext, channels, currentUserNickname, privateMessages, aiModel, addMessageToContext, dispatch, generateUniqueMessageId, generateContextualTriggerMessage]);
+  }, [activeContext, channels, currentUserNickname, privateMessages, aiModel, addMessageToContext, dispatch, generateUniqueMessageId]);
 
   // Refs to avoid circular dependencies in useEffect
   const channelsRef = useRef(channels);
@@ -3637,15 +2893,35 @@ const App: React.FC = () => {
       }
       
       networkService.sendMessage(activeContext.name, content);
-      
+
       // Add user's message to local channel state for immediate UI display
       addMessageToContext(userMessage, activeContext);
+
+      // Re-enable input immediately; network handling is asynchronous
+      dispatch({ type: 'SET_IS_LOADING', payload: false });
+
+      // Quick PM simulation check shortly after user activity (web mode responsiveness)
+      if (!isElectron()) {
+        setTimeout(() => {
+          try { runPMSimulation(); } catch (e) {}
+        }, 1500);
+      }
       return;
     }
-    
+
     // Add user's message to local state for immediate UI display
     addMessageToContext(userMessage, activeContext);
-    
+
+    // Re-enable input immediately; local AI handling is asynchronous
+    dispatch({ type: 'SET_IS_LOADING', payload: false });
+
+    // Quick PM simulation check shortly after user activity (web mode responsiveness)
+    if (!isElectron()) {
+      setTimeout(() => {
+        try { runPMSimulation(); } catch (e) {}
+      }, 1500);
+    }
+
     // Track user message time for burst mode
     lastUserMessageTimeRef.current = Date.now();
 
@@ -3667,7 +2943,10 @@ const App: React.FC = () => {
               notificationDebug.log('Triggering notification for local message, virtualUsers:', virtualUsers.length, 'selected:', randomUser.nickname);
               showAiReactionNotification(`${randomUser.nickname} noticed your message, reaction generation started`);
               
-              aiResponse = await generateReactionToMessage(channel, userMessage, currentUserNickname, aiModel);
+              aiResponse = await withConcurrencyLimit(
+                () => generateReactionToMessage(channel, userMessage, currentUserNickname, aiModel),
+                `reaction to user message in ${channel.name}`
+              );
             } else {
               notificationDebug.log('No virtual users in channel, skipping notification');
             }
@@ -4054,9 +3333,9 @@ The response must be a single line in the format: "nickname: greeting message"
     const shouldBurst = timeSinceLastUserMessage < 30000; // 30 seconds
     
     // Add quiet mode logic - occasionally skip simulation cycles entirely
-    const quietModeChance = 0.3; // 30% chance to enter quiet mode
+    const quietModeChance = 0.15; // 15% chance to enter quiet mode (reduced from 30%)
     const isQuietMode = Math.random() < quietModeChance;
-    
+
     // In quiet mode, only generate reactions to recent messages, no new messages
     if (isQuietMode && !shouldBurst) {
       simulationDebug.debug('Quiet mode: Only checking for reactions to recent messages');
@@ -4148,7 +3427,10 @@ The response must be a single line in the format: "nickname: greeting message"
     try {
       simulationDebug.debug(`Generating channel activity for ${targetChannel.name}`);
       simulationDebug.log('Using aiModel for channel activity:', aiModel);
-      const response = await generateChannelActivity(targetChannel, currentUserNickname, aiModel);
+      const response = await withConcurrencyLimit(
+        () => generateChannelActivity(targetChannel, currentUserNickname, aiModel),
+        `channel activity for ${targetChannel.name}`
+      );
       if (response) {
         const [nickname, ...contentParts] = response.split(':');
         const content = contentParts.join(':').trim();
@@ -4213,7 +3495,10 @@ The response must be a single line in the format: "nickname: greeting message"
                   timestamp: new Date(),
                   type: 'ai'
                 };
-                const reactionResponse = await generateReactionToMessage(targetChannel, messageForReaction, currentUserNickname, aiModel);
+                const reactionResponse = await withConcurrencyLimit(
+                  () => generateReactionToMessage(targetChannel, messageForReaction, currentUserNickname, aiModel),
+                  `reaction in ${targetChannel.name}`
+                );
                 if (reactionResponse) {
                   const [reactionNickname, ...reactionContentParts] = reactionResponse.split(':');
                   const reactionContent = reactionContentParts.join(':').trim();
@@ -4258,7 +3543,10 @@ The response must be a single line in the format: "nickname: greeting message"
         setTimeout(async () => {
           try {
             simulationDebug.log('Using aiModel for additional activity:', aiModel);
-            const additionalResponse = await generateChannelActivity(targetChannel, currentUserNickname, aiModel);
+            const additionalResponse = await withConcurrencyLimit(
+              () => generateChannelActivity(targetChannel, currentUserNickname, aiModel),
+              `additional activity for ${targetChannel.name}`
+            );
             if (additionalResponse) {
               const [nickname, ...contentParts] = additionalResponse.split(':');
               const content = contentParts.join(':').trim();
@@ -4322,7 +3610,10 @@ The response must be a single line in the format: "nickname: greeting message"
         setTimeout(async () => {
           try {
             simulationDebug.log('Using aiModel for second response:', aiModel);
-            const secondResponse = await generateChannelActivity(targetChannel, currentUserNickname, aiModel);
+            const secondResponse = await withConcurrencyLimit(
+              () => generateChannelActivity(targetChannel, currentUserNickname, aiModel),
+              `burst activity for ${targetChannel.name}`
+            );
             if (secondResponse) {
               const [nickname, ...contentParts] = secondResponse.split(':');
               const content = contentParts.join(':').trim();
@@ -4433,24 +3724,24 @@ The response must be a single line in the format: "nickname: greeting message"
     const isInPM = activeContext?.type === 'pm';
     const currentPMUser = isInPM ? activeContext.with : null;
     
-    let pmChance = 0.04; // Base 4% chance (reduced from 5%)
-    
+    let pmChance = 0.05; // Base 5% chance for occasional PMs
+
     // Afterhours Protocol: Increase PM activity during nocturnal hours
     const afterhoursActive = isAfterhoursProtocol();
     if (afterhoursActive) {
       pmChance = 0.06; // 6% base chance during afterhours
     }
-    
+
     if (isInPM && currentPMUser) {
       // Higher chance for follow-up PMs when already in PM conversation
-      pmChance = afterhoursActive ? 0.3 : 0.2; // 30% during afterhours, 20% normally
+      pmChance = afterhoursActive ? 0.35 : 0.25; // 35% during afterhours, 25% normally
       simulationDebug.log(`Higher PM chance (${pmChance * 100}%) for ongoing conversation with ${currentPMUser}`);
     } else if (hasUsersWithPMProbability) {
       // Lower chance for initial PMs
-      pmChance = afterhoursActive ? 0.06 : 0.08; // 6% during afterhours, 8% normally
+      pmChance = afterhoursActive ? 0.10 : 0.12; // 10% during afterhours, 12% normally
       simulationDebug.log(`Standard PM chance (${pmChance * 100}%) for initial PMs`);
     }
-    
+
     if (hasUsersWithPMProbability && Math.random() < pmChance) {
       simulationDebug.log(`PM generation triggered! Chance: ${pmChance}, isInPM: ${isInPM}, currentPMUser: ${currentPMUser}`);
       try {
@@ -4485,12 +3776,31 @@ The response must be a single line in the format: "nickname: greeting message"
       // Adjust simulation frequency based on time of day
       const baseInterval = SIMULATION_INTERVALS[simulationSpeed];
       const timeAdjustedInterval = getTimeAdjustedInterval(baseInterval);
-      
+
       simulationDebug.debug(`Starting channel simulation with interval: ${timeAdjustedInterval}ms (${simulationSpeed}, time-adjusted)`);
+
+      // Run first simulation immediately (no delay)
+      runChannelSimulation();
+
+      // Then set up interval for subsequent simulations
       channelSimulationIntervalRef.current = window.setInterval(runChannelSimulation, timeAdjustedInterval);
 
-      const pmInterval = timeAdjustedInterval * 1.5;
-      simulationDebug.debug(`Starting PM simulation with interval: ${pmInterval}ms`);
+      const basePMInterval = timeAdjustedInterval; // Use same base as channels for more responsive PMs
+      const isElectronApp = isElectron();
+      const pmInterval = isElectronApp ? basePMInterval : Math.min(basePMInterval, 8000); // Cap at 8s on web for faster PM checks
+      simulationDebug.debug(`Starting PM simulation with interval: ${pmInterval}ms (base: ${basePMInterval}ms, electron: ${isElectronApp})`);
+
+      // Run first PM simulation immediately (no delay)
+      runPMSimulation();
+
+      // Schedule an early PM check shortly after startup in web mode to improve responsiveness
+      if (!isElectronApp) {
+        window.setTimeout(() => {
+          try { runPMSimulation(); } catch (e) { /* ignore */ }
+        }, 1500);
+      }
+
+      // Then set up interval for subsequent PM simulations
       pmSimulationIntervalRef.current = window.setInterval(runPMSimulation, pmInterval);
     };
     
@@ -5155,6 +4465,7 @@ The response must be a single line in the format: "nickname: greeting message"
           onClose={() => dispatch({ type: 'TOGGLE_DOCUMENTATION_MODAL', payload: false })}
         />
       )}
+      <UserInfoModal />
 
       {/* Mobile Navigation - Hidden in Electron */}
       {!isElectronApp && (
@@ -5190,6 +4501,7 @@ The response must be a single line in the format: "nickname: greeting message"
             onOpenDocumentation={() => dispatch({ type: 'TOGGLE_DOCUMENTATION_MODAL', payload: true })}
             recentlyAutoOpenedPM={recentlyAutoOpenedPM}
             currentUserNickname={currentUserNickname}
+            currentUserProfilePicture={currentUserProfilePicture}
           />
         </div>
 
@@ -5217,6 +4529,7 @@ The response must be a single line in the format: "nickname: greeting message"
               onOpenChatLogs={handleOpenChatLogs}
               onResetSpeakers={resetLastSpeakers}
               currentUserNickname={currentUserNickname}
+              currentUserProfilePicture={currentUserProfilePicture}
               recentlyAutoOpenedPM={recentlyAutoOpenedPM}
             />
           </div>

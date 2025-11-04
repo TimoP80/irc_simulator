@@ -747,17 +747,40 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
             
             <div>
               <label htmlFor="profilePicture" className="block text-sm font-medium text-gray-300 mb-2">
-                Profile Picture URL
+                Profile Picture
               </label>
-              <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2">
                 <input
-                  type="url"
+                  type="text"
                   id="profilePicture"
                   value={profilePicture}
                   onChange={(e) => setProfilePicture(e.target.value)}
-                  placeholder="https://example.com/avatar.jpg"
+                  placeholder="Enter image URL or upload"
                   className="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
+                <input
+                  type="file"
+                  id="profilePictureUpload"
+                  className="hidden"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        setProfilePicture(reader.result as string);
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => document.getElementById('profilePictureUpload')?.click()}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors duration-200 text-sm font-medium"
+                >
+                  Upload
+                </button>
                 <button
                   type="button"
                   onClick={() => setProfilePicture('')}
@@ -767,9 +790,9 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
                 </button>
               </div>
               <p className="text-xs text-gray-400 mt-1">
-                Optional: Enter a URL to an image for this user's profile picture. Leave empty for auto-generated initials.
+                Optional: Enter a URL or upload an image for this user's profile picture. Leave empty for auto-generated initials.
               </p>
-              
+
               {/* Profile Picture Preview */}
               {profilePicture && (
                 <div className="mt-3 flex items-center space-x-3">

@@ -5,12 +5,16 @@ import path from 'path';
 // Build script for Electron
 export async function buildElectron() {
   console.log('🔨 Building Electron application...');
-  
+
   // The Vite app and Electron main process are expected to be built already
   // by the 'npm run build' command. This script handles the packaging.
+  // Ensure Electron main/preload outputs use .cjs extensions to match package.json "main" and code references
+  console.log('🔄 Ensuring .cjs filenames in dist-electron...');
+  await runCommand('node', ['scripts/rename-electron-files.js']);
+
   console.log('📦 Packaging with electron-builder...');
   await runCommand('npx', ['electron-builder']);
-  
+
   console.log('✅ Electron packaging complete!');
 }
 

@@ -3,6 +3,8 @@ import React, { useState, useEffect } from 'react';
 import type { User, Channel } from '../types';
 import { isChannelOperator } from '../types';
 import { ProfilePicture } from './ProfilePicture';
+import { useChatDispatch } from '../context/ChatProvider';
+import { getNetworkService } from '../services/networkService';
 
 interface UserListProps {
   users: User[];
@@ -18,6 +20,8 @@ interface UserListProps {
 export const UserList: React.FC<UserListProps> = ({ users, onUserClick, currentUserNickname, channel, onToggleOperator, networkNickname, isNetworkConnected, unreadPMUsers }) => {
   const isOperator = (nickname: string) => channel && isChannelOperator(channel, nickname);
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, nickname: string } | null>(null);
+  const dispatch = useChatDispatch();
+  const networkService = getNetworkService();
 
   const handleContextMenu = (event: React.MouseEvent, nickname: string) => {
     if (!channel || !onToggleOperator) return;
@@ -65,6 +69,21 @@ export const UserList: React.FC<UserListProps> = ({ users, onUserClick, currentU
             >
               {isOperator(contextMenu.nickname) ? 'Remove Operator' : 'Make Operator'}
             </li>
+            <li
+             className="px-4 py-2 hover:bg-gray-700 cursor-pointer"
+             onClick={(e) => {
+               e.stopPropagation();
+               if (networkService.isConnected()) {
+                 networkService.whois(contextMenu.nickname);
+                 dispatch({ type: 'TOGGLE_USER_INFO_MODAL', payload: true });
+               } else {
+                 alert('Not connected to network service to perform WHOIS lookup.');
+               }
+               closeContextMenu();
+             }}
+           >
+             Whois
+           </li>
           </ul>
         </div>
       )}

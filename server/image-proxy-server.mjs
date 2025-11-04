@@ -28,7 +28,7 @@ app.post('/generate-image', async (req, res) => {
     
     imageDebug.log('Received request to generate image with prompt:', prompt);
     
-    const result = await imageService.generateImage({ prompt });
+    const result = await imageService._generateImageInternal({ prompt });
     
     if (result.success) {
       imageDebug.log('Successfully generated image:', result.imageUrl);

@@ -51,6 +51,7 @@ class NetworkService {
   private broadcastChannel: BroadcastChannel | null = null;
   private receivedMessageIds: Set<number> = new Set();
   private maxStoredMessageIds: number = 1000;
+  private whoisHandlers: ((data: any) => void)[] = [];
 
   /**
    * Creates an instance of NetworkService.
@@ -268,6 +269,9 @@ class NetworkService {
       case 'join_failed':
         this.handleJoinFailed(message);
         break;
+      case 'whois':
+       this.handleWhois(message);
+       break;
       default:
         networkDebug.log('Unknown message type:', message.type);
     }
@@ -330,15 +334,26 @@ class NetworkService {
       // Notify that the channel has been joined
       this.notifyChannelJoinedHandlers(channelData);
 
-      // Notify about any messages that were loaded
-      if (message.channelData.messages && message.channelData.messages.length > 0) {
-        networkDebug.log(`Notifying about ${message.channelData.messages.length} loaded messages`);
-        message.channelData.messages.forEach((msg: any) => {
-          this.notifyMessageHandlers({
-            ...msg,
-            channel: message.channel
-          });
-        });
+      // Notify about any messages that were loaded - process in small chunks to avoid UI blocking
+      const loadedMessages = message.channelData.messages || [];
+      if (loadedMessages.length > 0) {
+        networkDebug.log(`Notifying about ${loadedMessages.length} loaded messages (chunked to keep UI responsive)`);
+        const chunkSize = 25; // Process 25 messages per tick
+        let index = 0;
+        const processChunk = () => {
+          const end = Math.min(index + chunkSize, loadedMessages.length);
+          for (; index < end; index++) {
+            const msg = loadedMessages[index];
+            this.notifyMessageHandlers({
+              ...msg,
+              channel: message.channel
+            });
+          }
+          if (index < loadedMessages.length) {
+            setTimeout(processChunk, 0); // Yield to the event loop to keep UI responsive
+          }
+        };
+        processChunk();
       }
     }
   }
@@ -523,6 +538,11 @@ class NetworkService {
     });
   }
 
+ private handleWhois(message: any): void {
+   networkDebug.log('WHOIS data received:', message);
+   this.notifyWhoisHandlers(message);
+ }
+
   // Public methods
   /**
    * Joins a channel.
@@ -622,6 +642,24 @@ class NetworkService {
     }));
   }
 
+ /**
+  * Performs a WHOIS lookup on a user.
+  * @param {string} nickname - The nickname of the user to look up.
+  */
+ whois(nickname: string): void {
+   if (!this.connected || !this.ws || this.ws.readyState !== 1) {
+     networkDebug.error('Not connected to server');
+     return;
+   }
+
+   networkDebug.log(`Performing WHOIS lookup for: ${nickname}`);
+   
+   this.ws.send(JSON.stringify({
+     type: 'whois',
+     nick: nickname
+   }));
+ }
+
   // Getters
   isConnected(): boolean {
     return this.connected;
@@ -715,6 +753,17 @@ class NetworkService {
     }
   }
 
+ onWhois(handler: (data: any) => void): void {
+   this.whoisHandlers.push(handler);
+ }
+
+ offWhois(handler: (data: any) => void): void {
+   const index = this.whoisHandlers.indexOf(handler);
+   if (index > -1) {
+     this.whoisHandlers.splice(index, 1);
+   }
+ }
+
   private notifyMessageHandlers(message: NetworkMessage): void {
     // Check if we've already processed this message
     if (this.receivedMessageIds.has(message.id)) {
@@ -771,6 +820,10 @@ class NetworkService {
   private notifyChannelJoinFailedHandlers(errorData: any): void {
     this.channelJoinFailedHandlers.forEach(handler => handler(errorData));
   }
+
+ private notifyWhoisHandlers(data: any): void {
+   this.whoisHandlers.forEach(handler => handler(data));
+ }
 
   private broadcastUserUpdate(users: NetworkUser[]): void {
     if (this.broadcastChannel) {

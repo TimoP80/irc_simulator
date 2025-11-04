@@ -1,9 +1,9 @@
 // Audio Service
 // Handles microphone input and audio analysis using Google GenAI
 
-import { GoogleGenAI } from "@google/genai";
 import { audioDebug } from '../utils/debugLogger';
 import { listAvailableModels } from './geminiService';
+import { getAIService } from './vertexAIService';
 
 export interface AudioAnalysisRequest {
   audioData: string; // base64 encoded audio
@@ -20,13 +20,8 @@ export interface AudioAnalysisResponse {
   };
 }
 
-const API_KEY = process.env.GEMINI_API_KEY;
-
-if (!API_KEY) {
-  throw new Error("GEMINI_API_KEY environment variable not set");
-}
-
-const ai = new GoogleGenAI({ apiKey: API_KEY });
+// Get the AI service instance (supports both Vertex AI and API key)
+const ai = getAIService();
 
 // Get available audio models
 export const getAvailableAudioModels = async (): Promise<string[]> => {

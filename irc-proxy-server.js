@@ -77,6 +77,9 @@ class IRCProxyServer {
       case 'message':
         this.handleMessage(ws, message);
         break;
+      case 'whois':
+       this.handleWhois(ws, message);
+       break;
       default:
         console.log('📨 Unknown message type:', message.type);
     }
@@ -182,9 +185,25 @@ class IRCProxyServer {
           console.log('📨 Raw IRC event:', event.command, event.params);
         }
       });
+ircClient.on('whois', (event) => {
+ console.log('WHOIS event received:', event);
+ if (ws.readyState === 1) {
+   ws.send(JSON.stringify({
+     type: 'whois',
+     nick: event.nick,
+     user: event.user,
+     host: event.host,
+     realname: event.realname,
+     channels: event.channels,
+     server: event.server,
+     serverinfo: event.serverinfo,
+   }));
+ }
+});
 
-      // Store the IRC client for this WebSocket
-      this.ircClients.set(ws, ircClient);
+// Store the IRC client for this WebSocket
+this.ircClients.set(ws, ircClient);
+
 
       // Connect to IRC server
       console.log('🔗 Attempting IRC connection...');
@@ -232,6 +251,21 @@ class IRCProxyServer {
       console.log('❌ No IRC client found for WebSocket');
     }
   }
+
+ /**
+  * Handles a 'whois' message from a WebSocket client.
+  * @param {import('ws').WebSocket} ws - The WebSocket connection.
+  * @param {object} message - The message object containing the nick for the WHOIS lookup.
+  */
+ handleWhois(ws, message) {
+   const ircClient = this.ircClients.get(ws);
+   if (ircClient) {
+     console.log('🔍 Performing WHOIS lookup for:', message.nick);
+     ircClient.whois(message.nick);
+   } else {
+     console.log('❌ No IRC client found for WebSocket');
+   }
+ }
 
   /**
    * Cleans up the IRC client associated with a WebSocket connection.

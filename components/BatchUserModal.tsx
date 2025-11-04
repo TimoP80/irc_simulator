@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { User, isLegacyFormat } from '../types';
 import { PERSONALITY_TEMPLATES, generateRandomUser, generateRandomUserAsync, TRAIT_POOLS } from '../utils/personalityTemplates';
-import { generateBatchUsers, generateTranslatedPersonality, generatePersonalityFromTraits, generateUsername } from '../services/geminiService';
-// usernameGeneration functions are imported dynamically to avoid mixed import warnings
+import { generateBatchUsers, generateTranslatedPersonality, generatePersonalityFromTraits } from '../services/geminiService';
+import { generateAUsernames } from '../services/usernameGeneration'; // Explicitly import generateAUsernames
 
 // Local username categories to avoid dynamic import issues
 const USERNAME_CATEGORIES = [
@@ -58,6 +58,7 @@ export const BatchUserModal: React.FC<BatchUserModalProps> = ({
   const [userCount, setUserCount] = useState(5);
   const [previewUsers, setPreviewUsers] = useState<User[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
   const [randomizationSettings, setRandomizationSettings] = useState({
     randomizePersonality: true,
     randomizeWritingStyle: true,
@@ -77,6 +78,7 @@ export const BatchUserModal: React.FC<BatchUserModalProps> = ({
       setSelectedTemplate('');
       setUserCount(5);
       setPreviewUsers([]);
+      setGenerationError(null);
       setRandomizationSettings({
         randomizePersonality: true,
         randomizeWritingStyle: true,
@@ -101,24 +103,25 @@ export const BatchUserModal: React.FC<BatchUserModalProps> = ({
   }, [isOpen, onClose]);
 
   const generateUsers = async (): Promise<User[]> => {
-    if (generationMode === 'ai') {
-      try {
-        setIsGenerating(true);
+    setGenerationError(null); // Clear previous errors
+    setIsGenerating(true);
+    try {
+      if (generationMode === 'ai') {
         const options = {
           multilingualPersonalities,
           personalityLanguage: personalityLanguage
         };
         const users = await generateBatchUsers(userCount, aiModel, options);
         return users;
-      } catch (error) {
-        console.error('Failed to generate AI users:', error);
-        // Fallback to random generation
-        return generateRandomUsers();
-      } finally {
-        setIsGenerating(false);
+      } else {
+        return await generateRandomUsers();
       }
-    } else {
-      return await generateRandomUsers();
+    } catch (error) {
+      console.error('Failed to generate users:', error);
+      setGenerationError(`Failed to generate users: ${error instanceof Error ? error.message : String(error)}`);
+      return []; // Return empty array on error
+    } finally {
+      setIsGenerating(false);
     }
   };
 
@@ -132,17 +135,15 @@ export const BatchUserModal: React.FC<BatchUserModalProps> = ({
       if (generationMode === 'template' && selectedTemplate) {
         const template = PERSONALITY_TEMPLATES.find(t => t.id === selectedTemplate);
         if (template?.baseUser.personality) {
-          const { generateUsernamesForPersonality } = await import('../services/usernameGeneration');
-          aiUsernames = await generateUsernamesForPersonality(
-            template.baseUser.personality,
-            userCount,
-            Array.from(usedNicknames)
-          );
+          aiUsernames = await generateAUsernames({
+            count: userCount,
+            personality: template.baseUser.personality,
+            avoidDuplicates: Array.from(usedNicknames)
+          });
         }
       }
       
       if (aiUsernames.length === 0) {
-        const { generateAUsernames } = await import('../services/usernameGeneration');
         aiUsernames = await generateAUsernames({
           count: userCount,
           style: usernameStyle,
@@ -151,7 +152,7 @@ export const BatchUserModal: React.FC<BatchUserModalProps> = ({
       }
     } catch (error) {
       console.error('Failed to generate AI usernames:', error);
-      // Fallback to traditional generation
+      // Fallback to traditional generation, handled by generateUniqueNickname
     }
 
     for (let i = 0; i < userCount; i++) {
@@ -184,7 +185,7 @@ export const BatchUserModal: React.FC<BatchUserModalProps> = ({
           }
 
           user = {
-            nickname: aiUsernames[i] || generateUniqueNickname(usedNicknames),
+            nickname: aiUsernames[i] || await generateUniqueNickname(usedNicknames),
             status: 'online',
             userType: 'virtual',
             personality: template.baseUser.personality || '',
@@ -287,16 +288,27 @@ export const BatchUserModal: React.FC<BatchUserModalProps> = ({
     return users;
   };
 
-  const generateUniqueNickname = (usedNicknames: Set<string>): string => {
+  const generateUniqueNickname = async (usedNicknames: Set<string>): Promise<string> => {
     let nickname: string;
     let attempts = 0;
     do {
-      nickname = generateRandomUser().nickname;
+      // Try AI generation first
+      try {
+        const aiNames = await generateAUsernames({
+          count: 1,
+          style: usernameStyle,
+          avoidDuplicates: Array.from(usedNicknames)
+        });
+        nickname = aiNames[0];
+      } catch (error) {
+        console.warn('AI username generation failed, falling back to random:', error);
+        nickname = generateRandomUser().nickname; // Fallback to local random
+      }
       attempts++;
     } while (usedNicknames.has(nickname.toLowerCase()) && attempts < 100);
     
     if (attempts >= 100) {
-      nickname = `user${Date.now()}`;
+      nickname = `user${Date.now()}`; // Final fallback
     }
     
     return nickname;
@@ -304,7 +316,11 @@ export const BatchUserModal: React.FC<BatchUserModalProps> = ({
 
   const handlePreview = async () => {
     const users = await generateUsers();
-    setPreviewUsers(users.slice(0, 3)); // Show first 3 as preview
+    if (users.length > 0) {
+      setPreviewUsers(users.slice(0, 3)); // Show first 3 as preview
+    } else {
+      setPreviewUsers([]);
+    }
   };
 
   const handleGenerate = async () => {
@@ -315,6 +331,7 @@ export const BatchUserModal: React.FC<BatchUserModalProps> = ({
 
   const handleCancel = () => {
     setPreviewUsers([]);
+    setGenerationError(null);
     onClose();
   };
 
@@ -598,12 +615,20 @@ export const BatchUserModal: React.FC<BatchUserModalProps> = ({
               <button
                 type="button"
                 onClick={handlePreview}
-                className="bg-blue-600 text-white rounded-lg px-4 py-2 hover:bg-blue-500 transition-colors"
+                disabled={isGenerating || (generationMode === 'template' && !selectedTemplate)}
+                className="bg-blue-600 text-white rounded-lg px-4 py-2 hover:bg-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Generate Preview
+                {isGenerating ? 'Generating Preview...' : 'Generate Preview'}
               </button>
             </div>
             
+            {generationError && (
+              <div className="bg-red-900/20 border border-red-700 text-red-200 p-3 rounded-lg mb-4">
+                <p className="font-semibold">Error:</p>
+                <p>{generationError}</p>
+              </div>
+            )}
+
             {previewUsers.length > 0 && (
               <div className="space-y-3 max-h-64 overflow-y-auto">
                 {previewUsers.map((user, index) => (
@@ -614,14 +639,20 @@ export const BatchUserModal: React.FC<BatchUserModalProps> = ({
                     <div className="flex items-center gap-2 mb-2">
                       <span className="font-semibold text-white">{user.nickname}</span>
                       <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-900 text-blue-200">
-                        {user.languageSkills && 'fluency' in user.languageSkills ? user.languageSkills.fluency : 'native'}
+                        {user.languageSkills && 'languages' in user.languageSkills && user.languageSkills.languages.length > 0
+                          ? user.languageSkills.languages[0].fluency
+                          : 'native'}
                       </span>
                     </div>
                     <p className="text-gray-300 text-sm mb-2">{user.personality}</p>
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <div>
                         <span className="text-gray-400">Languages:</span>
-                        <p className="text-gray-300">{(user.languageSkills && 'languages' in user.languageSkills && Array.isArray(user.languageSkills.languages)) ? (user.languageSkills.languages as any[]).map(l => typeof l === 'string' ? l : l.language).join(', ') : 'English'}</p>
+                        <p className="text-gray-300">
+                          {(user.languageSkills && 'languages' in user.languageSkills && Array.isArray(user.languageSkills.languages))
+                            ? user.languageSkills.languages.map(l => l.language).join(', ')
+                            : 'English'}
+                        </p>
                       </div>
                       <div>
                         <span className="text-gray-400">Style:</span>
